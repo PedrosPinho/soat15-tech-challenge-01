@@ -3,3 +3,9 @@ dist/
 .env
 coverage/
 *.log
+
+docs/*
+AGENTS.md
+*/CODE_EXAMPLES.md
+PROJECT_STATUS.md
+project_sumary.md
