@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { connectDatabase } from '@infrastructure/database/mongodb/connection';
 import { errorHandler } from '@presentation/middlewares/error.middleware';
 import { healthRouter } from '@presentation/routes/health.routes';
+import { authRouter } from '@presentation/routes/auth.routes';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/health', healthRouter);
+app.use('/api/auth', authRouter);
 
 app.use(errorHandler);
 
