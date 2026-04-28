@@ -5,7 +5,10 @@ import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repo
 import { IClienteRepository } from '@domain/repositories/cliente.repository';
 import { IVeiculoRepository } from '@domain/repositories/veiculo.repository';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
-import { CreateOrdemServicoDto, OrdemServicoResponseDto } from '@application/dtos/ordem-servico/ordem-servico.dto';
+import {
+  CreateOrdemServicoDto,
+  OrdemServicoResponseDto,
+} from '@application/dtos/ordem-servico/ordem-servico.dto';
 import { OrdemServicoMapper } from '@application/mappers/ordem-servico.mapper';
 
 export class CreateOrdemServicoUseCase {

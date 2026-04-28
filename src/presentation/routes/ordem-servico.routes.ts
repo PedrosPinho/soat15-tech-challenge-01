@@ -34,9 +34,7 @@ ordemServicoRouter.post('/', authMiddleware, validateCreateOrdemServico, (req, r
   controller.create(req, res, next),
 );
 
-ordemServicoRouter.get('/', authMiddleware, (req, res, next) =>
-  controller.list(req, res, next),
-);
+ordemServicoRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
 
 ordemServicoRouter.get('/:id', authMiddleware, (req, res, next) =>
   controller.getById(req, res, next),

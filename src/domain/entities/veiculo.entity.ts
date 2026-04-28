@@ -61,8 +61,13 @@ export class Veiculo {
   atualizar(props: { quilometragem: number; cor?: string; observacoes?: string }): Veiculo {
     const comKm = this.atualizarQuilometragem(props.quilometragem);
     return new Veiculo(
-      comKm.id, comKm.clienteId, comKm.placa, comKm.marca, comKm.modelo,
-      comKm.ano, comKm.quilometragem,
+      comKm.id,
+      comKm.clienteId,
+      comKm.placa,
+      comKm.marca,
+      comKm.modelo,
+      comKm.ano,
+      comKm.quilometragem,
       props.cor !== undefined ? props.cor : comKm.cor,
       comKm.chassi,
       comKm.renavam,
@@ -78,8 +83,18 @@ export class Veiculo {
       );
     }
     return new Veiculo(
-      this.id, this.clienteId, this.placa, this.marca, this.modelo,
-      this.ano, km, this.cor, this.chassi, this.renavam, this.observacoes, this.criadoEm,
+      this.id,
+      this.clienteId,
+      this.placa,
+      this.marca,
+      this.modelo,
+      this.ano,
+      km,
+      this.cor,
+      this.chassi,
+      this.renavam,
+      this.observacoes,
+      this.criadoEm,
     );
   }
 
@@ -89,7 +104,8 @@ export class Veiculo {
 
     const currentYear = new Date().getFullYear();
     if (ano < 1900) throw new ValidationError('Ano não pode ser anterior a 1900');
-    if (ano > currentYear) throw new ValidationError(`Ano não pode ser futuro (máximo: ${currentYear})`);
+    if (ano > currentYear)
+      throw new ValidationError(`Ano não pode ser futuro (máximo: ${currentYear})`);
 
     if (quilometragem < 0) throw new ValidationError('Quilometragem não pode ser negativa');
   }

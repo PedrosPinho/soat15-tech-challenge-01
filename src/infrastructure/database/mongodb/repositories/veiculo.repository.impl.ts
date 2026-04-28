@@ -17,7 +17,11 @@ export class MongoVeiculoRepository implements IVeiculoRepository {
     return doc ? this.toDomain(doc) : null;
   }
 
-  async findByClienteId(clienteId: string, page: number, limit: number): Promise<ListVeiculosResult> {
+  async findByClienteId(
+    clienteId: string,
+    page: number,
+    limit: number,
+  ): Promise<ListVeiculosResult> {
     const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
       VeiculoModel.find({ clienteId }).skip(skip).limit(limit).sort({ criadoEm: -1 }),

@@ -1,7 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '@shared/errors/domain.error';
 
-const CATEGORIAS = ['MOTOR', 'TRANSMISSAO', 'SUSPENSAO', 'FREIOS', 'ELETRICA', 'FLUIDOS', 'FILTROS', 'OUTROS'];
+const CATEGORIAS = [
+  'MOTOR',
+  'TRANSMISSAO',
+  'SUSPENSAO',
+  'FREIOS',
+  'ELETRICA',
+  'FLUIDOS',
+  'FILTROS',
+  'OUTROS',
+];
 const UNIDADES = ['UNIDADE', 'LITRO', 'METRO', 'KG'];
 
 function assertString(value: unknown, field: string): void {
@@ -24,7 +33,16 @@ function assertInteger(value: unknown, field: string): void {
 
 export const validateCreatePeca = (req: Request, _res: Response, next: NextFunction): void => {
   try {
-    const { codigo, descricao, categoria, precoCompra, precoVenda, unidadeMedida, nivelMinimo, nivelMaximo } = req.body;
+    const {
+      codigo,
+      descricao,
+      categoria,
+      precoCompra,
+      precoVenda,
+      unidadeMedida,
+      nivelMinimo,
+      nivelMaximo,
+    } = req.body;
 
     assertString(codigo, 'codigo');
     assertString(descricao, 'descricao');

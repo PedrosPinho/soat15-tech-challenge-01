@@ -69,7 +69,9 @@ export class OrdemServico {
 
   adicionarServico(servico: Servico): OrdemServico {
     if (this.status === 'CONCLUIDA' || this.status === 'CANCELADA') {
-      throw new ValidationError('Não é possível adicionar serviços a uma OS concluída ou cancelada');
+      throw new ValidationError(
+        'Não é possível adicionar serviços a uma OS concluída ou cancelada',
+      );
     }
     return this.copy({ servicos: [...this.servicos, servico] });
   }
@@ -90,7 +92,8 @@ export class OrdemServico {
 
   cancelar(motivo: string): OrdemServico {
     if (!motivo.trim()) throw new ValidationError('Motivo de cancelamento é obrigatório');
-    if (this.status === 'CONCLUIDA') throw new ValidationError('OS concluída não pode ser cancelada');
+    if (this.status === 'CONCLUIDA')
+      throw new ValidationError('OS concluída não pode ser cancelada');
     if (this.status === 'CANCELADA') throw new ValidationError('OS já está cancelada');
     if (this.temPagamento) throw new ValidationError('OS com pagamento não pode ser cancelada');
     return this.copy({ status: 'CANCELADA', motivoCancelamento: motivo });
@@ -103,14 +106,16 @@ export class OrdemServico {
     return this.copy({ temPagamento: true });
   }
 
-  private copy(overrides: Partial<{
-    status: StatusOS;
-    dataInicio: Date;
-    dataConclusao: Date;
-    motivoCancelamento: string;
-    temPagamento: boolean;
-    servicos: Servico[];
-  }>): OrdemServico {
+  private copy(
+    overrides: Partial<{
+      status: StatusOS;
+      dataInicio: Date;
+      dataConclusao: Date;
+      motivoCancelamento: string;
+      temPagamento: boolean;
+      servicos: Servico[];
+    }>,
+  ): OrdemServico {
     return new OrdemServico(
       this.id,
       this.numeroOS,
@@ -134,6 +139,7 @@ export class OrdemServico {
     if (!props.numeroOS.trim()) throw new ValidationError('numeroOS é obrigatório');
     if (!props.clienteId.trim()) throw new ValidationError('clienteId é obrigatório');
     if (!props.veiculoId.trim()) throw new ValidationError('veiculoId é obrigatório');
-    if (props.quilometragemEntrada < 0) throw new ValidationError('Quilometragem de entrada não pode ser negativa');
+    if (props.quilometragemEntrada < 0)
+      throw new ValidationError('Quilometragem de entrada não pode ser negativa');
   }
 }

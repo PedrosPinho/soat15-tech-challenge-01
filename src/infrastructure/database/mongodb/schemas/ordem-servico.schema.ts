@@ -103,5 +103,8 @@ const osCounterSchema = new Schema<OSCounterDocument>(
   { _id: false },
 );
 
-export const OrdemServicoModel = mongoose.model<OrdemServicoDocument>('OrdemServico', ordemServicoSchema);
+export const OrdemServicoModel = mongoose.model<OrdemServicoDocument>(
+  'OrdemServico',
+  ordemServicoSchema,
+);
 export const OSCounterModel = mongoose.model<OSCounterDocument>('OSCounter', osCounterSchema);

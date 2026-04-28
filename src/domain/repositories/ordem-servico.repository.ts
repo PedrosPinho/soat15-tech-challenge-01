@@ -16,7 +16,11 @@ export interface IOrdemServicoRepository {
   findById(id: string): Promise<OrdemServico | null>;
   findByNumeroOS(numeroOS: string): Promise<OrdemServico | null>;
   findByClienteId(clienteId: string, page: number, limit: number): Promise<ListOrdemServicoResult>;
-  list(page: number, limit: number, filter?: ListOrdemServicoFilter): Promise<ListOrdemServicoResult>;
+  list(
+    page: number,
+    limit: number,
+    filter?: ListOrdemServicoFilter,
+  ): Promise<ListOrdemServicoResult>;
   update(os: OrdemServico): Promise<void>;
   nextSequence(dateKey: string): Promise<number>;
 }

@@ -23,10 +23,6 @@ pagamentoRouter.post('/', authMiddleware, validateCreatePagamento, (req, res, ne
   controller.create(req, res, next),
 );
 
-pagamentoRouter.get('/', authMiddleware, (req, res, next) =>
-  controller.list(req, res, next),
-);
+pagamentoRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
 
-pagamentoRouter.get('/:id', authMiddleware, (req, res, next) =>
-  controller.getById(req, res, next),
-);
+pagamentoRouter.get('/:id', authMiddleware, (req, res, next) => controller.getById(req, res, next));

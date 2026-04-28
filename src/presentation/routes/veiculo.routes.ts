@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { VeiculoController } from '@presentation/controllers/veiculo.controller';
 import { authMiddleware } from '@presentation/middlewares/auth.middleware';
-import { validateCreateVeiculo, validateUpdateVeiculo } from '@presentation/validators/veiculo.validator';
+import {
+  validateCreateVeiculo,
+  validateUpdateVeiculo,
+} from '@presentation/validators/veiculo.validator';
 import { MongoVeiculoRepository } from '@infrastructure/database/mongodb/repositories/veiculo.repository.impl';
 import { MongoClienteRepository } from '@infrastructure/database/mongodb/repositories/cliente.repository.impl';
 import { CreateVeiculoUseCase } from '@application/use-cases/veiculo/create-veiculo.use-case';
@@ -25,9 +28,7 @@ veiculoRouter.post('/', authMiddleware, validateCreateVeiculo, (req, res, next) 
   controller.create(req, res, next),
 );
 
-veiculoRouter.get('/:id', authMiddleware, (req, res, next) =>
-  controller.getById(req, res, next),
-);
+veiculoRouter.get('/:id', authMiddleware, (req, res, next) => controller.getById(req, res, next));
 
 veiculoRouter.put('/:id', authMiddleware, validateUpdateVeiculo, (req, res, next) =>
   controller.update(req, res, next),

@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { DomainError, NotFoundError, ValidationError, ConflictError, UnauthorizedError } from '@shared/errors/domain.error';
+import {
+  DomainError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+  UnauthorizedError,
+} from '@shared/errors/domain.error';
 
 export class AppError extends Error {
   constructor(

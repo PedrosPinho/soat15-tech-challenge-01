@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { CatalogoServicoController } from '@presentation/controllers/catalogo-servico.controller';
 import { authMiddleware } from '@presentation/middlewares/auth.middleware';
-import { validateCreateCatalogoServico, validateUpdateCatalogoServico } from '@presentation/validators/catalogo-servico.validator';
+import {
+  validateCreateCatalogoServico,
+  validateUpdateCatalogoServico,
+} from '@presentation/validators/catalogo-servico.validator';
 import { MongoCatalogoServicoRepository } from '@infrastructure/database/mongodb/repositories/catalogo-servico.repository.impl';
 import { CreateCatalogoServicoUseCase } from '@application/use-cases/catalogo-servico/create-catalogo-servico.use-case';
 import { GetCatalogoServicoUseCase } from '@application/use-cases/catalogo-servico/get-catalogo-servico.use-case';
@@ -25,9 +28,7 @@ catalogoServicoRouter.post('/', authMiddleware, validateCreateCatalogoServico, (
   controller.create(req, res, next),
 );
 
-catalogoServicoRouter.get('/', authMiddleware, (req, res, next) =>
-  controller.list(req, res, next),
-);
+catalogoServicoRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
 
 catalogoServicoRouter.get('/:id', authMiddleware, (req, res, next) =>
   controller.getById(req, res, next),

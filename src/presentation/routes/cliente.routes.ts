@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { ClienteController } from '@presentation/controllers/cliente.controller';
 import { authMiddleware } from '@presentation/middlewares/auth.middleware';
-import { validateCreateCliente, validateUpdateCliente } from '@presentation/validators/cliente.validator';
+import {
+  validateCreateCliente,
+  validateUpdateCliente,
+} from '@presentation/validators/cliente.validator';
 import { MongoClienteRepository } from '@infrastructure/database/mongodb/repositories/cliente.repository.impl';
 import { CreateClienteUseCase } from '@application/use-cases/cliente/create-cliente.use-case';
 import { GetClienteUseCase } from '@application/use-cases/cliente/get-cliente.use-case';
@@ -25,13 +28,9 @@ clienteRouter.post('/', authMiddleware, validateCreateCliente, (req, res, next) 
   controller.create(req, res, next),
 );
 
-clienteRouter.get('/', authMiddleware, (req, res, next) =>
-  controller.list(req, res, next),
-);
+clienteRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
 
-clienteRouter.get('/:id', authMiddleware, (req, res, next) =>
-  controller.getById(req, res, next),
-);
+clienteRouter.get('/:id', authMiddleware, (req, res, next) => controller.getById(req, res, next));
 
 clienteRouter.put('/:id', authMiddleware, validateUpdateCliente, (req, res, next) =>
   controller.update(req, res, next),

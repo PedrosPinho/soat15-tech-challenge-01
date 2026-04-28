@@ -22,7 +22,16 @@ const pecaSchema = new Schema<PecaDocument>(
     categoria: {
       type: String,
       required: true,
-      enum: ['MOTOR', 'TRANSMISSAO', 'SUSPENSAO', 'FREIOS', 'ELETRICA', 'FLUIDOS', 'FILTROS', 'OUTROS'],
+      enum: [
+        'MOTOR',
+        'TRANSMISSAO',
+        'SUSPENSAO',
+        'FREIOS',
+        'ELETRICA',
+        'FLUIDOS',
+        'FILTROS',
+        'OUTROS',
+      ],
     },
     precoCompra: { type: Number, required: true },
     precoVenda: { type: Number, required: true },

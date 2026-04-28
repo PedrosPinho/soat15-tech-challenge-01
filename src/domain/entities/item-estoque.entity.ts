@@ -58,13 +58,15 @@ export class ItemEstoque {
 
   utilizar(quantidade: number): ItemEstoque {
     if (quantidade <= 0) throw new ValidationError('Quantidade deve ser maior que zero');
-    if (quantidade > this.quantidadeReservada) throw new ValidationError('Quantidade a utilizar excede o reservado');
+    if (quantidade > this.quantidadeReservada)
+      throw new ValidationError('Quantidade a utilizar excede o reservado');
     return this.copy({ quantidadeReservada: this.quantidadeReservada - quantidade });
   }
 
   liberarReserva(quantidade: number): ItemEstoque {
     if (quantidade <= 0) throw new ValidationError('Quantidade deve ser maior que zero');
-    if (quantidade > this.quantidadeReservada) throw new ValidationError('Quantidade a liberar excede o reservado');
+    if (quantidade > this.quantidadeReservada)
+      throw new ValidationError('Quantidade a liberar excede o reservado');
     return this.copy({
       quantidadeDisponivel: this.quantidadeDisponivel + quantidade,
       quantidadeReservada: this.quantidadeReservada - quantidade,
@@ -76,10 +78,12 @@ export class ItemEstoque {
     return this.copy({ quantidadeDisponivel: this.quantidadeDisponivel + quantidade });
   }
 
-  private copy(overrides: Partial<{
-    quantidadeDisponivel: number;
-    quantidadeReservada: number;
-  }>): ItemEstoque {
+  private copy(
+    overrides: Partial<{
+      quantidadeDisponivel: number;
+      quantidadeReservada: number;
+    }>,
+  ): ItemEstoque {
     return new ItemEstoque(
       this.id,
       this.pecaId,
@@ -93,9 +97,12 @@ export class ItemEstoque {
   }
 
   private static validate(props: ItemEstoqueProps): void {
-    if (props.quantidadeDisponivel < 0) throw new ValidationError('quantidadeDisponivel não pode ser negativa');
-    if ((props.quantidadeReservada ?? 0) < 0) throw new ValidationError('quantidadeReservada não pode ser negativa');
+    if (props.quantidadeDisponivel < 0)
+      throw new ValidationError('quantidadeDisponivel não pode ser negativa');
+    if ((props.quantidadeReservada ?? 0) < 0)
+      throw new ValidationError('quantidadeReservada não pode ser negativa');
     if (props.nivelMinimo < 0) throw new ValidationError('nivelMinimo não pode ser negativo');
-    if (props.nivelMaximo <= props.nivelMinimo) throw new ValidationError('nivelMaximo deve ser maior que nivelMinimo');
+    if (props.nivelMaximo <= props.nivelMinimo)
+      throw new ValidationError('nivelMaximo deve ser maior que nivelMinimo');
   }
 }

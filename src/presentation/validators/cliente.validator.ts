@@ -13,11 +13,7 @@ function assertEnum<T extends string>(value: unknown, field: string, allowed: T[
   }
 }
 
-export const validateCreateCliente = (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void => {
+export const validateCreateCliente = (req: Request, _res: Response, next: NextFunction): void => {
   try {
     const { nome, cpfCnpj, tipo, telefone, email, endereco } = req.body;
 
@@ -43,11 +39,7 @@ export const validateCreateCliente = (
   }
 };
 
-export const validateUpdateCliente = (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void => {
+export const validateUpdateCliente = (req: Request, _res: Response, next: NextFunction): void => {
   try {
     const { telefone, email } = req.body;
     assertString(telefone, 'telefone');

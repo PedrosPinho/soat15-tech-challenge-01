@@ -25,13 +25,9 @@ pecaRouter.post('/', authMiddleware, validateCreatePeca, (req, res, next) =>
   controller.create(req, res, next),
 );
 
-pecaRouter.get('/', authMiddleware, (req, res, next) =>
-  controller.list(req, res, next),
-);
+pecaRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
 
-pecaRouter.get('/:id', authMiddleware, (req, res, next) =>
-  controller.getById(req, res, next),
-);
+pecaRouter.get('/:id', authMiddleware, (req, res, next) => controller.getById(req, res, next));
 
 pecaRouter.put('/:id', authMiddleware, validateUpdatePeca, (req, res, next) =>
   controller.update(req, res, next),

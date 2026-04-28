@@ -13,6 +13,10 @@ export interface ListCatalogoServicoResult {
 export interface ICatalogoServicoRepository {
   save(servico: CatalogoServico): Promise<void>;
   findById(id: string): Promise<CatalogoServico | null>;
-  list(page: number, limit: number, filter?: ListCatalogoServicoFilter): Promise<ListCatalogoServicoResult>;
+  list(
+    page: number,
+    limit: number,
+    filter?: ListCatalogoServicoFilter,
+  ): Promise<ListCatalogoServicoResult>;
   update(servico: CatalogoServico): Promise<void>;
 }

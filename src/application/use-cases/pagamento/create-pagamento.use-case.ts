@@ -2,7 +2,10 @@ import { Pagamento } from '@domain/entities/pagamento.entity';
 import { IPagamentoRepository } from '@domain/repositories/pagamento.repository';
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
-import { CreatePagamentoDto, PagamentoResponseDto } from '@application/dtos/pagamento/pagamento.dto';
+import {
+  CreatePagamentoDto,
+  PagamentoResponseDto,
+} from '@application/dtos/pagamento/pagamento.dto';
 import { PagamentoMapper } from '@application/mappers/pagamento.mapper';
 
 export class CreatePagamentoUseCase {
