@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   mongodb:
     image: mongo:7
     container_name: oficina-mongodb
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: senha123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
       MONGO_INITDB_DATABASE: oficina
     ports:
       - '27017:27017'
@@ -31,10 +29,10 @@ services:
       - '3001:3001'
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://admin:senha123@mongodb:27017/oficina?authSource=admin
-      JWT_SECRET: change-this-in-production
-      JWT_EXPIRES_IN: 1d
-      BCRYPT_ROUNDS: 10
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD:?MONGO_PASSWORD is required}@mongodb:27017/oficina?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -74,7 +72,7 @@ services:
       - .:/usr/src
     environment:
       SONAR_HOST_URL: http://sonarqube:9000
-      SONAR_TOKEN: ${SONAR_TOKEN:-admin}
+      SONAR_TOKEN: ${SONAR_TOKEN:?SONAR_TOKEN is required}
     networks:
       - oficina-network
     profiles:
