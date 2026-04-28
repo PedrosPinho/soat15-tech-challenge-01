@@ -28,5 +28,6 @@ module.exports = {
     },
   },
   coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'clover'],
   verbose: true,
 };

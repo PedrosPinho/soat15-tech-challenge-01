@@ -24,7 +24,10 @@
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "sonar:up": "docker-compose up -d sonarqube",
+    "sonar:scan": "npm run test:coverage && docker-compose --profile sonar run --rm sonar-scanner",
+    "sonar:down": "docker-compose stop sonarqube"
   },
   "keywords": [
     "oficina",
