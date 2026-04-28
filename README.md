@@ -88,8 +88,8 @@ docker-compose up -d
 # Aguarde ~30 segundos para inicialização
 
 # Acesse a aplicação
-# API: http://localhost:3000
-# API Docs: http://localhost:3000/api-docs
+# API: http://localhost:3001
+# API Docs: http://localhost:3001/api-docs
 # MongoDB: mongodb://localhost:27017/oficina
 ```
 
@@ -120,7 +120,7 @@ npm run dev
 npm run test:watch
 ```
 
-A aplicação estará disponível em `http://localhost:3000`.
+A aplicação estará disponível em `http://localhost:301`.
 
 ## 📚 Documentação
 
@@ -143,8 +143,8 @@ A aplicação estará disponível em `http://localhost:3000`.
 
 Após iniciar a aplicação, acesse:
 
-- **Swagger UI**: http://localhost:3000/api-docs
-- **OpenAPI JSON**: http://localhost:3000/api-docs.json
+- **Swagger UI**: http://localhost:301/api-docs
+- **OpenAPI JSON**: http://localhost:301/api-docs.json
 
 ## 🧪 Testes
 
@@ -289,7 +289,7 @@ Ver modelo completo em [docs/domain_model.md](docs/domain_model.md).
 
 ```bash
 # 1. Criar cliente
-curl -X POST http://localhost:3000/api/clientes \
+curl -X POST http://localhost:301/api/clientes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -308,7 +308,7 @@ curl -X POST http://localhost:3000/api/clientes \
   }'
 
 # 2. Criar veículo
-curl -X POST http://localhost:3000/api/veiculos \
+curl -X POST http://localhost:301/api/veiculos \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -321,7 +321,7 @@ curl -X POST http://localhost:3000/api/veiculos \
   }'
 
 # 3. Criar ordem de serviço
-curl -X POST http://localhost:3000/api/ordens-servico \
+curl -X POST http://localhost:301/api/ordens-servico \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{

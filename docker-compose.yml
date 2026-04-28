@@ -28,7 +28,7 @@ services:
     container_name: oficina-api
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      - '3001:3001'
     environment:
       NODE_ENV: production
       MONGODB_URI: mongodb://admin:senha123@mongodb:27017/oficina?authSource=admin
