@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ValidationError } from '@shared/errors/domain.error';
+import { Servico } from '@domain/entities/servico.entity';
 
 export type StatusOS = 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
 
@@ -16,6 +17,7 @@ export interface OrdemServicoProps {
   observacoes?: string;
   motivoCancelamento?: string;
   temPagamento?: boolean;
+  servicos?: Servico[];
 }
 
 export class OrdemServico {
@@ -32,6 +34,7 @@ export class OrdemServico {
     public readonly observacoes: string | undefined,
     public readonly motivoCancelamento: string | undefined,
     public readonly temPagamento: boolean,
+    public readonly servicos: readonly Servico[],
   ) {}
 
   static create(props: OrdemServicoProps): OrdemServico {
@@ -49,7 +52,19 @@ export class OrdemServico {
       props.observacoes,
       props.motivoCancelamento,
       props.temPagamento ?? false,
+      props.servicos ?? [],
     );
+  }
+
+  get valorTotal(): number {
+    return this.servicos.reduce((acc, s) => acc + s.valorTotal, 0);
+  }
+
+  adicionarServico(servico: Servico): OrdemServico {
+    if (this.status === 'CONCLUIDA' || this.status === 'CANCELADA') {
+      throw new ValidationError('Não é possível adicionar serviços a uma OS concluída ou cancelada');
+    }
+    return this.copy({ servicos: [...this.servicos, servico] });
   }
 
   iniciar(): OrdemServico {
@@ -87,6 +102,7 @@ export class OrdemServico {
     dataConclusao: Date;
     motivoCancelamento: string;
     temPagamento: boolean;
+    servicos: Servico[];
   }>): OrdemServico {
     return new OrdemServico(
       this.id,
@@ -101,6 +117,7 @@ export class OrdemServico {
       this.observacoes,
       overrides.motivoCancelamento ?? this.motivoCancelamento,
       overrides.temPagamento ?? this.temPagamento,
+      overrides.servicos ?? [...this.servicos],
     );
   }
 
