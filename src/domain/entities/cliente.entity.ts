@@ -37,19 +37,20 @@ export class Cliente {
   }
 
   static create(props: ClienteProps): Cliente {
-    const cpfCnpj = CpfCnpj.create(props.cpfCnpj);
-    const endereco = Endereco.create(props.endereco);
-    Cliente.validate(props.nome, props.email, props.telefone, props.tipo, cpfCnpj);
+    const decoded = JSON.parse(JSON.stringify(props));
+    const cpfCnpj = CpfCnpj.create(decoded.cpfCnpj);
+    const endereco = Endereco.create(decoded.endereco);
+    Cliente.validate(decoded.nome, decoded.email, decoded.telefone, decoded.tipo, cpfCnpj);
     return new Cliente(
-      props.id ?? uuidv4(),
-      props.nome,
+      decoded.id ?? uuidv4(),
+      decoded.nome,
       cpfCnpj,
-      props.tipo,
-      props.telefone,
-      props.email,
+      decoded.tipo,
+      decoded.telefone,
+      decoded.email,
       endereco,
-      props.dataCadastro ?? new Date(),
-      props.ativo ?? true,
+      decoded.dataCadastro ?? new Date(),
+      decoded.ativo ?? true,
     );
   }
 
