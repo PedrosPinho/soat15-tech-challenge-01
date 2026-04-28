@@ -11,6 +11,8 @@ import { clienteRouter } from '@presentation/routes/cliente.routes';
 import { veiculoRouter, veiculosByClienteRouter } from '@presentation/routes/veiculo.routes';
 import { pecaRouter } from '@presentation/routes/peca.routes';
 import { ordemServicoRouter } from '@presentation/routes/ordem-servico.routes';
+import { pagamentoRouter } from '@presentation/routes/pagamento.routes';
+import { relatoriosRouter } from '@presentation/routes/relatorios.routes';
 
 dotenv.config();
 
@@ -40,6 +42,8 @@ app.use('/api/veiculos', veiculoRouter);
 app.use('/api/clientes/:clienteId/veiculos', veiculosByClienteRouter);
 app.use('/api/pecas', pecaRouter);
 app.use('/api/ordens-servico', ordemServicoRouter);
+app.use('/api/pagamentos', pagamentoRouter);
+app.use('/api/relatorios', relatoriosRouter);
 
 app.use(errorHandler);
 
