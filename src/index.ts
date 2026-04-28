@@ -9,6 +9,7 @@ import { healthRouter } from '@presentation/routes/health.routes';
 import { authRouter } from '@presentation/routes/auth.routes';
 import { clienteRouter } from '@presentation/routes/cliente.routes';
 import { veiculoRouter, veiculosByClienteRouter } from '@presentation/routes/veiculo.routes';
+import { pecaRouter } from '@presentation/routes/peca.routes';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/clientes', clienteRouter);
 app.use('/api/veiculos', veiculoRouter);
 app.use('/api/clientes/:clienteId/veiculos', veiculosByClienteRouter);
+app.use('/api/pecas', pecaRouter);
 
 app.use(errorHandler);
 
