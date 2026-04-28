@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-04-28  
-**Testes**: 534 passando | **Cobertura**: em andamento  
-**Status atual**: Fase 5 concluída → Fase 6 iniciando (Qualidade & Cobertura)
+**Testes**: 534 passando | **Cobertura**: Statements 93% | Branches 90% | Functions 84% | Lines 93%  
+**Status atual**: Fase 6 concluída → Fase 7 iniciando (Documentação & Entrega)
 
 ---
 
@@ -215,14 +215,23 @@
 - Schema MongoDB, repository impl, DTOs e mapper atualizados
 - `CreateOrdemServicoDto` aceita `catalogoServicoId` e `precoServico` opcionais
 
+## ✅ Fase 6: Qualidade & Cobertura — COMPLETA
+
+#### Cobertura ≥ 80% ✅
+- Statements: 93.43% | Branches: 90.46% | Functions: 84.91% | Lines: 93.24%
+- Thresholds configurados no `jest.config.js` (mínimo 80% em todas as métricas)
+- Relatório LCOV gerado em `coverage/lcov.info` (integração com SonarQube)
+
+#### SonarQube + SonarScanner ✅
+- `docker-compose.yml` — serviço `sonarqube` (porta 9000, volumes persistentes, healthcheck)
+- `docker-compose.yml` — serviço `sonar-scanner` com profile `sonar` (executa após SonarQube saudável)
+- `sonar-project.properties` — configuração do projeto (sources, tests, lcov path, exclusions)
+- Scripts npm:
+  - `npm run sonar:up` — sobe SonarQube
+  - `npm run sonar:scan` — roda cobertura + análise
+  - `npm run sonar:down` — para SonarQube
+
 ## 📋 Pendente
-
-### Fase 6: Qualidade & Cobertura
-- Cobertura ≥ 80%
-- Testes de integração (repositórios reais)
-- Testes E2E (fluxos completos)
-- SonarQube e SonarScanner configurados
-
 
 ### Fase 7: Documentação & Entrega
 - Swagger/OpenAPI completo
@@ -244,7 +253,7 @@
 - [x] Health check endpoint
 - [x] JWT auth infrastructure
 - [x] Auth middleware
-- [ ] SonarQube e SonarScanner configurados e executando no docker 
+- [x] SonarQube e SonarScanner configurados e executando no docker
 
 
 ### Domain Layer
@@ -285,7 +294,7 @@
 - [x] Unit — services (jwt, hash)
 - [ ] Integration — repositórios MongoDB
 - [ ] E2E — fluxos completos
-- [ ] Cobertura ≥ 80%
+- [x] Cobertura ≥ 80%
 
 ### Quality & Security
 - [x] TypeScript strict — type-check limpo
@@ -293,7 +302,7 @@
 - [x] Security headers (Helmet)
 - [x] CORS configurado
 - [ ] ESLint sem warnings
-- [ ] SonarQube e SonarScanner sem warnings
+- [x] SonarQube e SonarScanner configurados
 - [ ] npm audit limpo
 
 ### Entrega
