@@ -40,6 +40,8 @@ export class CreateOrdemServicoUseCase {
       quilometragemEntrada: dto.quilometragemEntrada,
       observacoes: dto.observacoes,
       servicos,
+      catalogoServicoId: dto.catalogoServicoId,
+      precoServico: dto.precoServico,
     });
 
     await this.osRepo.save(os);

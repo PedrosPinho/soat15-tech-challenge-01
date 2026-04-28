@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-04-28  
-**Testes**: 317 passando | **Cobertura**: em andamento  
-**Status atual**: Fase 4 concluída → Fase 5 iniciando (Qualidade & Cobertura)
+**Testes**: 534 passando | **Cobertura**: em andamento  
+**Status atual**: Fase 5 concluída → Fase 6 iniciando (Qualidade & Cobertura)
 
 ---
 
@@ -179,15 +179,54 @@
   - `financeiro.{ receitaTotal }` (soma dos pagamentos CONFIRMADO)
   - `estoque.{ itensAbaixoDoMinimo }`
 
+---
+
+### Fase 5: CRUD de Serviços — COMPLETA
+
+#### Task 5.1 — CatalogoServico entity ✅
+- `src/domain/entities/catalogo-servico.entity.ts`
+  - Campos: `id` (UUID), `descricao`, `preco`, `tempoEstimado`, `ativo`
+  - `CatalogoServico.create()` — factory com validações
+  - `editar(changes)` — retorna nova instância com campos atualizados (imutável)
+  - `deletar()` — retorna nova instância com `ativo = false` (soft delete)
+  - Validações: descrição não vazia, preço ≥ 0, tempoEstimado > 0
+
+#### Task 5.2 — Repository + MongoDB ✅
+- `src/domain/repositories/catalogo-servico.repository.ts` — `ICatalogoServicoRepository`
+- `src/infrastructure/database/mongodb/schemas/catalogo-servico.schema.ts`
+- `src/infrastructure/database/mongodb/repositories/catalogo-servico.repository.impl.ts`
+  - `list()` com suporte a filtro `search` ($text) e `ativo`
+
+#### Task 5.3 — Use cases CRUD ✅
+- `CreateCatalogoServicoUseCase`, `GetCatalogoServicoUseCase`, `UpdateCatalogoServicoUseCase`
+- `ListCatalogoServicoUseCase` (paginação, search), `DeleteCatalogoServicoUseCase` (soft delete)
+- `CatalogoServicoMapper`, `CatalogoServicoResponseDto`
+
+#### Task 5.4 — REST API ✅
+- `POST /api/servicos` — criar serviço
+- `GET /api/servicos` — listar (page, limit, search)
+- `GET /api/servicos/:id` — buscar por id
+- `PUT /api/servicos/:id` — editar
+- `DELETE /api/servicos/:id` — deletar (soft delete)
+
+#### Task 5.5 — OrdemServico atualizada ✅
+- Novos campos: `catalogoServicoId?: string`, `precoServico?: number`
+- `get valorTotal()` atualizado: `sum(servicos) + precoServico`
+- Schema MongoDB, repository impl, DTOs e mapper atualizados
+- `CreateOrdemServicoDto` aceita `catalogoServicoId` e `precoServico` opcionais
+
 ## 📋 Pendente
 
-### Fase 5: Qualidade & Cobertura
+### Fase 6: Qualidade & Cobertura
 - Cobertura ≥ 80%
 - Testes de integração (repositórios reais)
 - Testes E2E (fluxos completos)
+- SonarQube e SonarScanner configurados
 
-### Fase 6: Documentação & Entrega
+
+### Fase 7: Documentação & Entrega
 - Swagger/OpenAPI completo
+- Atualização do README.md completo com instruções de uso e objetivos
 - Video demonstração (10–15 min)
 - PDF entregável
 
@@ -205,11 +244,14 @@
 - [x] Health check endpoint
 - [x] JWT auth infrastructure
 - [x] Auth middleware
+- [ ] SonarQube e SonarScanner configurados e executando no docker 
+
 
 ### Domain Layer
 - [x] Cliente entity + CPF/CNPJ VO + Endereco VO
 - [x] Veiculo entity + Placa VO
 - [x] Peca entity (preço, margem, estoque)
+- [x] CatalogoServico entity (preço, descrição, tempo estimado)
 - [x] ItemEstoque entity (reservar/utilizar/liberar/abastecer)
 - [x] OrdemServico aggregate + NumeroOS VO
 - [x] Servico entity
@@ -219,6 +261,7 @@
 - [x] Cliente use cases (Create, Get, Update, List, Deactivate)
 - [x] Veiculo use cases (Create, Get, Update, ListByCliente)
 - [x] Peca use cases (Create, Get, Update, List, Deactivate)
+- [x] CatalogoServico use cases (Create, Get, Update, List, Delete)
 - [x] InventoryService (domain service)
 - [x] OrdemServico use cases (Create, Get, List, Iniciar, Concluir, Cancelar)
 - [x] Pagamento use cases (Create, Get, List)
@@ -229,6 +272,7 @@
 - [x] Cliente REST API (`/api/clientes`)
 - [x] Veiculo REST API (`/api/veiculos`, `/api/clientes/:id/veiculos`)
 - [x] Peca REST API (`/api/pecas`)
+- [x] Serviços REST API (`/api/servicos`)
 - [x] OrdemServico REST API
 - [x] Pagamento REST API
 - [x] Relatórios REST API
@@ -249,6 +293,7 @@
 - [x] Security headers (Helmet)
 - [x] CORS configurado
 - [ ] ESLint sem warnings
+- [ ] SonarQube e SonarScanner sem warnings
 - [ ] npm audit limpo
 
 ### Entrega
