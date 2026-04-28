@@ -1,6 +1,23 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
 
+export interface PecaServicoSubDoc {
+  pecaId: string;
+  quantidade: number;
+  precoUnitario: number;
+}
+
+export interface ServicoSubDoc {
+  _id: string;
+  descricao: string;
+  status: string;
+  tempoEstimadoMinutos: number;
+  tempoRealMinutos?: number;
+  valorMaoDeObra: number;
+  pecasUtilizadas: PecaServicoSubDoc[];
+  observacoes?: string;
+}
+
 export interface OrdemServicoDocument extends Document<string> {
   _id: string;
   numeroOS: string;
@@ -14,6 +31,7 @@ export interface OrdemServicoDocument extends Document<string> {
   observacoes?: string;
   motivoCancelamento?: string;
   temPagamento: boolean;
+  servicos: ServicoSubDoc[];
 }
 
 const ordemServicoSchema = new Schema<OrdemServicoDocument>(
@@ -35,6 +53,30 @@ const ordemServicoSchema = new Schema<OrdemServicoDocument>(
     observacoes: { type: String },
     motivoCancelamento: { type: String },
     temPagamento: { type: Boolean, required: true, default: false },
+    servicos: [
+      {
+        _id: { type: String, required: true },
+        descricao: { type: String, required: true },
+        status: {
+          type: String,
+          required: true,
+          enum: ['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDO', 'CANCELADO'],
+          default: 'PENDENTE',
+        },
+        tempoEstimadoMinutos: { type: Number, required: true },
+        tempoRealMinutos: { type: Number },
+        valorMaoDeObra: { type: Number, required: true },
+        pecasUtilizadas: [
+          {
+            _id: false,
+            pecaId: { type: String, required: true },
+            quantidade: { type: Number, required: true },
+            precoUnitario: { type: Number, required: true },
+          },
+        ],
+        observacoes: { type: String },
+      },
+    ],
   },
   { timestamps: false, _id: false },
 );

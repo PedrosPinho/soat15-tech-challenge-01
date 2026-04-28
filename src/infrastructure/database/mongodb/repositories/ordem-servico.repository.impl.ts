@@ -1,4 +1,5 @@
 import { OrdemServico } from '@domain/entities/ordem-servico.entity';
+import { Servico } from '@domain/entities/servico.entity';
 import {
   IOrdemServicoRepository,
   ListOrdemServicoFilter,
@@ -62,6 +63,19 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
   }
 
   private toDomain(doc: OrdemServicoDocument): OrdemServico {
+    const servicos = (doc.servicos ?? []).map((s) =>
+      Servico.create({
+        id: s._id,
+        descricao: s.descricao,
+        status: s.status as 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO',
+        tempoEstimadoMinutos: s.tempoEstimadoMinutos,
+        tempoRealMinutos: s.tempoRealMinutos,
+        valorMaoDeObra: s.valorMaoDeObra,
+        pecasUtilizadas: s.pecasUtilizadas,
+        observacoes: s.observacoes,
+      }),
+    );
+
     return OrdemServico.create({
       id: doc._id as string,
       numeroOS: doc.numeroOS,
@@ -75,6 +89,7 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
       observacoes: doc.observacoes,
       motivoCancelamento: doc.motivoCancelamento,
       temPagamento: doc.temPagamento,
+      servicos,
     });
   }
 
@@ -92,6 +107,16 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
       observacoes: os.observacoes,
       motivoCancelamento: os.motivoCancelamento,
       temPagamento: os.temPagamento,
+      servicos: os.servicos.map((s) => ({
+        _id: s.id,
+        descricao: s.descricao,
+        status: s.status,
+        tempoEstimadoMinutos: s.tempoEstimadoMinutos,
+        tempoRealMinutos: s.tempoRealMinutos,
+        valorMaoDeObra: s.valorMaoDeObra,
+        pecasUtilizadas: [...s.pecasUtilizadas],
+        observacoes: s.observacoes,
+      })),
     };
   }
 }

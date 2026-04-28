@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-04-28  
-**Testes**: 266 passando | **Cobertura**: em andamento  
-**Status atual**: Task 3.2 concluída → Task 3.3 iniciando (CreateOrdemServico use case)
+**Testes**: 278 passando | **Cobertura**: em andamento  
+**Status atual**: Task 3.3 concluída → Task 3.4 iniciando (OS lifecycle use cases)
 
 ---
 
@@ -116,8 +116,20 @@
   - `PecaServico` interface: `{ pecaId, quantidade, precoUnitario }` (snapshot de preço)
   - Totalmente imutável (todos os métodos retornam nova instância)
 
-#### Task 3.3 — CreateOrdemServico use case ⬅ PRÓXIMA
-#### Task 3.4 — CreateOrdemServico use case
+#### Task 3.3 — CreateOrdemServico use case ✅
+- Atualizado `OrdemServico` entity: campo `servicos: readonly Servico[]`, `adicionarServico()`, `get valorTotal()`
+- `src/application/dtos/ordem-servico/ordem-servico.dto.ts` — `CreateOrdemServicoDto`, `CreateServicoDto`, `OrdemServicoResponseDto`, `ServicoResponseDto`
+- `src/application/mappers/ordem-servico.mapper.ts` — `OrdemServicoMapper.toDto()`, `servicoToDto()`
+- `src/application/use-cases/ordem-servico/create-ordem-servico.use-case.ts`
+  - Valida existência do Cliente e Veículo
+  - Valida que o Veículo pertence ao Cliente
+  - Gera `NumeroOS` via `nextSequence(dateKey)` atômico
+  - Cria Servicos iniciais opcionais (status `PENDENTE`)
+  - Salva a OS com servicos embedded
+- Schema MongoDB atualizado: subdocumento `servicos[]` com `pecasUtilizadas[]` embedded
+- Repository impl atualizado: `toDomain`/`toPersistence` com reconstitução de `Servico` entities
+
+#### Task 3.4 — OS lifecycle use cases ⬅ PRÓXIMA
 #### Task 3.4 — OS lifecycle use cases (iniciar, concluir, cancelar)
 #### Task 3.5 — OrdemServico REST API
 
