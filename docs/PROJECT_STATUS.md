@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-04-28  
-**Testes**: 298 passando | **Cobertura**: em andamento  
-**Status atual**: Fase 3 concluída → Fase 4 iniciando (Pagamento)
+**Testes**: 317 passando | **Cobertura**: em andamento  
+**Status atual**: Fase 4 concluída → Fase 5 iniciando (Qualidade & Cobertura)
 
 ---
 
@@ -149,11 +149,37 @@
 
 ---
 
-## 📋 Pendente
+---
 
-### Fase 4: Pagamento & Relatórios
-- Pagamento entity + use cases
-- Relatórios / dashboard endpoints
+### Fase 4: Pagamento & Relatórios — COMPLETA
+
+#### Task 4.1 — Pagamento entity + repository ✅
+- `src/domain/entities/pagamento.entity.ts`
+  - `FormaPagamento`: DINHEIRO | CARTAO_CREDITO | CARTAO_DEBITO | PIX | TRANSFERENCIA
+  - `StatusPagamento`: PENDENTE | CONFIRMADO | CANCELADO
+  - `confirmar()` — seta `dataPagamento`, transiciona para CONFIRMADO
+  - `cancelar()` — bloqueia se já CONFIRMADO
+  - Validações: `ordemServicoId` não vazio, `valor > 0`
+- `src/domain/repositories/pagamento.repository.ts` — `sumConfirmados()` para receita total
+- Schema MongoDB com índices em `ordemServicoId` e `status`
+- `MongoPagamentoRepository` com `sumConfirmados()` via `$group` aggregate
+
+#### Task 4.2 — Pagamento use cases + REST API ✅
+- `CreatePagamentoUseCase` — valida OS (EM_ANDAMENTO|CONCLUIDA), cria já confirmado, chama `os.registrarPagamento()`
+- `GetPagamentoUseCase`, `ListPagamentosUseCase`
+- `PagamentoMapper`, `PagamentoResponseDto`, `CreatePagamentoDto`
+- `POST /api/pagamentos` — registrar pagamento
+- `GET /api/pagamentos` — listar (filtros: ordemServicoId, status, page, limit)
+- `GET /api/pagamentos/:id` — buscar por id
+
+#### Task 4.3 — Relatórios / Dashboard ✅
+- `DashboardUseCase` — agrega dados de OS, pagamentos e estoque em paralelo (`Promise.all`)
+- `GET /api/relatorios/dashboard` — retorna:
+  - `ordensServico.{ total, abertas, emAndamento, concluidas, canceladas }`
+  - `financeiro.{ receitaTotal }` (soma dos pagamentos CONFIRMADO)
+  - `estoque.{ itensAbaixoDoMinimo }`
+
+## 📋 Pendente
 
 ### Fase 5: Qualidade & Cobertura
 - Cobertura ≥ 80%
@@ -187,7 +213,7 @@
 - [x] ItemEstoque entity (reservar/utilizar/liberar/abastecer)
 - [x] OrdemServico aggregate + NumeroOS VO
 - [x] Servico entity
-- [ ] Pagamento entity
+- [x] Pagamento entity
 
 ### Application Layer
 - [x] Cliente use cases (Create, Get, Update, List, Deactivate)
@@ -195,8 +221,8 @@
 - [x] Peca use cases (Create, Get, Update, List, Deactivate)
 - [x] InventoryService (domain service)
 - [x] OrdemServico use cases (Create, Get, List, Iniciar, Concluir, Cancelar)
-- [ ] Pagamento use cases
-- [ ] Relatórios use cases
+- [x] Pagamento use cases (Create, Get, List)
+- [x] Relatórios use cases (Dashboard)
 
 ### Presentation Layer
 - [x] Auth endpoints (`POST /api/auth/login`)
@@ -204,8 +230,8 @@
 - [x] Veiculo REST API (`/api/veiculos`, `/api/clientes/:id/veiculos`)
 - [x] Peca REST API (`/api/pecas`)
 - [x] OrdemServico REST API
-- [ ] Pagamento REST API
-- [ ] Relatórios REST API
+- [x] Pagamento REST API
+- [x] Relatórios REST API
 - [ ] Swagger/OpenAPI
 
 ### Testes
