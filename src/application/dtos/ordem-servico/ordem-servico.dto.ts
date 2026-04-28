@@ -51,3 +51,18 @@ export interface OrdemServicoResponseDto {
   servicos: ServicoResponseDto[];
   valorTotal: number;
 }
+
+export interface ListOrdensServicoDto {
+  page?: number;
+  limit?: number;
+  status?: StatusOS;
+  clienteId?: string;
+  veiculoId?: string;
+}
+
+export interface ListOrdensServicoResponseDto {
+  ordens: OrdemServicoResponseDto[];
+  total: number;
+  page: number;
+  limit: number;
+}

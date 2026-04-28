@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-04-28  
-**Testes**: 278 passando | **Cobertura**: em andamento  
-**Status atual**: Task 3.3 concluída → Task 3.4 iniciando (OS lifecycle use cases)
+**Testes**: 298 passando | **Cobertura**: em andamento  
+**Status atual**: Fase 3 concluída → Fase 4 iniciando (Pagamento)
 
 ---
 
@@ -87,7 +87,7 @@
 
 ---
 
-### Fase 3: Ordem de Serviço — EM ANDAMENTO
+### Fase 3: Ordem de Serviço — COMPLETA
 
 #### Task 3.1 — OrdemServico aggregate + NumeroOS VO ✅
 - `src/domain/value-objects/numero-os.vo.ts`
@@ -129,9 +129,23 @@
 - Schema MongoDB atualizado: subdocumento `servicos[]` com `pecasUtilizadas[]` embedded
 - Repository impl atualizado: `toDomain`/`toPersistence` com reconstitução de `Servico` entities
 
-#### Task 3.4 — OS lifecycle use cases ⬅ PRÓXIMA
-#### Task 3.4 — OS lifecycle use cases (iniciar, concluir, cancelar)
-#### Task 3.5 — OrdemServico REST API
+#### Task 3.4 — OS lifecycle use cases ✅
+- `IniciarOSUseCase` — ABERTA → EM_ANDAMENTO
+- `ConcluirOSUseCase` — EM_ANDAMENTO → CONCLUIDA
+- `CancelarOSUseCase` — ABERTA|EM_ANDAMENTO → CANCELADA (valida motivo, temPagamento)
+
+#### Task 3.5 — OrdemServico REST API ✅
+- `src/presentation/validators/ordem-servico.validator.ts` — `validateCreateOrdemServico`, `validateCancelarOS`
+- `src/presentation/controllers/ordem-servico.controller.ts`
+- `src/presentation/routes/ordem-servico.routes.ts`
+  - `POST /api/ordens-servico` — cria OS
+  - `GET /api/ordens-servico` — lista com filtros (status, clienteId, veiculoId, page, limit)
+  - `GET /api/ordens-servico/:id` — busca por id
+  - `PATCH /api/ordens-servico/:id/iniciar` — inicia OS
+  - `PATCH /api/ordens-servico/:id/concluir` — conclui OS
+  - `PATCH /api/ordens-servico/:id/cancelar` — cancela OS (body: `{ motivo }`)
+- `GetOrdemServicoUseCase`, `ListOrdensServicoUseCase` implementados
+- `ListOrdensServicoResponseDto` adicionado ao DTO
 
 ---
 
@@ -180,7 +194,7 @@
 - [x] Veiculo use cases (Create, Get, Update, ListByCliente)
 - [x] Peca use cases (Create, Get, Update, List, Deactivate)
 - [x] InventoryService (domain service)
-- [ ] OrdemServico use cases
+- [x] OrdemServico use cases (Create, Get, List, Iniciar, Concluir, Cancelar)
 - [ ] Pagamento use cases
 - [ ] Relatórios use cases
 
@@ -189,7 +203,7 @@
 - [x] Cliente REST API (`/api/clientes`)
 - [x] Veiculo REST API (`/api/veiculos`, `/api/clientes/:id/veiculos`)
 - [x] Peca REST API (`/api/pecas`)
-- [ ] OrdemServico REST API
+- [x] OrdemServico REST API
 - [ ] Pagamento REST API
 - [ ] Relatórios REST API
 - [ ] Swagger/OpenAPI
