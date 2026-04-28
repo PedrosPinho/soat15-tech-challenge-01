@@ -1,5 +1,5 @@
 {
-  "name": "oficina-mecanica",
+  "name": "soat15-tech-challenge-01",
   "version": "1.0.0",
   "description": "Auto Repair Shop Management System — MVP",
   "main": "dist/index.js",
@@ -47,6 +47,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.5.0",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
@@ -57,6 +58,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.6.0",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
     "@typescript-eslint/parser": "^8.59.1",
