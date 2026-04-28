@@ -15,7 +15,7 @@ export class ClienteMapper {
       endereco: {
         logradouro: cliente.endereco.logradouro,
         numero: cliente.endereco.numero,
-        complemento: cliente.endereco.complemento,
+        complemento: cliente.endereco?.complemento || '',
         bairro: cliente.endereco.bairro,
         cidade: cliente.endereco.cidade,
         estado: cliente.endereco.estado,
