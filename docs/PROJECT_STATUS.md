@@ -1,391 +1,268 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-## ✅ Documentação Completa (Concluída)
-
-### Artefatos Criados
-
-1. **README.md** (Principal)
-   - Visão geral do projeto
-   - Quick start com Docker e local
-   - Documentação da API
-   - Guias de teste e desenvolvimento
-   - Stack tecnológico completo
-
-2. **AGENTS.md** (Guia para Desenvolvedores)
-   - Workflow de desenvolvimento TDD
-   - Padrões de código TypeScript/Node.js
-   - Regras por camada (Domain, Application, Infrastructure)
-   - Exemplos práticos de implementação
-   - Troubleshooting comum
-   - Code review checklist
-
-3. **docs/project_summary.md**
-   - 7 Bounded Contexts detalhados
-   - 21 Entidades do domínio
-   - Fluxo de negócio completo
-   - Padrões de integração DDD
-   - 12 eventos de domínio chave
-   - Business rules e invariantes
-
-4. **docs/domain_model.md**
-   - Especificação completa de todas as 21 entidades
-   - Atributos, operações, regras de validação
-   - Relacionamentos e cardinalidades
-   - Aggregate design
-   - MongoDB schema considerations
-   - 50+ páginas de especificação detalhada
-
-5. **docs/implementation_plan.md**
-   - MVP scope definition
-   - Justificativa MongoDB
-   - 6 Fases de implementação (21 dias)
-   - 25+ tarefas granulares com:
-     - Acceptance criteria
-     - Files to create
-     - Tests required
-     - Demo checklist
-   - Testing strategy (80% coverage)
-   - Quality gates
-   - Risk mitigation
-
-### Análise do Miro Board
-
-**Explorados**:
-- ✅ Event Storming diagram completo
-- ✅ Domain Model (UML) com 21 classes
-- ✅ Context Map com padrões de integração
-- ✅ Linguagem Ubíqua documentada
-
-**Imagens**: Nenhuma imagem encontrada no board (conteúdo é baseado em diagramas e documentos textuais)
-
-## 📋 Próximos Passos — Implementação
-
-### Fase 0: Project Bootstrap (Começar Agora)
-
-#### Task 0.1: Initialize Project Structure
-```bash
-# Criar estrutura de pastas
-mkdir -p src/{presentation/{controllers,middlewares,validators,routes},application/{use-cases,dtos,mappers},domain/{entities,value-objects,aggregates,repositories,services,events},infrastructure/{database/{mongodb,repositories},security,logging},shared/{errors,validators,utils}}
-
-# Criar package.json
-npm init -y
-
-# Instalar dependências principais
-npm install express mongoose dotenv bcryptjs jsonwebtoken helmet cors express-rate-limit
-
-# Instalar dependências de dev
-npm install -D typescript @types/node @types/express @types/mongoose @types/bcryptjs @types/jsonwebtoken ts-node-dev jest @types/jest ts-jest supertest @types/supertest eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin prettier eslint-config-prettier
-
-# Configurar TypeScript
-npx tsc --init
-
-# Configurar ESLint
-npx eslint --init
-
-# Configurar Jest
-npx jest --init
-```
-
-**Arquivos a criar manualmente**:
-- `tsconfig.json` (modo strict)
-- `.eslintrc.json`
-- `.prettierrc`
-- `jest.config.js`
-- `.env.example`
-- `.gitignore`
-
-**Duração estimada**: 2-3 horas
+**Última Atualização**: 2026-04-28  
+**Testes**: 266 passando | **Cobertura**: em andamento  
+**Status atual**: Task 3.2 concluída → Task 3.3 iniciando (CreateOrdemServico use case)
 
 ---
 
-#### Task 0.2: Setup MongoDB Connection
+## ✅ Fases Concluídas
 
-```bash
-# Criar schema base do Mongoose
-touch src/infrastructure/database/mongodb/connection.ts
+### Fase 0: Project Bootstrap — COMPLETA
 
-# Criar schemas para entidades
-touch src/infrastructure/database/mongodb/schemas/{cliente,veiculo,ordem-servico,peca,pagamento}.schema.ts
-```
-
-**Implementação**:
-1. Connection utility com retry logic
-2. Mongoose schemas TypeScript-first
-3. Graceful shutdown handling
-
-**Testes**:
-- Integration: Connect/disconnect
-- Unit: Validation de env vars
-
-**Duração estimada**: 3-4 horas
+| Task | Descrição | Status |
+|------|-----------|--------|
+| 0.1 | Estrutura de pastas, package.json, tsconfig, ESLint, Jest | ✅ |
+| 0.2 | MongoDB connection com retry e graceful shutdown | ✅ |
+| 0.3 | Dockerfile, docker-compose.yml, health check endpoint | ✅ |
+| 0.4 | JWT service, hash service, auth middleware, login endpoint | ✅ |
 
 ---
 
-#### Task 0.3: Docker Configuration
+### Fase 1: Cliente & Veículo — COMPLETA
 
-```bash
-# Criar Dockerfile
-touch Dockerfile
+#### Task 1.1 — Cliente entity + value objects
+- `src/domain/entities/cliente.entity.ts` — imutável, factory `Cliente.create()`
+- `src/domain/value-objects/cpf-cnpj.vo.ts` — validação de dígitos verificadores
+- `src/domain/value-objects/endereco.vo.ts`
+- `src/domain/repositories/cliente.repository.ts` — interface `IClienteRepository`
+- `src/infrastructure/database/mongodb/schemas/cliente.schema.ts`
+- `src/infrastructure/database/mongodb/repositories/cliente.repository.impl.ts`
 
-# Criar docker-compose.yml
-touch docker-compose.yml
+#### Task 1.2 — Cliente use cases + REST API
+- Use cases: `CreateCliente`, `GetCliente`, `UpdateCliente`, `ListClientes`, `DeactivateCliente`
+- DTOs, mapper `ClienteMapper`
+- `src/presentation/controllers/cliente.controller.ts`
+- `src/presentation/routes/cliente.routes.ts` — todas as rotas protegidas com `authMiddleware`
+- `src/presentation/validators/cliente.validator.ts`
+- Rota registrada: `POST|GET|PUT|DELETE /api/clientes`
 
-# Criar .dockerignore
-touch .dockerignore
+#### Task 1.3 — Veículo entity + value objects
+- `src/domain/entities/veiculo.entity.ts` — `atualizarQuilometragem()` só aceita km crescente
+- `src/domain/value-objects/placa.vo.ts` — formato antigo (`ABC-1234`) e Mercosul (`ABC1D23`)
+- `src/domain/repositories/veiculo.repository.ts` — interface `IVeiculoRepository`
+- Schema e repository MongoDB
 
-# Criar health check
-touch src/presentation/controllers/health.controller.ts
-```
-
-**docker-compose.yml** deve incluir:
-- Node.js app (porta 3000)
-- MongoDB (porta 27017)
-- Volumes para persistência
-- Networks
-
-**Duração estimada**: 2-3 horas
-
----
-
-#### Task 0.4: Authentication Infrastructure
-
-```bash
-# Criar JWT service
-touch src/infrastructure/security/jwt.service.ts
-
-# Criar hash service
-touch src/infrastructure/security/hash.service.ts
-
-# Criar auth middleware
-touch src/presentation/middlewares/auth.middleware.ts
-
-# Criar User entity
-touch src/domain/entities/user.entity.ts
-```
-
-**Implementação**:
-1. JWT sign/verify functions
-2. Password hashing com bcrypt
-3. Auth middleware para proteger rotas
-4. Login endpoint básico
-
-**Testes**:
-- Unit: JWT operations
-- Unit: Password hashing
-- Integration: Middleware blocks
-
-**Duração estimada**: 4-5 horas
+#### Task 1.4 — Veículo use cases + REST API
+- Use cases: `CreateVeiculo`, `GetVeiculo`, `UpdateVeiculo`, `ListVeiculosByCliente`
+- Método `atualizar()` no entity (km + cor + observações em uma operação)
+- `VeiculoResponseDto` inclui `placaFormatada`
+- Rotas registradas: `GET|POST /api/veiculos` e `GET /api/clientes/:clienteId/veiculos`
+- `veiculosByClienteRouter` usa `mergeParams: true`
 
 ---
 
-### Total Fase 0: 11-15 horas (1.5-2 dias)
+### Fase 2: Peças & Estoque — COMPLETA
 
-**Entregável da Fase 0**:
-- ✅ Projeto compilando sem erros TypeScript
-- ✅ MongoDB conectando via Docker
-- ✅ Health endpoint respondendo
-- ✅ Testes de infraestrutura passando
-- ✅ Docker compose up funcional
+#### Task 2.1 — Peça entity + repository
+- `src/domain/entities/peca.entity.ts`
+  - Tipos: `CategoriaPeca` (MOTOR, TRANSMISSAO, SUSPENSAO, FREIOS, ELETRICA, FLUIDOS, FILTROS, OUTROS)
+  - Tipos: `UnidadeMedida` (UNIDADE, LITRO, METRO, KG)
+  - `get margemLucro()` — retorna 0 quando precoCompra é 0 (evita divisão por zero)
+  - `atualizarPreco()`, `desativar()` — retornam nova instância (imutável)
+  - Validações: código não vazio, descrição 5–200 chars, precoVenda ≥ precoCompra, nivelMaximo > nivelMinimo
+- `src/domain/repositories/peca.repository.ts` — interface com `list(page, limit, filter?)`
+- Schema com índice de texto (`descricao: 'text'`) e índice em `categoria`
+- `MongoPecaRepository` com suporte a `$text: { $search }` no `list()`
+
+#### Task 2.2 — Peça use cases + REST API
+- Use cases: `CreatePeca`, `GetPeca`, `UpdatePeca`, `ListPecas`, `DeactivatePeca`
+- `UpdatePecaUseCase` — atualiza preço e opcionalmente níveis (re-cria via `Peca.create()` para validação completa)
+- `ListPecasUseCase` — sempre filtra `{ ativo: true }` por padrão, suporta `categoria` e `search`
+- `PecaResponseDto` inclui `margemLucro` (formatado com 2 casas decimais)
+- `src/presentation/validators/peca.validator.ts`
+- Rota registrada: `GET|POST|PUT|DELETE /api/pecas`
+
+#### Task 2.3 — Estoque (ItemEstoque + InventoryService)
+- `src/domain/entities/item-estoque.entity.ts`
+  - `reservar(qty)` — disponivel↓ reservada↑
+  - `utilizar(qty)` — reservada↓ (estoque sai do sistema)
+  - `liberarReserva(qty)` — reservada↓ disponivel↑
+  - `abastecer(qty)` — disponivel↑
+  - `get totalEmEstoque()`, `get isAbaixoDoMinimo()`
+  - Totalmente imutável (todos os métodos retornam nova instância)
+- `src/domain/repositories/item-estoque.repository.ts` — interface `IItemEstoqueRepository`
+- `src/domain/services/inventory.service.ts` — `InventoryService` orquestra operações; cria novo item em `adicionarEstoque()` se não existir (exige thresholds)
+- `MongoItemEstoqueRepository` — filtro `abaixoMinimo` aplicado na camada de aplicação
 
 ---
 
-### Após Fase 0: Seguir Implementation Plan
+### Fase 3: Ordem de Serviço — EM ANDAMENTO
 
-**Ordem de execução**:
-1. **Fase 1**: Cliente & Veículo (Days 3-5)
-2. **Fase 2**: Peças & Inventory (Days 6-8)
-3. **Fase 3**: Ordem de Serviço (Days 9-13)
-4. **Fase 4**: Payment & Reports (Days 14-16)
-5. **Fase 5**: Testing & Quality (Days 17-19)
-6. **Fase 6**: Documentation & Delivery (Days 20-21)
+#### Task 3.1 — OrdemServico aggregate + NumeroOS VO ✅
+- `src/domain/value-objects/numero-os.vo.ts`
+  - `NumeroOS.generate(date, sequence)` → `OS-YYYYMMDD-####`
+  - `NumeroOS.parse(value)` — valida formato via regex
+- `src/domain/entities/ordem-servico.entity.ts`
+  - Status: `ABERTA → EM_ANDAMENTO → CONCLUIDA | CANCELADA`
+  - `iniciar()` — seta `dataInicio`
+  - `concluir()` — seta `dataConclusao`
+  - `cancelar(motivo)` — bloqueia se `CONCLUIDA` ou `temPagamento === true`
+  - `registrarPagamento()` — disponível em `EM_ANDAMENTO` ou `CONCLUIDA`
+- `src/domain/repositories/ordem-servico.repository.ts` — interface com `nextSequence(dateKey)` para geração atômica de número sequencial por dia
+- `OSCounterModel` — documento MongoDB com `$inc` atômico para sequência diária
+- Schema com índices em `clienteId`, `veiculoId`, `status`
 
-Cada fase está detalhada em `docs/implementation_plan.md` com:
-- Acceptance criteria específicos
-- Lista exata de arquivos a criar
-- Testes obrigatórios
-- Demo checklist
+#### Task 3.2 — Servico entity ✅
+- `src/domain/entities/servico.entity.ts`
+  - Status: `PENDENTE → EM_ANDAMENTO → CONCLUIDO | CANCELADO`
+  - `iniciar()` — transição de PENDENTE para EM_ANDAMENTO
+  - `concluir(tempoReal)` — seta `tempoRealMinutos`, transiciona para CONCLUIDO
+  - `cancelar()` — bloqueia se CONCLUIDO ou já CANCELADO
+  - `adicionarPeca(pecaId, quantidade, precoUnitario)` — bloqueia se CONCLUIDO/CANCELADO ou duplicado
+  - `removerPeca(pecaId)` — bloqueia se CONCLUIDO/CANCELADO, lança `NotFoundError` se não existe
+  - `get valorTotalPecas()` — soma de `quantidade * precoUnitario` por peça
+  - `get valorTotal()` — `valorMaoDeObra + valorTotalPecas`
+  - `PecaServico` interface: `{ pecaId, quantidade, precoUnitario }` (snapshot de preço)
+  - Totalmente imutável (todos os métodos retornam nova instância)
+
+#### Task 3.3 — CreateOrdemServico use case ⬅ PRÓXIMA
+#### Task 3.4 — CreateOrdemServico use case
+#### Task 3.4 — OS lifecycle use cases (iniciar, concluir, cancelar)
+#### Task 3.5 — OrdemServico REST API
+
+---
+
+## 📋 Pendente
+
+### Fase 4: Pagamento & Relatórios
+- Pagamento entity + use cases
+- Relatórios / dashboard endpoints
+
+### Fase 5: Qualidade & Cobertura
+- Cobertura ≥ 80%
+- Testes de integração (repositórios reais)
+- Testes E2E (fluxos completos)
+
+### Fase 6: Documentação & Entrega
+- Swagger/OpenAPI completo
+- Video demonstração (10–15 min)
+- PDF entregável
 
 ---
 
 ## 📊 Checklist de Progresso
 
-### Documentação
-- [x] README.md
-- [x] AGENTS.md
-- [x] docs/project_summary.md
-- [x] docs/domain_model.md
-- [x] docs/implementation_plan.md
-- [ ] docs/API_USAGE.md (criar durante implementação)
-- [ ] docs/TESTING.md (criar durante implementação)
-- [ ] docs/security_analysis.md (criar após scan)
-
 ### Infrastructure
 - [x] package.json com dependências
-- [x] tsconfig.json
-- [x] ESLint + Prettier config
-- [x] Jest config
-- [x] Dockerfile
-- [x] docker-compose.yml
+- [x] tsconfig.json (strict, path aliases)
+- [x] ESLint + Prettier
+- [x] Jest + ts-jest
+- [x] Dockerfile + docker-compose.yml
 - [x] MongoDB connection
 - [x] Health check endpoint
 - [x] JWT auth infrastructure
+- [x] Auth middleware
 
-### Domain Layer (MVP)
-- [x] Cliente entity + CPF/CNPJ validation
-- [ ] Veiculo entity + Placa validation
-- [ ] OrdemServico aggregate
-- [ ] Servico entity
-- [ ] Peca entity
-- [ ] ItemEstoque entity
+### Domain Layer
+- [x] Cliente entity + CPF/CNPJ VO + Endereco VO
+- [x] Veiculo entity + Placa VO
+- [x] Peca entity (preço, margem, estoque)
+- [x] ItemEstoque entity (reservar/utilizar/liberar/abastecer)
+- [x] OrdemServico aggregate + NumeroOS VO
+- [x] Servico entity
 - [ ] Pagamento entity
 
 ### Application Layer
-- [ ] Cliente use cases (CRUD)
-- [ ] Veiculo use cases (CRUD)
-- [ ] Peca use cases (CRUD)
-- [ ] OrdemServico use cases (lifecycle)
+- [x] Cliente use cases (Create, Get, Update, List, Deactivate)
+- [x] Veiculo use cases (Create, Get, Update, ListByCliente)
+- [x] Peca use cases (Create, Get, Update, List, Deactivate)
+- [x] InventoryService (domain service)
+- [ ] OrdemServico use cases
 - [ ] Pagamento use cases
-- [ ] Reports use cases
+- [ ] Relatórios use cases
 
 ### Presentation Layer
-- [ ] Cliente REST API
-- [ ] Veiculo REST API
-- [ ] Peca REST API
+- [x] Auth endpoints (`POST /api/auth/login`)
+- [x] Cliente REST API (`/api/clientes`)
+- [x] Veiculo REST API (`/api/veiculos`, `/api/clientes/:id/veiculos`)
+- [x] Peca REST API (`/api/pecas`)
 - [ ] OrdemServico REST API
 - [ ] Pagamento REST API
-- [ ] Reports REST API
-- [ ] Auth endpoints
-- [ ] Swagger documentation
+- [ ] Relatórios REST API
+- [ ] Swagger/OpenAPI
 
-### Testing
-- [ ] Unit tests (domain)
-- [ ] Integration tests (repositories)
-- [ ] API tests (endpoints)
-- [ ] E2E tests (workflows)
-- [ ] 80%+ coverage achieved
+### Testes
+- [x] Unit — domain entities (Cliente, Veiculo, Peca, ItemEstoque, OrdemServico)
+- [x] Unit — value objects (CpfCnpj, Endereco, Placa, NumeroOS)
+- [x] Unit — use cases (cliente, veiculo, peca, inventory)
+- [x] Unit — services (jwt, hash)
+- [ ] Integration — repositórios MongoDB
+- [ ] E2E — fluxos completos
+- [ ] Cobertura ≥ 80%
 
 ### Quality & Security
-- [ ] ESLint passing
-- [ ] Type check passing
-- [ ] npm audit clean
-- [ ] Snyk scan completed
-- [ ] Rate limiting configured
-- [ ] Input sanitization
-- [ ] Security headers (Helmet)
+- [x] TypeScript strict — type-check limpo
+- [x] Rate limiting configurado
+- [x] Security headers (Helmet)
+- [x] CORS configurado
+- [ ] ESLint sem warnings
+- [ ] npm audit limpo
 
-### Delivery
-- [ ] Repository on GitHub/GitLab
-- [ ] User soatarchitecture added
-- [ ] Video demonstration (10-15 min)
-- [ ] PDF deliverable document
-- [ ] Miro board finalized
+### Entrega
+- [ ] Repositório no GitHub
+- [ ] Usuário `soatarchitecture` adicionado
+- [ ] Vídeo de demonstração (10–15 min)
+- [ ] PDF entregável
+- [ ] Miro board finalizado
 
 ---
 
-## 🎯 Comandos Iniciais
+## 🗂️ Estrutura de Arquivos Atual
 
-### Setup Inicial (Execute agora)
-
-```bash
-# 1. Criar estrutura do projeto
-mkdir -p oficina-mecanica/{src,tests,docs}
-cd oficina-mecanica
-
-# 2. Inicializar Git
-git init
-echo "node_modules/" > .gitignore
-echo "dist/" >> .gitignore
-echo ".env" >> .gitignore
-echo "coverage/" >> .gitignore
-
-# 3. Copiar documentação existente
-cp /home/claude/docs/* docs/
-cp /home/claude/AGENTS.md .
-cp /home/claude/README.md .
-
-# 4. Inicializar NPM
-npm init -y
-
-# 5. Instalar dependências base
-npm install express mongoose dotenv
-
-# 6. Instalar dev dependencies
-npm install -D typescript @types/node @types/express ts-node-dev
-
-# 7. Criar tsconfig.json básico
-npx tsc --init --strict --esModuleInterop --resolveJsonModule --outDir dist
-
-# 8. Criar entrada básica
-mkdir -p src
-echo "console.log('Oficina Mecânica API Starting...');" > src/index.ts
-
-# 9. Testar compilação
-npx tsc
-
-# 10. Adicionar scripts no package.json
-npm pkg set scripts.dev="ts-node-dev --respawn --transpile-only src/index.ts"
-npm pkg set scripts.build="tsc"
-npm pkg set scripts.start="node dist/index.js"
-
-# 11. Testar
-npm run dev
 ```
+src/
+├── domain/
+│   ├── entities/
+│   │   ├── cliente.entity.ts
+│   │   ├── veiculo.entity.ts
+│   │   ├── peca.entity.ts
+│   │   ├── item-estoque.entity.ts
+│   │   ├── ordem-servico.entity.ts
+│   │   ├── servico.entity.ts
+│   │   └── user.entity.ts
+│   ├── value-objects/
+│   │   ├── cpf-cnpj.vo.ts
+│   │   ├── endereco.vo.ts
+│   │   ├── placa.vo.ts
+│   │   └── numero-os.vo.ts
+│   ├── repositories/
+│   │   ├── cliente.repository.ts
+│   │   ├── veiculo.repository.ts
+│   │   ├── peca.repository.ts
+│   │   ├── item-estoque.repository.ts
+│   │   ├── ordem-servico.repository.ts
+│   │   └── user.repository.ts
+│   └── services/
+│       └── inventory.service.ts
+├── application/
+│   ├── dtos/           (cliente, veiculo, peca)
+│   ├── mappers/        (cliente, peca)
+│   └── use-cases/      (cliente, veiculo, peca)
+├── infrastructure/
+│   ├── database/mongodb/
+│   │   ├── connection.ts
+│   │   ├── schemas/    (cliente, veiculo, peca, item-estoque, ordem-servico)
+│   │   └── repositories/ (impl de todos acima)
+│   └── security/       (jwt.service, hash.service)
+├── presentation/
+│   ├── controllers/    (auth, cliente, veiculo, peca, health)
+│   ├── middlewares/    (auth, error)
+│   ├── routes/         (auth, cliente, veiculo, peca, health)
+│   └── validators/     (cliente, veiculo, peca)
+└── shared/
+    └── errors/domain.error.ts
 
-### Primeiro Commit
-
-```bash
-git add .
-git commit -m "chore: initial project setup with documentation"
+tests/
+├── domain/
+│   ├── entities/       (cliente, veiculo, peca, item-estoque, ordem-servico, servico)
+│   ├── value-objects/  (cpf-cnpj, endereco, placa, numero-os)
+│   └── services/       (inventory.service)
+├── application/use-cases/
+│   ├── cliente/        (create, get, update, list, deactivate)
+│   ├── veiculo/        (create, get, update, list-by-cliente)
+│   └── peca/           (create, get, update, list, deactivate)
+└── application/services/
+    ├── hash.service.spec.ts
+    └── jwt.service.spec.ts
 ```
-
----
-
-## 💡 Recomendações
-
-### Para Desenvolvedores
-
-1. **Leia ANTES de começar**:
-   - `AGENTS.md` - Seu guia de desenvolvimento
-   - `docs/implementation_plan.md` - Tarefas detalhadas
-   - `docs/domain_model.md` - Especificação das entidades
-
-2. **Siga estritamente**:
-   - TDD (Test-Driven Development)
-   - Camadas arquiteturais
-   - Quality gates antes de commit
-
-3. **Use como referência**:
-   - Exemplos de código no AGENTS.md
-   - Padrões definidos no implementation plan
-   - Business rules do domain_model.md
-
-### Para o Projeto
-
-1. **Priorize qualidade sobre velocidade**
-   - 80% coverage não é negociável
-   - Code review obrigatório
-   - Testes antes de features
-
-2. **Mantenha documentação atualizada**
-   - README com mudanças de setup
-   - Swagger com novos endpoints
-   - AGENTS.md com novos padrões
-
-3. **Demonstre progresso**
-   - Demo após cada task
-   - Commits frequentes e descritivos
-   - Métricas de cobertura visíveis
-
----
-
-## 🚀 Ready to Start!
-
-Toda a documentação está pronta. O próximo passo é executar os comandos acima e começar a implementação seguindo o `docs/implementation_plan.md`.
-
-**Boa sorte com o Tech Challenge!** 🎓
-
----
-
-**Status**: ✅ Task 1.1 completa → Task 1.2 iniciando (Cliente use cases + REST API)  
-**Última Atualização**: 2026-04-27  
-**Próxima Milestone**: Task 1.2 - Cliente use cases (CRUD) + REST endpoints
