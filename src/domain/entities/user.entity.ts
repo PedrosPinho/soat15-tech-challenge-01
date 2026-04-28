@@ -22,7 +22,8 @@ export class User {
 
   private static validate(nome: string, email: string): void {
     if (nome.length < 3) throw new ValidationError('Nome must be at least 3 characters');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError('Invalid email format');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      throw new ValidationError('Invalid email format');
   }
 
   static create(props: UserProps): User {

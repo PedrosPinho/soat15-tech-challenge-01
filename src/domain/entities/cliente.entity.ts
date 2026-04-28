@@ -59,15 +59,29 @@ export class Cliente {
       throw new ValidationError('Email inválido');
     }
     return new Cliente(
-      this.id, this.nome, this.cpfCnpj, this.tipo,
-      telefone, email, this.endereco, this.dataCadastro, this.ativo,
+      this.id,
+      this.nome,
+      this.cpfCnpj,
+      this.tipo,
+      telefone,
+      email,
+      this.endereco,
+      this.dataCadastro,
+      this.ativo,
     );
   }
 
   desativar(): Cliente {
     return new Cliente(
-      this.id, this.nome, this.cpfCnpj, this.tipo,
-      this.telefone, this.email, this.endereco, this.dataCadastro, false,
+      this.id,
+      this.nome,
+      this.cpfCnpj,
+      this.tipo,
+      this.telefone,
+      this.email,
+      this.endereco,
+      this.dataCadastro,
+      false,
     );
   }
 

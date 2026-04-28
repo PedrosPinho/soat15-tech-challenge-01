@@ -13,7 +13,7 @@ export const authMiddleware = (
 ): void => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return next()
+    return next();
     // return next(new UnauthorizedError('Missing or malformed Authorization header'));
   }
 

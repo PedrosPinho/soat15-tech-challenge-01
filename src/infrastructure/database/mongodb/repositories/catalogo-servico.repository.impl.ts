@@ -16,7 +16,11 @@ export class MongoCatalogoServicoRepository implements ICatalogoServicoRepositor
     return doc ? this.toDomain(doc) : null;
   }
 
-  async list(page: number, limit: number, filter?: ListCatalogoServicoFilter): Promise<ListCatalogoServicoResult> {
+  async list(
+    page: number,
+    limit: number,
+    filter?: ListCatalogoServicoFilter,
+  ): Promise<ListCatalogoServicoResult> {
     const query: Record<string, unknown> = {};
     if (filter?.ativo !== undefined) query['ativo'] = filter.ativo;
     if (filter?.search) query['$text'] = { $search: filter.search };

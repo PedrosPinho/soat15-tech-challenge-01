@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '@shared/errors/domain.error';
 
-export const validateCreateCatalogoServico = (req: Request, _res: Response, next: NextFunction): void => {
+export const validateCreateCatalogoServico = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
   try {
     const { descricao, preco, tempoEstimado } = req.body;
 
@@ -20,7 +24,11 @@ export const validateCreateCatalogoServico = (req: Request, _res: Response, next
   }
 };
 
-export const validateUpdateCatalogoServico = (req: Request, _res: Response, next: NextFunction): void => {
+export const validateUpdateCatalogoServico = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
   try {
     const { descricao, preco, tempoEstimado } = req.body;
 

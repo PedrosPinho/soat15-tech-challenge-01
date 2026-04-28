@@ -21,13 +21,13 @@
     "clean": "rm -rf dist coverage",
     "db:seed": "ts-node src/infrastructure/database/seeds/index.ts",
     "db:reset": "ts-node src/infrastructure/database/seeds/reset.ts",
-    "docker:build": "docker-compose build",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f",
-    "sonar:up": "docker-compose up -d sonarqube",
-    "sonar:scan": "npm run test:coverage && docker-compose --profile sonar run --rm sonar-scanner",
-    "sonar:down": "docker-compose stop sonarqube"
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "sonar:up": "docker compose up -d sonarqube",
+    "sonar:scan": "npm run test:coverage && docker compose --profile sonar run --rm sonar-scanner",
+    "sonar:down": "docker compose stop sonarqube"
   },
   "keywords": [
     "oficina",
@@ -47,7 +47,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.5.0",
-    "uuid": "^9.0.1"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

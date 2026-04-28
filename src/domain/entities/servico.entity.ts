@@ -72,14 +72,17 @@ export class Servico {
   }
 
   cancelar(): Servico {
-    if (this.status === 'CONCLUIDO') throw new ValidationError('Serviço concluído não pode ser cancelado');
+    if (this.status === 'CONCLUIDO')
+      throw new ValidationError('Serviço concluído não pode ser cancelado');
     if (this.status === 'CANCELADO') throw new ValidationError('Serviço já está cancelado');
     return this.copy({ status: 'CANCELADO' });
   }
 
   adicionarPeca(pecaId: string, quantidade: number, precoUnitario: number): Servico {
     if (this.status === 'CONCLUIDO' || this.status === 'CANCELADO') {
-      throw new ValidationError('Não é possível adicionar peças a um serviço concluído ou cancelado');
+      throw new ValidationError(
+        'Não é possível adicionar peças a um serviço concluído ou cancelado',
+      );
     }
     if (!pecaId.trim()) throw new ValidationError('pecaId é obrigatório');
     if (quantidade <= 0) throw new ValidationError('Quantidade deve ser maior que zero');
@@ -87,12 +90,16 @@ export class Servico {
     if (this.pecasUtilizadas.some((p) => p.pecaId === pecaId)) {
       throw new ConflictError('Peça já adicionada ao serviço');
     }
-    return this.copy({ pecasUtilizadas: [...this.pecasUtilizadas, { pecaId, quantidade, precoUnitario }] });
+    return this.copy({
+      pecasUtilizadas: [...this.pecasUtilizadas, { pecaId, quantidade, precoUnitario }],
+    });
   }
 
   removerPeca(pecaId: string): Servico {
     if (this.status === 'CONCLUIDO' || this.status === 'CANCELADO') {
-      throw new ValidationError('Não é possível remover peças de um serviço concluído ou cancelado');
+      throw new ValidationError(
+        'Não é possível remover peças de um serviço concluído ou cancelado',
+      );
     }
     if (!this.pecasUtilizadas.some((p) => p.pecaId === pecaId)) {
       throw new NotFoundError('Peça não encontrada no serviço');
@@ -100,11 +107,13 @@ export class Servico {
     return this.copy({ pecasUtilizadas: this.pecasUtilizadas.filter((p) => p.pecaId !== pecaId) });
   }
 
-  private copy(overrides: Partial<{
-    status: StatusServico;
-    tempoRealMinutos: number;
-    pecasUtilizadas: PecaServico[];
-  }>): Servico {
+  private copy(
+    overrides: Partial<{
+      status: StatusServico;
+      tempoRealMinutos: number;
+      pecasUtilizadas: PecaServico[];
+    }>,
+  ): Servico {
     return new Servico(
       this.id,
       this.descricao,
@@ -119,8 +128,11 @@ export class Servico {
 
   private static validate(props: ServicoProps): void {
     if (!props.descricao.trim()) throw new ValidationError('Descrição é obrigatória');
-    if (props.descricao.trim().length < 3) throw new ValidationError('Descrição deve ter pelo menos 3 caracteres');
-    if (props.tempoEstimadoMinutos <= 0) throw new ValidationError('Tempo estimado deve ser maior que zero');
-    if (props.valorMaoDeObra < 0) throw new ValidationError('Valor de mão de obra não pode ser negativo');
+    if (props.descricao.trim().length < 3)
+      throw new ValidationError('Descrição deve ter pelo menos 3 caracteres');
+    if (props.tempoEstimadoMinutos <= 0)
+      throw new ValidationError('Tempo estimado deve ser maior que zero');
+    if (props.valorMaoDeObra < 0)
+      throw new ValidationError('Valor de mão de obra não pode ser negativo');
   }
 }

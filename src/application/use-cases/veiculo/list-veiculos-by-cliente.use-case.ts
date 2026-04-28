@@ -1,7 +1,10 @@
 import { IVeiculoRepository } from '@domain/repositories/veiculo.repository';
 import { IClienteRepository } from '@domain/repositories/cliente.repository';
 import { NotFoundError } from '@shared/errors/domain.error';
-import { ListVeiculosByClienteDto, ListVeiculosResponseDto } from '@application/dtos/veiculo/veiculo.dto';
+import {
+  ListVeiculosByClienteDto,
+  ListVeiculosResponseDto,
+} from '@application/dtos/veiculo/veiculo.dto';
 import { VeiculoMapper } from '@application/mappers/veiculo.mapper';
 
 export class ListVeiculosByClienteUseCase {

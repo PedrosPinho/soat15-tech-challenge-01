@@ -27,4 +27,7 @@ const itemEstoqueSchema = new Schema<ItemEstoqueDocument>(
 
 itemEstoqueSchema.index({ pecaId: 1 });
 
-export const ItemEstoqueModel = mongoose.model<ItemEstoqueDocument>('ItemEstoque', itemEstoqueSchema);
+export const ItemEstoqueModel = mongoose.model<ItemEstoqueDocument>(
+  'ItemEstoque',
+  itemEstoqueSchema,
+);

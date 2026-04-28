@@ -1,5 +1,8 @@
 import { ICatalogoServicoRepository } from '@domain/repositories/catalogo-servico.repository';
-import { ListCatalogoServicoDto, ListCatalogoServicoResponseDto } from '@application/dtos/catalogo-servico/catalogo-servico.dto';
+import {
+  ListCatalogoServicoDto,
+  ListCatalogoServicoResponseDto,
+} from '@application/dtos/catalogo-servico/catalogo-servico.dto';
 import { CatalogoServicoMapper } from '@application/mappers/catalogo-servico.mapper';
 
 export class ListCatalogoServicoUseCase {

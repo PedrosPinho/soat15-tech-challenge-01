@@ -66,17 +66,31 @@ export class Peca {
       throw new ValidationError('Preço de venda não pode ser menor que o preço de compra');
     }
     return new Peca(
-      this.id, this.codigo, this.descricao, this.categoria,
-      novoPrecoCompra, novoPrecoVenda,
-      this.unidadeMedida, this.nivelMinimo, this.nivelMaximo, this.ativo,
+      this.id,
+      this.codigo,
+      this.descricao,
+      this.categoria,
+      novoPrecoCompra,
+      novoPrecoVenda,
+      this.unidadeMedida,
+      this.nivelMinimo,
+      this.nivelMaximo,
+      this.ativo,
     );
   }
 
   desativar(): Peca {
     return new Peca(
-      this.id, this.codigo, this.descricao, this.categoria,
-      this.precoCompra, this.precoVenda,
-      this.unidadeMedida, this.nivelMinimo, this.nivelMaximo, false,
+      this.id,
+      this.codigo,
+      this.descricao,
+      this.categoria,
+      this.precoCompra,
+      this.precoVenda,
+      this.unidadeMedida,
+      this.nivelMinimo,
+      this.nivelMaximo,
+      false,
     );
   }
 

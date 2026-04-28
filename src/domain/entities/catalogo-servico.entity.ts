@@ -29,23 +29,34 @@ export class CatalogoServico {
     );
   }
 
-  editar(changes: Partial<Pick<CatalogoServicoProps, 'descricao' | 'preco' | 'tempoEstimado'>>): CatalogoServico {
+  editar(
+    changes: Partial<Pick<CatalogoServicoProps, 'descricao' | 'preco' | 'tempoEstimado'>>,
+  ): CatalogoServico {
     const updated = {
       descricao: changes.descricao ?? this.descricao,
       preco: changes.preco ?? this.preco,
       tempoEstimado: changes.tempoEstimado ?? this.tempoEstimado,
     };
     CatalogoServico.validate(updated);
-    return new CatalogoServico(this.id, updated.descricao.trim(), updated.preco, updated.tempoEstimado, this.ativo);
+    return new CatalogoServico(
+      this.id,
+      updated.descricao.trim(),
+      updated.preco,
+      updated.tempoEstimado,
+      this.ativo,
+    );
   }
 
   deletar(): CatalogoServico {
     return new CatalogoServico(this.id, this.descricao, this.preco, this.tempoEstimado, false);
   }
 
-  private static validate(props: Pick<CatalogoServicoProps, 'descricao' | 'preco' | 'tempoEstimado'>): void {
+  private static validate(
+    props: Pick<CatalogoServicoProps, 'descricao' | 'preco' | 'tempoEstimado'>,
+  ): void {
     if (!props.descricao?.trim()) throw new ValidationError('Descrição é obrigatória');
     if (props.preco < 0) throw new ValidationError('Preço não pode ser negativo');
-    if (props.tempoEstimado <= 0) throw new ValidationError('Tempo estimado deve ser maior que zero');
+    if (props.tempoEstimado <= 0)
+      throw new ValidationError('Tempo estimado deve ser maior que zero');
   }
 }

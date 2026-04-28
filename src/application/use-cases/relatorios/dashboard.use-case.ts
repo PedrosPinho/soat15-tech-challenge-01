@@ -11,23 +11,16 @@ export class DashboardUseCase {
   ) {}
 
   async execute(): Promise<DashboardResponseDto> {
-    const [
-      todas,
-      abertas,
-      emAndamento,
-      concluidas,
-      canceladas,
-      receitaTotal,
-      itensEstoque,
-    ] = await Promise.all([
-      this.osRepo.list(1, 1, {}),
-      this.osRepo.list(1, 1, { status: 'ABERTA' }),
-      this.osRepo.list(1, 1, { status: 'EM_ANDAMENTO' }),
-      this.osRepo.list(1, 1, { status: 'CONCLUIDA' }),
-      this.osRepo.list(1, 1, { status: 'CANCELADA' }),
-      this.pagamentoRepo.sumConfirmados(),
-      this.estoqueRepo.list(),
-    ]);
+    const [todas, abertas, emAndamento, concluidas, canceladas, receitaTotal, itensEstoque] =
+      await Promise.all([
+        this.osRepo.list(1, 1, {}),
+        this.osRepo.list(1, 1, { status: 'ABERTA' }),
+        this.osRepo.list(1, 1, { status: 'EM_ANDAMENTO' }),
+        this.osRepo.list(1, 1, { status: 'CONCLUIDA' }),
+        this.osRepo.list(1, 1, { status: 'CANCELADA' }),
+        this.pagamentoRepo.sumConfirmados(),
+        this.estoqueRepo.list(),
+      ]);
 
     const itensAbaixoDoMinimo = itensEstoque.filter((i) => i.isAbaixoDoMinimo).length;
 

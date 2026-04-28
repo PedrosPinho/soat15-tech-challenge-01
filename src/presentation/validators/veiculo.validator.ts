@@ -13,11 +13,7 @@ function assertPositiveInt(value: unknown, field: string): void {
   }
 }
 
-export const validateCreateVeiculo = (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void => {
+export const validateCreateVeiculo = (req: Request, _res: Response, next: NextFunction): void => {
   try {
     const { clienteId, placa, marca, modelo, ano } = req.body;
     assertString(clienteId, 'clienteId');
@@ -33,11 +29,7 @@ export const validateCreateVeiculo = (
   }
 };
 
-export const validateUpdateVeiculo = (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-): void => {
+export const validateUpdateVeiculo = (req: Request, _res: Response, next: NextFunction): void => {
   try {
     assertPositiveInt(req.body.quilometragem, 'quilometragem');
     next();

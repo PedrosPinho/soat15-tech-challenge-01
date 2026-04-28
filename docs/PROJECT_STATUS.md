@@ -303,7 +303,7 @@
 - [x] CORS configurado
 - [ ] ESLint sem warnings
 - [x] SonarQube e SonarScanner configurados
-- [ ] npm audit limpo
+- [x] npm audit limpo
 
 ### Entrega
 - [ ] Repositório no GitHub

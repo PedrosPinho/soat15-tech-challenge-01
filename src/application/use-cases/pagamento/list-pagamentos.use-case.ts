@@ -1,5 +1,8 @@
 import { IPagamentoRepository } from '@domain/repositories/pagamento.repository';
-import { ListPagamentosDto, ListPagamentosResponseDto } from '@application/dtos/pagamento/pagamento.dto';
+import {
+  ListPagamentosDto,
+  ListPagamentosResponseDto,
+} from '@application/dtos/pagamento/pagamento.dto';
 import { PagamentoMapper } from '@application/mappers/pagamento.mapper';
 
 export class ListPagamentosUseCase {

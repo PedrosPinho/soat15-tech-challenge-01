@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { ValidationError } from '@shared/errors/domain.error';
 
-export const validateCreateOrdemServico = (req: Request, _res: Response, next: NextFunction): void => {
+export const validateCreateOrdemServico = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
   try {
     const { clienteId, veiculoId, quilometragemEntrada } = req.body;
 
@@ -24,7 +28,10 @@ export const validateCreateOrdemServico = (req: Request, _res: Response, next: N
         if (typeof srv['descricao'] !== 'string' || !(srv['descricao'] as string).trim()) {
           throw new ValidationError('Cada serviço deve ter uma descricao');
         }
-        if (typeof srv['tempoEstimadoMinutos'] !== 'number' || (srv['tempoEstimadoMinutos'] as number) <= 0) {
+        if (
+          typeof srv['tempoEstimadoMinutos'] !== 'number' ||
+          (srv['tempoEstimadoMinutos'] as number) <= 0
+        ) {
           throw new ValidationError('Cada serviço deve ter tempoEstimadoMinutos maior que zero');
         }
         if (typeof srv['valorMaoDeObra'] !== 'number' || (srv['valorMaoDeObra'] as number) < 0) {

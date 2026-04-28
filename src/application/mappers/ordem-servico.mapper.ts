@@ -1,6 +1,9 @@
 import { OrdemServico } from '@domain/entities/ordem-servico.entity';
 import { Servico } from '@domain/entities/servico.entity';
-import { OrdemServicoResponseDto, ServicoResponseDto } from '@application/dtos/ordem-servico/ordem-servico.dto';
+import {
+  OrdemServicoResponseDto,
+  ServicoResponseDto,
+} from '@application/dtos/ordem-servico/ordem-servico.dto';
 
 export class OrdemServicoMapper {
   static toDto(os: OrdemServico): OrdemServicoResponseDto {

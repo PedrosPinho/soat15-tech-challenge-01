@@ -1,5 +1,9 @@
 import { Peca } from '@domain/entities/peca.entity';
-import { IPecaRepository, ListPecasFilter, ListPecasResult } from '@domain/repositories/peca.repository';
+import {
+  IPecaRepository,
+  ListPecasFilter,
+  ListPecasResult,
+} from '@domain/repositories/peca.repository';
 import { PecaModel, PecaDocument } from '../schemas/peca.schema';
 
 export class MongoPecaRepository implements IPecaRepository {

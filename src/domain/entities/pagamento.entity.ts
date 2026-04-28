@@ -1,7 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ValidationError } from '@shared/errors/domain.error';
 
-export type FormaPagamento = 'DINHEIRO' | 'CARTAO_CREDITO' | 'CARTAO_DEBITO' | 'PIX' | 'TRANSFERENCIA';
+export type FormaPagamento =
+  | 'DINHEIRO'
+  | 'CARTAO_CREDITO'
+  | 'CARTAO_DEBITO'
+  | 'PIX'
+  | 'TRANSFERENCIA';
 export type StatusPagamento = 'PENDENTE' | 'CONFIRMADO' | 'CANCELADO';
 
 export interface PagamentoProps {
@@ -43,13 +48,15 @@ export class Pagamento {
 
   confirmar(): Pagamento {
     if (this.status === 'CONFIRMADO') throw new ValidationError('Pagamento já foi confirmado');
-    if (this.status === 'CANCELADO') throw new ValidationError('Pagamento cancelado não pode ser confirmado');
+    if (this.status === 'CANCELADO')
+      throw new ValidationError('Pagamento cancelado não pode ser confirmado');
     return this.copy({ status: 'CONFIRMADO', dataPagamento: new Date() });
   }
 
   cancelar(): Pagamento {
     if (this.status === 'CANCELADO') throw new ValidationError('Pagamento já está cancelado');
-    if (this.status === 'CONFIRMADO') throw new ValidationError('Pagamento confirmado não pode ser cancelado');
+    if (this.status === 'CONFIRMADO')
+      throw new ValidationError('Pagamento confirmado não pode ser cancelado');
     return this.copy({ status: 'CANCELADO' });
   }
 

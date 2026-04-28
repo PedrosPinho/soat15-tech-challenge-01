@@ -21,7 +21,11 @@ export class MongoPagamentoRepository implements IPagamentoRepository {
     return docs.map((d) => this.toDomain(d));
   }
 
-  async list(page: number, limit: number, filter?: ListPagamentosFilter): Promise<IFindPagamentosResult> {
+  async list(
+    page: number,
+    limit: number,
+    filter?: ListPagamentosFilter,
+  ): Promise<IFindPagamentosResult> {
     const query: Record<string, unknown> = {};
     if (filter?.ordemServicoId) query['ordemServicoId'] = filter.ordemServicoId;
     if (filter?.status) query['status'] = filter.status;

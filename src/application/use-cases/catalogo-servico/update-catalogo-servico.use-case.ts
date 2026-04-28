@@ -1,5 +1,8 @@
 import { ICatalogoServicoRepository } from '@domain/repositories/catalogo-servico.repository';
-import { UpdateCatalogoServicoDto, CatalogoServicoResponseDto } from '@application/dtos/catalogo-servico/catalogo-servico.dto';
+import {
+  UpdateCatalogoServicoDto,
+  CatalogoServicoResponseDto,
+} from '@application/dtos/catalogo-servico/catalogo-servico.dto';
 import { CatalogoServicoMapper } from '@application/mappers/catalogo-servico.mapper';
 import { NotFoundError } from '@shared/errors/domain.error';
 

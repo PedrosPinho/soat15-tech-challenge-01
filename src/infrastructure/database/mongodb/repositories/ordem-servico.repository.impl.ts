@@ -26,7 +26,11 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
     return doc ? this.toDomain(doc) : null;
   }
 
-  async findByClienteId(clienteId: string, page: number, limit: number): Promise<ListOrdemServicoResult> {
+  async findByClienteId(
+    clienteId: string,
+    page: number,
+    limit: number,
+  ): Promise<ListOrdemServicoResult> {
     const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
       OrdemServicoModel.find({ clienteId }).skip(skip).limit(limit).sort({ dataAbertura: -1 }),
@@ -35,7 +39,11 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
     return { ordens: docs.map((d) => this.toDomain(d)), total };
   }
 
-  async list(page: number, limit: number, filter?: ListOrdemServicoFilter): Promise<ListOrdemServicoResult> {
+  async list(
+    page: number,
+    limit: number,
+    filter?: ListOrdemServicoFilter,
+  ): Promise<ListOrdemServicoResult> {
     const query: Record<string, unknown> = {};
     if (filter?.status) query['status'] = filter.status;
     if (filter?.clienteId) query['clienteId'] = filter.clienteId;

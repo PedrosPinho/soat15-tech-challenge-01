@@ -40,7 +40,9 @@ export class InventoryService {
     }
 
     if (!thresholds) {
-      throw new ValidationError('nivelMinimo e nivelMaximo são obrigatórios para criar um novo item de estoque');
+      throw new ValidationError(
+        'nivelMinimo e nivelMaximo são obrigatórios para criar um novo item de estoque',
+      );
     }
 
     const newItem = ItemEstoque.create({
