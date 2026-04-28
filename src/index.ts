@@ -3,8 +3,10 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 import { connectDatabase } from '@infrastructure/database/mongodb/connection';
 import { errorHandler } from '@presentation/middlewares/error.middleware';
+import { swaggerSpec, swaggerUiOptions } from './swagger';
 import { healthRouter } from '@presentation/routes/health.routes';
 import { authRouter } from '@presentation/routes/auth.routes';
 import { clienteRouter } from '@presentation/routes/cliente.routes';
@@ -37,6 +39,9 @@ app.use('/api', limiter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
 
 app.use('/health', healthRouter);
 app.use('/api/auth', authRouter);
