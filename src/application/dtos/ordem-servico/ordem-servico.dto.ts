@@ -14,6 +14,8 @@ export interface CreateOrdemServicoDto {
   quilometragemEntrada: number;
   observacoes?: string;
   servicos?: CreateServicoDto[];
+  catalogoServicoId?: string;
+  precoServico?: number;
 }
 
 export interface PecaServicoResponseDto {
@@ -49,6 +51,8 @@ export interface OrdemServicoResponseDto {
   motivoCancelamento?: string;
   temPagamento: boolean;
   servicos: ServicoResponseDto[];
+  catalogoServicoId?: string;
+  precoServico?: number;
   valorTotal: number;
 }
 

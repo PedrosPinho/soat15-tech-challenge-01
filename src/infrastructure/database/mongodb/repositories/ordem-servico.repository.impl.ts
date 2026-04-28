@@ -90,6 +90,8 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
       motivoCancelamento: doc.motivoCancelamento,
       temPagamento: doc.temPagamento,
       servicos,
+      catalogoServicoId: doc.catalogoServicoId,
+      precoServico: doc.precoServico,
     });
   }
 
@@ -107,6 +109,8 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
       observacoes: os.observacoes,
       motivoCancelamento: os.motivoCancelamento,
       temPagamento: os.temPagamento,
+      catalogoServicoId: os.catalogoServicoId,
+      precoServico: os.precoServico,
       servicos: os.servicos.map((s) => ({
         _id: s.id,
         descricao: s.descricao,

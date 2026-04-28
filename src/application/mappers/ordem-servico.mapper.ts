@@ -18,6 +18,8 @@ export class OrdemServicoMapper {
       motivoCancelamento: os.motivoCancelamento,
       temPagamento: os.temPagamento,
       servicos: os.servicos.map(OrdemServicoMapper.servicoToDto),
+      catalogoServicoId: os.catalogoServicoId,
+      precoServico: os.precoServico,
       valorTotal: os.valorTotal,
     };
   }
