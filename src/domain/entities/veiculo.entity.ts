@@ -58,6 +58,19 @@ export class Veiculo {
     );
   }
 
+  atualizar(props: { quilometragem: number; cor?: string; observacoes?: string }): Veiculo {
+    const comKm = this.atualizarQuilometragem(props.quilometragem);
+    return new Veiculo(
+      comKm.id, comKm.clienteId, comKm.placa, comKm.marca, comKm.modelo,
+      comKm.ano, comKm.quilometragem,
+      props.cor !== undefined ? props.cor : comKm.cor,
+      comKm.chassi,
+      comKm.renavam,
+      props.observacoes !== undefined ? props.observacoes : comKm.observacoes,
+      comKm.criadoEm,
+    );
+  }
+
   atualizarQuilometragem(km: number): Veiculo {
     if (km <= this.quilometragem) {
       throw new ValidationError(
