@@ -1,11 +1,14 @@
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
 import { StatusServico } from '@domain/entities/servico.entity';
 
-export interface CreateServicoDto {
-  descricao: string;
-  tempoEstimadoMinutos: number;
-  valorMaoDeObra: number;
-  observacoes?: string;
+export interface CreatePecaUtilizadaDto {
+  pecaId: string;
+  quantidade: number;
+}
+
+export interface CreateCatalogoServicoItemDto {
+  catalogoServicoId: string;
+  pecasUtilizadas?: CreatePecaUtilizadaDto[];
 }
 
 export interface CreateOrdemServicoDto {
@@ -13,9 +16,7 @@ export interface CreateOrdemServicoDto {
   placa: string;
   quilometragemEntrada: number;
   observacoes?: string;
-  servicos?: CreateServicoDto[];
-  catalogoServicoId?: string;
-  precoServico?: number;
+  catalogoServicos?: CreateCatalogoServicoItemDto[];
 }
 
 export interface PecaServicoResponseDto {
@@ -51,8 +52,6 @@ export interface OrdemServicoResponseDto {
   motivoCancelamento?: string;
   temPagamento: boolean;
   servicos: ServicoResponseDto[];
-  catalogoServicoId?: string;
-  precoServico?: number;
   valorTotal: number;
 }
 

@@ -19,10 +19,21 @@ describe('validateCreateOrdemServico', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('calls next() with servicos array', () => {
+  it('calls next() with catalogoServicos array', () => {
     validateCreateOrdemServico(makeReq({
       ...validCreate,
-      servicos: [{ descricao: 'Troca de óleo', tempoEstimadoMinutos: 30, valorMaoDeObra: 100 }],
+      catalogoServicos: [{ catalogoServicoId: 'abc-123' }],
+    }), res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('calls next() with catalogoServicos and pecasUtilizadas', () => {
+    validateCreateOrdemServico(makeReq({
+      ...validCreate,
+      catalogoServicos: [{
+        catalogoServicoId: 'abc-123',
+        pecasUtilizadas: [{ pecaId: 'peca-1', quantidade: 2 }],
+      }],
     }), res, next);
     expect(next).toHaveBeenCalledWith();
   });
@@ -47,31 +58,39 @@ describe('validateCreateOrdemServico', () => {
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('calls next(err) when servicos is not an array', () => {
-    validateCreateOrdemServico(makeReq({ ...validCreate, servicos: 'invalid' }), res, next);
+  it('calls next(err) when catalogoServicos is not an array', () => {
+    validateCreateOrdemServico(makeReq({ ...validCreate, catalogoServicos: 'invalid' }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('calls next(err) when servico has empty descricao', () => {
+  it('calls next(err) when catalogoServicoId is empty', () => {
     validateCreateOrdemServico(makeReq({
       ...validCreate,
-      servicos: [{ descricao: '', tempoEstimadoMinutos: 30, valorMaoDeObra: 100 }],
+      catalogoServicos: [{ catalogoServicoId: '' }],
     }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('calls next(err) when servico has invalid tempoEstimadoMinutos', () => {
+  it('calls next(err) when pecasUtilizadas is not an array', () => {
     validateCreateOrdemServico(makeReq({
       ...validCreate,
-      servicos: [{ descricao: 'Desc', tempoEstimadoMinutos: 0, valorMaoDeObra: 100 }],
+      catalogoServicos: [{ catalogoServicoId: 'abc', pecasUtilizadas: 'invalid' }],
     }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('calls next(err) when servico has negative valorMaoDeObra', () => {
+  it('calls next(err) when peca has empty pecaId', () => {
     validateCreateOrdemServico(makeReq({
       ...validCreate,
-      servicos: [{ descricao: 'Desc', tempoEstimadoMinutos: 30, valorMaoDeObra: -1 }],
+      catalogoServicos: [{ catalogoServicoId: 'abc', pecasUtilizadas: [{ pecaId: '', quantidade: 1 }] }],
+    }), res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('calls next(err) when peca has zero quantidade', () => {
+    validateCreateOrdemServico(makeReq({
+      ...validCreate,
+      catalogoServicos: [{ catalogoServicoId: 'abc', pecasUtilizadas: [{ pecaId: 'p1', quantidade: 0 }] }],
     }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });

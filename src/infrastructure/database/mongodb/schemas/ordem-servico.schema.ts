@@ -32,8 +32,7 @@ export interface OrdemServicoDocument extends Document<string> {
   motivoCancelamento?: string;
   temPagamento: boolean;
   servicos: ServicoSubDoc[];
-  catalogoServicoId?: string;
-  precoServico?: number;
+
 }
 
 const ordemServicoSchema = new Schema<OrdemServicoDocument>(
@@ -55,8 +54,6 @@ const ordemServicoSchema = new Schema<OrdemServicoDocument>(
     observacoes: { type: String },
     motivoCancelamento: { type: String },
     temPagamento: { type: Boolean, required: true, default: false },
-    catalogoServicoId: { type: String },
-    precoServico: { type: Number },
     servicos: [
       {
         _id: { type: String, required: true },

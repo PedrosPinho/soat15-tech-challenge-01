@@ -213,22 +213,29 @@ export const swaggerSpec = {
         type: 'object',
         required: ['cpfCnpj', 'placa', 'quilometragemEntrada'],
         properties: {
-          cpfCnpj: { type: 'string', example: '52998224725', description: 'CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente' },
-          placa: { type: 'string', example: 'ABC1D23', description: 'Placa do veículo (formato antigo ou Mercosul)' },
-          quilometragemEntrada: { type: 'number', example: 52000 },
-          observacoes: { type: 'string' },
-          catalogoServicoId: { type: 'string', format: 'uuid' },
-          precoServico: { type: 'number', example: 120.0 },
-          servicos: {
+          cpfCnpj: { type: 'string', example: '43201810851', description: 'CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente' },
+          placa: { type: 'string', example: 'UFW6E59', description: 'Placa do veículo (formato antigo ou Mercosul)' },
+          quilometragemEntrada: { type: 'number', example: 2000 },
+          observacoes: { type: 'string', example: 'Troca de óleo' },
+          catalogoServicos: {
             type: 'array',
+            description: 'Serviços do catálogo a serem executados. Preço e tempo são resolvidos automaticamente.',
             items: {
               type: 'object',
-              required: ['descricao', 'tempoEstimadoMinutos', 'valorMaoDeObra'],
+              required: ['catalogoServicoId'],
               properties: {
-                descricao: { type: 'string', example: 'Troca de pastilhas' },
-                tempoEstimadoMinutos: { type: 'integer', example: 60 },
-                valorMaoDeObra: { type: 'number', example: 150.0 },
-                observacoes: { type: 'string' },
+                catalogoServicoId: { type: 'string', format: 'uuid', example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' },
+                pecasUtilizadas: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['pecaId', 'quantidade'],
+                    properties: {
+                      pecaId: { type: 'string', format: 'uuid', example: '3d468fa5-2492-4ab9-975d-0540f74d5517' },
+                      quantidade: { type: 'integer', example: 1, minimum: 1 },
+                    },
+                  },
+                },
               },
             },
           },
