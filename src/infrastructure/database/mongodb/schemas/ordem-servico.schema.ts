@@ -3,6 +3,7 @@ import { StatusOS } from '@domain/entities/ordem-servico.entity';
 
 export interface PecaServicoSubDoc {
   pecaId: string;
+  descricao?: string;
   quantidade: number;
   precoUnitario: number;
 }
@@ -23,6 +24,8 @@ export interface OrdemServicoDocument extends Document<string> {
   numeroOS: string;
   clienteId: string;
   veiculoId: string;
+  cpfCnpj?: string;
+  placa?: string;
   quilometragemEntrada: number;
   status: StatusOS;
   dataAbertura: Date;
@@ -41,6 +44,8 @@ const ordemServicoSchema = new Schema<OrdemServicoDocument>(
     numeroOS: { type: String, required: true, unique: true },
     clienteId: { type: String, required: true },
     veiculoId: { type: String, required: true },
+    cpfCnpj: { type: String },
+    placa: { type: String },
     quilometragemEntrada: { type: Number, required: true },
     status: {
       type: String,
@@ -71,6 +76,7 @@ const ordemServicoSchema = new Schema<OrdemServicoDocument>(
           {
             _id: false,
             pecaId: { type: String, required: true },
+            descricao: { type: String },
             quantidade: { type: Number, required: true },
             precoUnitario: { type: Number, required: true },
           },

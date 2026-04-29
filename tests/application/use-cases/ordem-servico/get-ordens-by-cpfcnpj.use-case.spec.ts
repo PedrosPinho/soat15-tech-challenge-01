@@ -26,6 +26,8 @@ function makeOS(): OrdemServico {
     numeroOS: 'OS-20260428-0001',
     clienteId: 'cliente-uuid-1',
     veiculoId: 'veiculo-uuid-1',
+    cpfCnpj: '52998224725',
+    placa: 'ABC1D23',
     quilometragemEntrada: 50000,
   });
 }
@@ -65,7 +67,7 @@ describe('GetOrdensByCpfCnpjUseCase', () => {
     expect(result.total).toBe(1);
     expect(result.page).toBe(1);
     expect(result.limit).toBe(20);
-    expect(result.ordens[0]!.clienteId).toBe('cliente-uuid-1');
+    expect(result.ordens[0]!.cpfCnpj).toBe('52998224725');
   });
 
   it('returns empty list when cliente has no OS', async () => {

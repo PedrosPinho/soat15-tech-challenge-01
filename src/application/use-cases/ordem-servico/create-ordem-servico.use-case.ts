@@ -40,11 +40,11 @@ export class CreateOrdemServicoUseCase {
         throw new NotFoundError(`Serviço do catálogo ${item.catalogoServicoId} não encontrado`);
       }
 
-      const pecasUtilizadas: { pecaId: string; quantidade: number; precoUnitario: number }[] = [];
+      const pecasUtilizadas: { pecaId: string; descricao: string; quantidade: number; precoUnitario: number }[] = [];
       for (const p of item.pecasUtilizadas ?? []) {
         const peca = await this.pecaRepo.findById(p.pecaId);
         if (!peca) throw new NotFoundError(`Peça ${p.pecaId} não encontrada`);
-        pecasUtilizadas.push({ pecaId: peca.id, quantidade: p.quantidade, precoUnitario: peca.precoVenda });
+        pecasUtilizadas.push({ pecaId: peca.id, descricao: peca.descricao, quantidade: p.quantidade, precoUnitario: peca.precoVenda });
       }
 
       servicos.push(
@@ -66,6 +66,8 @@ export class CreateOrdemServicoUseCase {
       numeroOS,
       clienteId: cliente.id,
       veiculoId: veiculo.id,
+      cpfCnpj: cliente.cpfCnpj.value,
+      placa: veiculo.placa.value,
       quilometragemEntrada: dto.quilometragemEntrada,
       observacoes: dto.observacoes,
       servicos,
