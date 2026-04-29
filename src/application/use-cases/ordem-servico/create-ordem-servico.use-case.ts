@@ -19,13 +19,13 @@ export class CreateOrdemServicoUseCase {
   ) {}
 
   async execute(dto: CreateOrdemServicoDto): Promise<OrdemServicoResponseDto> {
-    const cliente = await this.clienteRepo.findById(dto.clienteId);
-    if (!cliente) throw new NotFoundError(`Cliente ${dto.clienteId} não encontrado`);
+    const cliente = await this.clienteRepo.findByCpfCnpj(dto.cpfCnpj);
+    if (!cliente) throw new NotFoundError(`Cliente com CPF/CNPJ ${dto.cpfCnpj} não encontrado`);
 
-    const veiculo = await this.veiculoRepo.findById(dto.veiculoId);
-    if (!veiculo) throw new NotFoundError(`Veículo ${dto.veiculoId} não encontrado`);
+    const veiculo = await this.veiculoRepo.findByPlaca(dto.placa);
+    if (!veiculo) throw new NotFoundError(`Veículo com placa ${dto.placa} não encontrado`);
 
-    if (veiculo.clienteId !== dto.clienteId) {
+    if (veiculo.clienteId !== cliente.id) {
       throw new ValidationError('Veículo não pertence ao cliente informado');
     }
 
@@ -38,8 +38,8 @@ export class CreateOrdemServicoUseCase {
 
     const os = OrdemServico.create({
       numeroOS,
-      clienteId: dto.clienteId,
-      veiculoId: dto.veiculoId,
+      clienteId: cliente.id,
+      veiculoId: veiculo.id,
       quilometragemEntrada: dto.quilometragemEntrada,
       observacoes: dto.observacoes,
       servicos,

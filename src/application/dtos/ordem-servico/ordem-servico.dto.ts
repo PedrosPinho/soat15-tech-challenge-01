@@ -9,8 +9,8 @@ export interface CreateServicoDto {
 }
 
 export interface CreateOrdemServicoDto {
-  clienteId: string;
-  veiculoId: string;
+  cpfCnpj: string;
+  placa: string;
   quilometragemEntrada: number;
   observacoes?: string;
   servicos?: CreateServicoDto[];

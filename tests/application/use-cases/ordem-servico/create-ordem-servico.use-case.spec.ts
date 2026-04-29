@@ -52,8 +52,8 @@ function makeOsRepo(overrides: Partial<IOrdemServicoRepository> = {}): IOrdemSer
 function makeClienteRepo(overrides: Partial<IClienteRepository> = {}): IClienteRepository {
   return {
     save: jest.fn(),
-    findById: jest.fn().mockResolvedValue(makeCliente()),
-    findByCpfCnpj: jest.fn().mockResolvedValue(null),
+    findById: jest.fn().mockResolvedValue(null),
+    findByCpfCnpj: jest.fn().mockResolvedValue(makeCliente()),
     findByEmail: jest.fn().mockResolvedValue(null),
     list: jest.fn(),
     update: jest.fn(),
@@ -65,8 +65,8 @@ function makeClienteRepo(overrides: Partial<IClienteRepository> = {}): IClienteR
 function makeVeiculoRepo(overrides: Partial<IVeiculoRepository> = {}): IVeiculoRepository {
   return {
     save: jest.fn(),
-    findById: jest.fn().mockResolvedValue(makeVeiculo()),
-    findByPlaca: jest.fn().mockResolvedValue(null),
+    findById: jest.fn().mockResolvedValue(null),
+    findByPlaca: jest.fn().mockResolvedValue(makeVeiculo()),
     findByClienteId: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -75,8 +75,8 @@ function makeVeiculoRepo(overrides: Partial<IVeiculoRepository> = {}): IVeiculoR
 }
 
 const validDto = {
-  clienteId: CLIENT_ID,
-  veiculoId: VEICULO_ID,
+  cpfCnpj: '52998224725',
+  placa: 'ABC1D23',
   quilometragemEntrada: 50000,
 };
 
@@ -120,7 +120,7 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('throws NotFoundError when cliente not found', async () => {
-    const clienteRepo = makeClienteRepo({ findById: jest.fn().mockResolvedValue(null) });
+    const clienteRepo = makeClienteRepo({ findByCpfCnpj: jest.fn().mockResolvedValue(null) });
     const useCase = new CreateOrdemServicoUseCase(makeOsRepo(), clienteRepo, makeVeiculoRepo());
 
     await expect(useCase.execute(validDto)).rejects.toThrow(NotFoundError);
@@ -128,7 +128,7 @@ describe('CreateOrdemServicoUseCase', () => {
 
   it('does not call nextSequence or save when cliente not found', async () => {
     const osRepo = makeOsRepo();
-    const clienteRepo = makeClienteRepo({ findById: jest.fn().mockResolvedValue(null) });
+    const clienteRepo = makeClienteRepo({ findByCpfCnpj: jest.fn().mockResolvedValue(null) });
     const useCase = new CreateOrdemServicoUseCase(osRepo, clienteRepo, makeVeiculoRepo());
 
     await expect(useCase.execute(validDto)).rejects.toThrow(NotFoundError);
@@ -137,7 +137,7 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('throws NotFoundError when veiculo not found', async () => {
-    const veiculoRepo = makeVeiculoRepo({ findById: jest.fn().mockResolvedValue(null) });
+    const veiculoRepo = makeVeiculoRepo({ findByPlaca: jest.fn().mockResolvedValue(null) });
     const useCase = new CreateOrdemServicoUseCase(makeOsRepo(), makeClienteRepo(), veiculoRepo);
 
     await expect(useCase.execute(validDto)).rejects.toThrow(NotFoundError);
@@ -145,7 +145,7 @@ describe('CreateOrdemServicoUseCase', () => {
 
   it('throws ValidationError when veiculo does not belong to cliente', async () => {
     const veiculoRepo = makeVeiculoRepo({
-      findById: jest.fn().mockResolvedValue(makeVeiculo('outro-cliente-id')),
+      findByPlaca: jest.fn().mockResolvedValue(makeVeiculo('outro-cliente-id')),
     });
     const useCase = new CreateOrdemServicoUseCase(makeOsRepo(), makeClienteRepo(), veiculoRepo);
 

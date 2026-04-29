@@ -211,10 +211,10 @@ export const swaggerSpec = {
       },
       CreateOrdemServico: {
         type: 'object',
-        required: ['clienteId', 'veiculoId', 'quilometragemEntrada'],
+        required: ['cpfCnpj', 'placa', 'quilometragemEntrada'],
         properties: {
-          clienteId: { type: 'string', format: 'uuid' },
-          veiculoId: { type: 'string', format: 'uuid' },
+          cpfCnpj: { type: 'string', example: '52998224725', description: 'CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente' },
+          placa: { type: 'string', example: 'ABC1D23', description: 'Placa do veículo (formato antigo ou Mercosul)' },
           quilometragemEntrada: { type: 'number', example: 52000 },
           observacoes: { type: 'string' },
           catalogoServicoId: { type: 'string', format: 'uuid' },
