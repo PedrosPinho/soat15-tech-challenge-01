@@ -17,6 +17,7 @@ import { AprovarOSUseCase } from '@application/use-cases/ordem-servico/aprovar-o
 import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
 import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
 import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
+import { GetOrdensByCpfCnpjUseCase } from '@application/use-cases/ordem-servico/get-ordens-by-cpfcnpj.use-case';
 
 const osRepo = new MongoOrdemServicoRepository();
 const clienteRepo = new MongoClienteRepository();
@@ -32,9 +33,14 @@ const controller = new OrdemServicoController(
   new ConcluirOSUseCase(osRepo),
   new EntregarOSUseCase(osRepo),
   new CancelarOSUseCase(osRepo),
+  new GetOrdensByCpfCnpjUseCase(osRepo, clienteRepo),
 );
 
 export const ordemServicoRouter = Router();
+
+ordemServicoRouter.get('/buscar', (req, res, next) =>
+  controller.getOrdensByCpfCnpj(req, res, next),
+);
 
 ordemServicoRouter.post('/', authMiddleware, validateCreateOrdemServico, (req, res, next) =>
   controller.create(req, res, next),

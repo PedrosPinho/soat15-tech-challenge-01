@@ -8,7 +8,9 @@ import { AprovarOSUseCase } from '@application/use-cases/ordem-servico/aprovar-o
 import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
 import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
 import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
+import { GetOrdensByCpfCnpjUseCase } from '@application/use-cases/ordem-servico/get-ordens-by-cpfcnpj.use-case';
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
+import { ValidationError } from '@shared/errors/domain.error';
 
 export class OrdemServicoController {
   constructor(
@@ -21,6 +23,7 @@ export class OrdemServicoController {
     private readonly concluirOS: ConcluirOSUseCase,
     private readonly entregarOS: EntregarOSUseCase,
     private readonly cancelarOS: CancelarOSUseCase,
+    private readonly getOrdensByCpfCnpjUseCase: GetOrdensByCpfCnpjUseCase,
   ) {}
 
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -95,6 +98,21 @@ export class OrdemServicoController {
   async entregar(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await this.entregarOS.execute(req.params['id'] as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getOrdensByCpfCnpj(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const cpfCnpj = req.query.cpfCnpj as string | undefined;
+      if (!cpfCnpj?.trim()) {
+        throw new ValidationError('cpfCnpj é obrigatório');
+      }
+      const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const result = await this.getOrdensByCpfCnpjUseCase.execute(cpfCnpj.trim(), page, limit);
       res.json(result);
     } catch (err) {
       next(err);
