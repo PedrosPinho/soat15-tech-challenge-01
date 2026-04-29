@@ -359,10 +359,10 @@ export const swaggerSpec = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password'],
+                required: ['email', 'senha'],
                 properties: {
                   email: { type: 'string', format: 'email', example: 'admin@oficina.com' },
-                  password: { type: 'string', example: 'senha123' },
+                  senha: { type: 'string', example: 'senha123' },
                 },
               },
             },
