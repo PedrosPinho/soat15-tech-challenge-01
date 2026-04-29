@@ -10,8 +10,8 @@ export class OrdemServicoMapper {
     return {
       id: os.id,
       numeroOS: os.numeroOS,
-      clienteId: os.clienteId,
-      veiculoId: os.veiculoId,
+      cpfCnpj: os.cpfCnpj ?? '',
+      placa: os.placa ?? '',
       quilometragemEntrada: os.quilometragemEntrada,
       status: os.status,
       dataAbertura: os.dataAbertura.toISOString(),
@@ -29,13 +29,16 @@ export class OrdemServicoMapper {
     return {
       id: servico.id,
       descricao: servico.descricao,
-      status: servico.status,
       tempoEstimadoMinutos: servico.tempoEstimadoMinutos,
       tempoRealMinutos: servico.tempoRealMinutos,
       valorMaoDeObra: servico.valorMaoDeObra,
       valorTotalPecas: servico.valorTotalPecas,
       valorTotal: servico.valorTotal,
-      pecasUtilizadas: [...servico.pecasUtilizadas],
+      pecasUtilizadas: servico.pecasUtilizadas.map((p) => ({
+        descricao: p.descricao ?? '',
+        quantidade: p.quantidade,
+        precoUnitario: p.precoUnitario,
+      })),
       observacoes: servico.observacoes,
     };
   }

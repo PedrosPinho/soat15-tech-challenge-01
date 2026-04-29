@@ -16,6 +16,8 @@ export interface OrdemServicoProps {
   numeroOS: string;
   clienteId: string;
   veiculoId: string;
+  cpfCnpj?: string;
+  placa?: string;
   quilometragemEntrada: number;
   status?: StatusOS;
   dataAbertura?: Date;
@@ -33,6 +35,8 @@ export class OrdemServico {
     public readonly numeroOS: string,
     public readonly clienteId: string,
     public readonly veiculoId: string,
+    public readonly cpfCnpj: string | undefined,
+    public readonly placa: string | undefined,
     public readonly quilometragemEntrada: number,
     public readonly status: StatusOS,
     public readonly dataAbertura: Date,
@@ -51,6 +55,8 @@ export class OrdemServico {
       props.numeroOS,
       props.clienteId,
       props.veiculoId,
+      props.cpfCnpj,
+      props.placa,
       props.quilometragemEntrada,
       props.status ?? 'RECEBIDA',
       props.dataAbertura ?? new Date(),
@@ -142,6 +148,8 @@ export class OrdemServico {
       this.numeroOS,
       this.clienteId,
       this.veiculoId,
+      this.cpfCnpj,
+      this.placa,
       this.quilometragemEntrada,
       overrides.status ?? this.status,
       this.dataAbertura,

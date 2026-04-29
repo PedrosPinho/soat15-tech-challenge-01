@@ -1,5 +1,4 @@
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
-import { StatusServico } from '@domain/entities/servico.entity';
 
 export interface CreatePecaUtilizadaDto {
   pecaId: string;
@@ -20,7 +19,7 @@ export interface CreateOrdemServicoDto {
 }
 
 export interface PecaServicoResponseDto {
-  pecaId: string;
+  descricao: string;
   quantidade: number;
   precoUnitario: number;
 }
@@ -28,7 +27,6 @@ export interface PecaServicoResponseDto {
 export interface ServicoResponseDto {
   id: string;
   descricao: string;
-  status: StatusServico;
   tempoEstimadoMinutos: number;
   tempoRealMinutos?: number;
   valorMaoDeObra: number;
@@ -41,8 +39,8 @@ export interface ServicoResponseDto {
 export interface OrdemServicoResponseDto {
   id: string;
   numeroOS: string;
-  clienteId: string;
-  veiculoId: string;
+  cpfCnpj: string;
+  placa: string;
   quilometragemEntrada: number;
   status: StatusOS;
   dataAbertura: string;

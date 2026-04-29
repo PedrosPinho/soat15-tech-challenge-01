@@ -152,8 +152,8 @@ describe('CreateOrdemServicoUseCase', () => {
     const result = await makeUseCase().execute(validDto);
 
     expect(result.id).toBeDefined();
-    expect(result.clienteId).toBe(CLIENT_ID);
-    expect(result.veiculoId).toBe(VEICULO_ID);
+    expect(result.cpfCnpj).toBe('52998224725');
+    expect(result.placa).toBe('ABC1D23');
     expect(result.status).toBe('RECEBIDA');
     expect(result.temPagamento).toBe(false);
     expect(result.servicos).toHaveLength(0);
@@ -202,7 +202,6 @@ describe('CreateOrdemServicoUseCase', () => {
     expect(result.servicos[0]!.descricao).toBe('Troca de óleo');
     expect(result.servicos[0]!.valorMaoDeObra).toBe(150);
     expect(result.servicos[0]!.tempoEstimadoMinutos).toBe(60);
-    expect(result.servicos[0]!.status).toBe('PENDENTE');
   });
 
   it('calculates valorTotal from catalog price', async () => {

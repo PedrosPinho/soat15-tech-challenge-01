@@ -5,6 +5,7 @@ export type StatusServico = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELA
 
 export interface PecaServico {
   pecaId: string;
+  descricao?: string;
   quantidade: number;
   precoUnitario: number;
 }
