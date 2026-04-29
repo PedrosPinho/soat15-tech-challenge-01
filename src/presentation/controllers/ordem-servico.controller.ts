@@ -3,7 +3,10 @@ import { CreateOrdemServicoUseCase } from '@application/use-cases/ordem-servico/
 import { GetOrdemServicoUseCase } from '@application/use-cases/ordem-servico/get-ordem-servico.use-case';
 import { ListOrdensServicoUseCase } from '@application/use-cases/ordem-servico/list-ordens-servico.use-case';
 import { IniciarOSUseCase } from '@application/use-cases/ordem-servico/iniciar-os.use-case';
+import { AguardarAprovacaoOSUseCase } from '@application/use-cases/ordem-servico/aguardar-aprovacao-os.use-case';
+import { AprovarOSUseCase } from '@application/use-cases/ordem-servico/aprovar-os.use-case';
 import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
+import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
 import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
 
@@ -13,7 +16,10 @@ export class OrdemServicoController {
     private readonly getOS: GetOrdemServicoUseCase,
     private readonly listOS: ListOrdensServicoUseCase,
     private readonly iniciarOS: IniciarOSUseCase,
+    private readonly aguardarAprovacaoOS: AguardarAprovacaoOSUseCase,
+    private readonly aprovarOS: AprovarOSUseCase,
     private readonly concluirOS: ConcluirOSUseCase,
+    private readonly entregarOS: EntregarOSUseCase,
     private readonly cancelarOS: CancelarOSUseCase,
   ) {}
 
@@ -62,6 +68,33 @@ export class OrdemServicoController {
   async concluir(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await this.concluirOS.execute(req.params['id'] as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async aguardarAprovacao(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.aguardarAprovacaoOS.execute(req.params['id'] as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async aprovar(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.aprovarOS.execute(req.params['id'] as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async entregar(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.entregarOS.execute(req.params['id'] as string);
       res.json(result);
     } catch (err) {
       next(err);

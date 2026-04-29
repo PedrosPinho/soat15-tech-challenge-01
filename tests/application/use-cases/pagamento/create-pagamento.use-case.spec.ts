@@ -1,10 +1,10 @@
 import { CreatePagamentoUseCase } from '@application/use-cases/pagamento/create-pagamento.use-case';
 import { IPagamentoRepository } from '@domain/repositories/pagamento.repository';
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
-import { OrdemServico } from '@domain/entities/ordem-servico.entity';
+import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
 
-function makeOS(status: 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA' = 'EM_ANDAMENTO'): OrdemServico {
+function makeOS(status: StatusOS = 'EM_EXECUCAO'): OrdemServico {
   return OrdemServico.create({
     id: 'os-uuid-1',
     numeroOS: 'OS-20260428-0001',
@@ -47,7 +47,7 @@ const validDto = {
 describe('CreatePagamentoUseCase', () => {
   it('creates and confirms payment, updates OS', async () => {
     const pgtoRepo = makePagamentoRepo();
-    const osRepo = makeOsRepo(makeOS('EM_ANDAMENTO'));
+    const osRepo = makeOsRepo(makeOS('EM_EXECUCAO'));
     const useCase = new CreatePagamentoUseCase(pgtoRepo, osRepo);
 
     const result = await useCase.execute(validDto);
@@ -60,9 +60,9 @@ describe('CreatePagamentoUseCase', () => {
     expect(osRepo.update).toHaveBeenCalledTimes(1);
   });
 
-  it('also works when OS is CONCLUIDA', async () => {
+  it('also works when OS is FINALIZADA', async () => {
     const pgtoRepo = makePagamentoRepo();
-    const osRepo = makeOsRepo(makeOS('CONCLUIDA'));
+    const osRepo = makeOsRepo(makeOS('FINALIZADA'));
     const useCase = new CreatePagamentoUseCase(pgtoRepo, osRepo);
 
     const result = await useCase.execute(validDto);
@@ -78,9 +78,9 @@ describe('CreatePagamentoUseCase', () => {
     expect(pgtoRepo.save).not.toHaveBeenCalled();
   });
 
-  it('throws ValidationError when OS is ABERTA', async () => {
+  it('throws ValidationError when OS is RECEBIDA', async () => {
     const pgtoRepo = makePagamentoRepo();
-    const osRepo = makeOsRepo(makeOS('ABERTA'));
+    const osRepo = makeOsRepo(makeOS('RECEBIDA'));
     const useCase = new CreatePagamentoUseCase(pgtoRepo, osRepo);
 
     await expect(useCase.execute(validDto)).rejects.toThrow(ValidationError);

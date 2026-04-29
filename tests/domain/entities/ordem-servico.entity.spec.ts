@@ -12,9 +12,9 @@ function makeOS(overrides: Partial<Parameters<typeof OrdemServico.create>[0]> = 
 
 describe('OrdemServico entity', () => {
   describe('create', () => {
-    it('creates with status ABERTA by default', () => {
+    it('creates with status RECEBIDA by default', () => {
       const os = makeOS();
-      expect(os.status).toBe('ABERTA');
+      expect(os.status).toBe('RECEBIDA');
     });
 
     it('sets dataAbertura automatically', () => {
@@ -66,10 +66,10 @@ describe('OrdemServico entity', () => {
   });
 
   describe('iniciar', () => {
-    it('transitions from ABERTA to EM_ANDAMENTO', () => {
+    it('transitions from RECEBIDA to EM_DIAGNOSTICO', () => {
       const os = makeOS();
       const started = os.iniciar();
-      expect(started.status).toBe('EM_ANDAMENTO');
+      expect(started.status).toBe('EM_DIAGNOSTICO');
     });
 
     it('sets dataInicio on transition', () => {
@@ -84,52 +84,109 @@ describe('OrdemServico entity', () => {
       const os = makeOS();
       const started = os.iniciar();
       expect(started).not.toBe(os);
-      expect(os.status).toBe('ABERTA');
+      expect(os.status).toBe('RECEBIDA');
     });
 
-    it('throws when not ABERTA', () => {
+    it('throws when not RECEBIDA', () => {
       const os = makeOS();
       const started = os.iniciar();
-      expect(() => started.iniciar()).toThrow('OS deve estar ABERTA para ser iniciada');
+      expect(() => started.iniciar()).toThrow('OS deve estar RECEBIDA para iniciar o diagnóstico');
+    });
+  });
+
+  describe('aguardarAprovacao', () => {
+    it('transitions from EM_DIAGNOSTICO to AGUARDANDO_APROVACAO', () => {
+      const os = makeOS().iniciar().aguardarAprovacao();
+      expect(os.status).toBe('AGUARDANDO_APROVACAO');
+    });
+
+    it('returns a new instance (immutability)', () => {
+      const diagnostico = makeOS().iniciar();
+      const aguardando = diagnostico.aguardarAprovacao();
+      expect(aguardando).not.toBe(diagnostico);
+      expect(diagnostico.status).toBe('EM_DIAGNOSTICO');
+    });
+
+    it('throws when not EM_DIAGNOSTICO', () => {
+      const os = makeOS();
+      expect(() => os.aguardarAprovacao()).toThrow('OS deve estar EM_DIAGNOSTICO para aguardar aprovação');
+    });
+  });
+
+  describe('aprovar', () => {
+    it('transitions from AGUARDANDO_APROVACAO to EM_EXECUCAO', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar();
+      expect(os.status).toBe('EM_EXECUCAO');
+    });
+
+    it('returns a new instance (immutability)', () => {
+      const aguardando = makeOS().iniciar().aguardarAprovacao();
+      const aprovada = aguardando.aprovar();
+      expect(aprovada).not.toBe(aguardando);
+      expect(aguardando.status).toBe('AGUARDANDO_APROVACAO');
+    });
+
+    it('throws when not AGUARDANDO_APROVACAO', () => {
+      const os = makeOS().iniciar();
+      expect(() => os.aprovar()).toThrow('OS deve estar AGUARDANDO_APROVACAO para ser aprovada');
     });
   });
 
   describe('concluir', () => {
-    it('transitions from EM_ANDAMENTO to CONCLUIDA', () => {
-      const os = makeOS().iniciar();
+    it('transitions from EM_EXECUCAO to FINALIZADA', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar();
       const concluded = os.concluir();
-      expect(concluded.status).toBe('CONCLUIDA');
+      expect(concluded.status).toBe('FINALIZADA');
     });
 
     it('sets dataConclusao on transition', () => {
       const before = new Date();
-      const os = makeOS().iniciar().concluir();
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().concluir();
       expect(os.dataConclusao).toBeDefined();
       expect(os.dataConclusao!.getTime()).toBeGreaterThanOrEqual(before.getTime());
     });
 
     it('returns a new instance (immutability)', () => {
-      const started = makeOS().iniciar();
-      const concluded = started.concluir();
-      expect(concluded).not.toBe(started);
-      expect(started.status).toBe('EM_ANDAMENTO');
+      const emExecucao = makeOS().iniciar().aguardarAprovacao().aprovar();
+      const finalizada = emExecucao.concluir();
+      expect(finalizada).not.toBe(emExecucao);
+      expect(emExecucao.status).toBe('EM_EXECUCAO');
     });
 
-    it('throws when not EM_ANDAMENTO', () => {
+    it('throws when not EM_EXECUCAO', () => {
       const os = makeOS();
-      expect(() => os.concluir()).toThrow('OS deve estar EM_ANDAMENTO para ser concluída');
+      expect(() => os.concluir()).toThrow('OS deve estar EM_EXECUCAO para ser finalizada');
+    });
+  });
+
+  describe('entregar', () => {
+    it('transitions from FINALIZADA to ENTREGUE', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().concluir().entregar();
+      expect(os.status).toBe('ENTREGUE');
+    });
+
+    it('returns a new instance (immutability)', () => {
+      const finalizada = makeOS().iniciar().aguardarAprovacao().aprovar().concluir();
+      const entregue = finalizada.entregar();
+      expect(entregue).not.toBe(finalizada);
+      expect(finalizada.status).toBe('FINALIZADA');
+    });
+
+    it('throws when not FINALIZADA', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar();
+      expect(() => os.entregar()).toThrow('OS deve estar FINALIZADA para ser entregue');
     });
   });
 
   describe('cancelar', () => {
-    it('transitions from ABERTA to CANCELADA', () => {
+    it('transitions from RECEBIDA to CANCELADA', () => {
       const os = makeOS();
       const cancelled = os.cancelar('Cliente desistiu');
       expect(cancelled.status).toBe('CANCELADA');
     });
 
-    it('transitions from EM_ANDAMENTO to CANCELADA', () => {
-      const os = makeOS().iniciar();
+    it('transitions from EM_EXECUCAO to CANCELADA', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar();
       const cancelled = os.cancelar('Problema identificado');
       expect(cancelled.status).toBe('CANCELADA');
     });
@@ -140,9 +197,14 @@ describe('OrdemServico entity', () => {
       expect(cancelled.motivoCancelamento).toBe('Cliente desistiu');
     });
 
-    it('throws when already CONCLUIDA', () => {
-      const os = makeOS().iniciar().concluir();
-      expect(() => os.cancelar('Tentativa')).toThrow('OS concluída não pode ser cancelada');
+    it('throws when already FINALIZADA', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().concluir();
+      expect(() => os.cancelar('Tentativa')).toThrow('OS finalizada ou entregue não pode ser cancelada');
+    });
+
+    it('throws when already ENTREGUE', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().concluir().entregar();
+      expect(() => os.cancelar('Tentativa')).toThrow('OS finalizada ou entregue não pode ser cancelada');
     });
 
     it('throws when already CANCELADA', () => {
@@ -151,7 +213,7 @@ describe('OrdemServico entity', () => {
     });
 
     it('throws when payment has been registered', () => {
-      const os = makeOS().iniciar().registrarPagamento();
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().registrarPagamento();
       expect(() => os.cancelar('Tentativa')).toThrow('OS com pagamento não pode ser cancelada');
     });
 
@@ -162,24 +224,24 @@ describe('OrdemServico entity', () => {
   });
 
   describe('registrarPagamento', () => {
-    it('marks temPagamento as true', () => {
-      const os = makeOS().iniciar().registrarPagamento();
+    it('marks temPagamento as true on EM_EXECUCAO', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().registrarPagamento();
       expect(os.temPagamento).toBe(true);
     });
 
-    it('throws when OS is not EM_ANDAMENTO or CONCLUIDA', () => {
+    it('throws when OS is not EM_EXECUCAO or FINALIZADA', () => {
       const os = makeOS();
-      expect(() => os.registrarPagamento()).toThrow('Pagamento só pode ser registrado em OS em andamento ou concluída');
+      expect(() => os.registrarPagamento()).toThrow('Pagamento só pode ser registrado em OS em execução ou finalizada');
     });
 
-    it('allows registering payment on CONCLUIDA OS', () => {
-      const os = makeOS().iniciar().concluir();
+    it('allows registering payment on FINALIZADA OS', () => {
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar().concluir();
       const paid = os.registrarPagamento();
       expect(paid.temPagamento).toBe(true);
     });
 
     it('returns a new instance (immutability)', () => {
-      const os = makeOS().iniciar();
+      const os = makeOS().iniciar().aguardarAprovacao().aprovar();
       const paid = os.registrarPagamento();
       expect(paid).not.toBe(os);
       expect(os.temPagamento).toBe(false);

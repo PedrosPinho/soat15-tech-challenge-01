@@ -12,7 +12,10 @@ import { CreateOrdemServicoUseCase } from '@application/use-cases/ordem-servico/
 import { GetOrdemServicoUseCase } from '@application/use-cases/ordem-servico/get-ordem-servico.use-case';
 import { ListOrdensServicoUseCase } from '@application/use-cases/ordem-servico/list-ordens-servico.use-case';
 import { IniciarOSUseCase } from '@application/use-cases/ordem-servico/iniciar-os.use-case';
+import { AguardarAprovacaoOSUseCase } from '@application/use-cases/ordem-servico/aguardar-aprovacao-os.use-case';
+import { AprovarOSUseCase } from '@application/use-cases/ordem-servico/aprovar-os.use-case';
 import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
+import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
 import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
 
 const osRepo = new MongoOrdemServicoRepository();
@@ -24,7 +27,10 @@ const controller = new OrdemServicoController(
   new GetOrdemServicoUseCase(osRepo),
   new ListOrdensServicoUseCase(osRepo),
   new IniciarOSUseCase(osRepo),
+  new AguardarAprovacaoOSUseCase(osRepo),
+  new AprovarOSUseCase(osRepo),
   new ConcluirOSUseCase(osRepo),
+  new EntregarOSUseCase(osRepo),
   new CancelarOSUseCase(osRepo),
 );
 
@@ -44,8 +50,20 @@ ordemServicoRouter.patch('/:id/iniciar', authMiddleware, (req, res, next) =>
   controller.iniciar(req, res, next),
 );
 
+ordemServicoRouter.patch('/:id/aguardar-aprovacao', authMiddleware, (req, res, next) =>
+  controller.aguardarAprovacao(req, res, next),
+);
+
+ordemServicoRouter.patch('/:id/aprovar', authMiddleware, (req, res, next) =>
+  controller.aprovar(req, res, next),
+);
+
 ordemServicoRouter.patch('/:id/concluir', authMiddleware, (req, res, next) =>
   controller.concluir(req, res, next),
+);
+
+ordemServicoRouter.patch('/:id/entregar', authMiddleware, (req, res, next) =>
+  controller.entregar(req, res, next),
 );
 
 ordemServicoRouter.patch('/:id/cancelar', authMiddleware, validateCancelarOS, (req, res, next) =>

@@ -33,14 +33,14 @@ const makeChain = () => ({
 const osDoc = {
   _id: 'os-uuid-1', numeroOS: 'OS-20260428-0001',
   clienteId: 'c-uuid-1', veiculoId: 'v-uuid-1',
-  quilometragemEntrada: 50000, status: 'ABERTA',
+  quilometragemEntrada: 50000, status: 'RECEBIDA',
   dataAbertura: new Date(), dataInicio: undefined,
   dataConclusao: undefined, observacoes: undefined,
   motivoCancelamento: undefined, temPagamento: false, servicos: [],
 };
 
 const osDocWithServico = {
-  ...osDoc, status: 'EM_ANDAMENTO',
+  ...osDoc, status: 'EM_EXECUCAO',
   servicos: [{
     _id: 'srv-uuid-1', descricao: 'Troca de óleo', status: 'PENDENTE',
     tempoEstimadoMinutos: 30, tempoRealMinutos: undefined,
@@ -127,9 +127,9 @@ describe('MongoOrdemServicoRepository', () => {
   });
 
   it('list — applies status, clienteId, veiculoId filters', async () => {
-    await repo.list(1, 10, { status: 'ABERTA', clienteId: 'c-uuid-1', veiculoId: 'v-uuid-1' });
+    await repo.list(1, 10, { status: 'RECEBIDA', clienteId: 'c-uuid-1', veiculoId: 'v-uuid-1' });
     const findArg = OrdemServicoModel.find.mock.calls[0][0] as Record<string, unknown>;
-    expect(findArg['status']).toBe('ABERTA');
+    expect(findArg['status']).toBe('RECEBIDA');
     expect(findArg['clienteId']).toBe('c-uuid-1');
     expect(findArg['veiculoId']).toBe('v-uuid-1');
   });

@@ -32,7 +32,7 @@ describe('GetOrdemServicoUseCase', () => {
 
     expect(result.id).toBe('os-uuid-1');
     expect(result.numeroOS).toBe('OS-20260428-0001');
-    expect(result.status).toBe('ABERTA');
+    expect(result.status).toBe('RECEBIDA');
   });
 
   it('throws NotFoundError when OS not found', async () => {

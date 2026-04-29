@@ -52,7 +52,7 @@ function makeEstoqueRepo(items: ItemEstoque[]): IItemEstoqueRepository {
 
 describe('DashboardUseCase', () => {
   it('returns dashboard with correct counts and revenue', async () => {
-    const osRepo = makeOsRepo({ ALL: 10, ABERTA: 3, EM_ANDAMENTO: 2, CONCLUIDA: 4, CANCELADA: 1 });
+    const osRepo = makeOsRepo({ ALL: 10, RECEBIDA: 3, EM_EXECUCAO: 2, FINALIZADA: 4, CANCELADA: 1 });
     const pgtoRepo = makePagamentoRepo(5000);
     const estoqueRepo = makeEstoqueRepo([
       makeItemEstoque(5, 2),  // above minimum
@@ -64,9 +64,9 @@ describe('DashboardUseCase', () => {
     const result = await useCase.execute();
 
     expect(result.ordensServico.total).toBe(10);
-    expect(result.ordensServico.abertas).toBe(3);
-    expect(result.ordensServico.emAndamento).toBe(2);
-    expect(result.ordensServico.concluidas).toBe(4);
+    expect(result.ordensServico.recebidas).toBe(3);
+    expect(result.ordensServico.emExecucao).toBe(2);
+    expect(result.ordensServico.finalizadas).toBe(4);
     expect(result.ordensServico.canceladas).toBe(1);
     expect(result.financeiro.receitaTotal).toBe(5000);
     expect(result.estoque.itensAbaixoDoMinimo).toBe(2);

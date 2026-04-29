@@ -11,12 +11,12 @@ export class DashboardUseCase {
   ) {}
 
   async execute(): Promise<DashboardResponseDto> {
-    const [todas, abertas, emAndamento, concluidas, canceladas, receitaTotal, itensEstoque] =
+    const [todas, recebidas, emExecucao, finalizadas, canceladas, receitaTotal, itensEstoque] =
       await Promise.all([
         this.osRepo.list(1, 1, {}),
-        this.osRepo.list(1, 1, { status: 'ABERTA' }),
-        this.osRepo.list(1, 1, { status: 'EM_ANDAMENTO' }),
-        this.osRepo.list(1, 1, { status: 'CONCLUIDA' }),
+        this.osRepo.list(1, 1, { status: 'RECEBIDA' }),
+        this.osRepo.list(1, 1, { status: 'EM_EXECUCAO' }),
+        this.osRepo.list(1, 1, { status: 'FINALIZADA' }),
         this.osRepo.list(1, 1, { status: 'CANCELADA' }),
         this.pagamentoRepo.sumConfirmados(),
         this.estoqueRepo.list(),
@@ -27,9 +27,9 @@ export class DashboardUseCase {
     return {
       ordensServico: {
         total: todas.total,
-        abertas: abertas.total,
-        emAndamento: emAndamento.total,
-        concluidas: concluidas.total,
+        recebidas: recebidas.total,
+        emExecucao: emExecucao.total,
+        finalizadas: finalizadas.total,
         canceladas: canceladas.total,
       },
       financeiro: {
