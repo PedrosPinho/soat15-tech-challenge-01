@@ -18,11 +18,13 @@ const mockAprovar = { execute: jest.fn() };
 const mockConcluir = { execute: jest.fn() };
 const mockEntregar = { execute: jest.fn() };
 const mockCancelar = { execute: jest.fn() };
+const mockGetByCpfCnpj = { execute: jest.fn() };
 
 const ctrl = new OrdemServicoController(
   mockCreate as any, mockGet as any, mockList as any,
   mockIniciar as any, mockAguardarAprovacao as any, mockAprovar as any,
   mockConcluir as any, mockEntregar as any, mockCancelar as any,
+  mockGetByCpfCnpj as any,
 );
 
 beforeEach(() => jest.clearAllMocks());
@@ -168,6 +170,32 @@ describe('OrdemServicoController', () => {
     it('calls next(err) on failure', async () => {
       mockEntregar.execute.mockRejectedValue(new Error('fail'));
       await ctrl.entregar({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('getOrdensByCpfCnpj', () => {
+    it('returns OS list for a valid cpfCnpj query param', async () => {
+      const listDto = { ordens: [osDto], total: 1, page: 1, limit: 20 };
+      mockGetByCpfCnpj.execute.mockResolvedValue(listDto);
+      const res = makeRes();
+      await ctrl.getOrdensByCpfCnpj(
+        { query: { cpfCnpj: '52998224725' } } as unknown as Request, res, next,
+      );
+      expect(mockGetByCpfCnpj.execute).toHaveBeenCalledWith('52998224725', undefined, undefined);
+      expect(res.json).toHaveBeenCalledWith(listDto);
+    });
+
+    it('calls next(err) when cpfCnpj is missing', async () => {
+      await ctrl.getOrdensByCpfCnpj({ query: {} } as unknown as Request, makeRes(), next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+
+    it('calls next(err) on use-case failure', async () => {
+      mockGetByCpfCnpj.execute.mockRejectedValue(new Error('fail'));
+      await ctrl.getOrdensByCpfCnpj(
+        { query: { cpfCnpj: '52998224725' } } as unknown as Request, makeRes(), next,
+      );
       expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
