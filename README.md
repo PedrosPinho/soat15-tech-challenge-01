@@ -94,7 +94,7 @@ Authorization: Bearer <token>
 
 ```bash
 POST /api/auth/login
-{ "email": "admin@oficina.com", "password": "senha123" }
+{ "email": "admin@oficina.com", "senha": "senha123" }
 ```
 
 ### Endpoints
