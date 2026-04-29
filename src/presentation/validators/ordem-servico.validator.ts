@@ -19,23 +19,28 @@ export const validateCreateOrdemServico = (
       throw new ValidationError('quilometragemEntrada deve ser um número não negativo');
     }
 
-    if (req.body.servicos !== undefined) {
-      if (!Array.isArray(req.body.servicos)) {
-        throw new ValidationError('servicos deve ser um array');
+    if (req.body.catalogoServicos !== undefined) {
+      if (!Array.isArray(req.body.catalogoServicos)) {
+        throw new ValidationError('catalogoServicos deve ser um array');
       }
-      for (const s of req.body.servicos as unknown[]) {
-        const srv = s as Record<string, unknown>;
-        if (typeof srv['descricao'] !== 'string' || !(srv['descricao'] as string).trim()) {
-          throw new ValidationError('Cada serviço deve ter uma descricao');
+      for (const item of req.body.catalogoServicos as unknown[]) {
+        const srv = item as Record<string, unknown>;
+        if (typeof srv['catalogoServicoId'] !== 'string' || !(srv['catalogoServicoId'] as string).trim()) {
+          throw new ValidationError('Cada item de catalogoServicos deve ter um catalogoServicoId');
         }
-        if (
-          typeof srv['tempoEstimadoMinutos'] !== 'number' ||
-          (srv['tempoEstimadoMinutos'] as number) <= 0
-        ) {
-          throw new ValidationError('Cada serviço deve ter tempoEstimadoMinutos maior que zero');
-        }
-        if (typeof srv['valorMaoDeObra'] !== 'number' || (srv['valorMaoDeObra'] as number) < 0) {
-          throw new ValidationError('Cada serviço deve ter valorMaoDeObra não negativo');
+        if (srv['pecasUtilizadas'] !== undefined) {
+          if (!Array.isArray(srv['pecasUtilizadas'])) {
+            throw new ValidationError('pecasUtilizadas deve ser um array');
+          }
+          for (const p of srv['pecasUtilizadas'] as unknown[]) {
+            const peca = p as Record<string, unknown>;
+            if (typeof peca['pecaId'] !== 'string' || !(peca['pecaId'] as string).trim()) {
+              throw new ValidationError('Cada peça deve ter um pecaId');
+            }
+            if (typeof peca['quantidade'] !== 'number' || (peca['quantidade'] as number) <= 0) {
+              throw new ValidationError('Cada peça deve ter quantidade maior que zero');
+            }
+          }
         }
       }
     }

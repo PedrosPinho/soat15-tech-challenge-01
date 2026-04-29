@@ -25,8 +25,6 @@ export interface OrdemServicoProps {
   motivoCancelamento?: string;
   temPagamento?: boolean;
   servicos?: Servico[];
-  catalogoServicoId?: string;
-  precoServico?: number;
 }
 
 export class OrdemServico {
@@ -44,8 +42,6 @@ export class OrdemServico {
     public readonly motivoCancelamento: string | undefined,
     public readonly temPagamento: boolean,
     public readonly servicos: readonly Servico[],
-    public readonly catalogoServicoId: string | undefined,
-    public readonly precoServico: number | undefined,
   ) {}
 
   static create(props: OrdemServicoProps): OrdemServico {
@@ -64,14 +60,11 @@ export class OrdemServico {
       props.motivoCancelamento,
       props.temPagamento ?? false,
       props.servicos ?? [],
-      props.catalogoServicoId,
-      props.precoServico,
     );
   }
 
   get valorTotal(): number {
-    const totalPecasEServicos = this.servicos.reduce((acc, s) => acc + s.valorTotal, 0);
-    return totalPecasEServicos + (this.precoServico ?? 0);
+    return this.servicos.reduce((acc, s) => acc + s.valorTotal, 0);
   }
 
   adicionarServico(servico: Servico): OrdemServico {
@@ -158,8 +151,6 @@ export class OrdemServico {
       overrides.motivoCancelamento ?? this.motivoCancelamento,
       overrides.temPagamento ?? this.temPagamento,
       overrides.servicos ?? [...this.servicos],
-      this.catalogoServicoId,
-      this.precoServico,
     );
   }
 

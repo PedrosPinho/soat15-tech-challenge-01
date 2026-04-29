@@ -8,6 +8,8 @@ import {
 import { MongoOrdemServicoRepository } from '@infrastructure/database/mongodb/repositories/ordem-servico.repository.impl';
 import { MongoClienteRepository } from '@infrastructure/database/mongodb/repositories/cliente.repository.impl';
 import { MongoVeiculoRepository } from '@infrastructure/database/mongodb/repositories/veiculo.repository.impl';
+import { MongoCatalogoServicoRepository } from '@infrastructure/database/mongodb/repositories/catalogo-servico.repository.impl';
+import { MongoPecaRepository } from '@infrastructure/database/mongodb/repositories/peca.repository.impl';
 import { CreateOrdemServicoUseCase } from '@application/use-cases/ordem-servico/create-ordem-servico.use-case';
 import { GetOrdemServicoUseCase } from '@application/use-cases/ordem-servico/get-ordem-servico.use-case';
 import { ListOrdensServicoUseCase } from '@application/use-cases/ordem-servico/list-ordens-servico.use-case';
@@ -22,9 +24,11 @@ import { GetOrdensByCpfCnpjUseCase } from '@application/use-cases/ordem-servico/
 const osRepo = new MongoOrdemServicoRepository();
 const clienteRepo = new MongoClienteRepository();
 const veiculoRepo = new MongoVeiculoRepository();
+const catalogoRepo = new MongoCatalogoServicoRepository();
+const pecaRepo = new MongoPecaRepository();
 
 const controller = new OrdemServicoController(
-  new CreateOrdemServicoUseCase(osRepo, clienteRepo, veiculoRepo),
+  new CreateOrdemServicoUseCase(osRepo, clienteRepo, veiculoRepo, catalogoRepo, pecaRepo),
   new GetOrdemServicoUseCase(osRepo),
   new ListOrdensServicoUseCase(osRepo),
   new IniciarOSUseCase(osRepo),
