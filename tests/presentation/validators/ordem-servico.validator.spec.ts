@@ -8,8 +8,8 @@ const makeReq = (body: object) => ({ body } as Request);
 beforeEach(() => jest.clearAllMocks());
 
 const validCreate = {
-  clienteId: 'c1',
-  veiculoId: 'v1',
+  cpfCnpj: '52998224725',
+  placa: 'ABC1D23',
   quilometragemEntrada: 50000,
 };
 
@@ -27,13 +27,13 @@ describe('validateCreateOrdemServico', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('calls next(err) when clienteId is empty', () => {
-    validateCreateOrdemServico(makeReq({ ...validCreate, clienteId: '' }), res, next);
+  it('calls next(err) when cpfCnpj is empty', () => {
+    validateCreateOrdemServico(makeReq({ ...validCreate, cpfCnpj: '' }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('calls next(err) when veiculoId is empty', () => {
-    validateCreateOrdemServico(makeReq({ ...validCreate, veiculoId: '  ' }), res, next);
+  it('calls next(err) when placa is empty', () => {
+    validateCreateOrdemServico(makeReq({ ...validCreate, placa: '  ' }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 

@@ -7,13 +7,13 @@ export const validateCreateOrdemServico = (
   next: NextFunction,
 ): void => {
   try {
-    const { clienteId, veiculoId, quilometragemEntrada } = req.body;
+    const { cpfCnpj, placa, quilometragemEntrada } = req.body;
 
-    if (typeof clienteId !== 'string' || !clienteId.trim()) {
-      throw new ValidationError('clienteId é obrigatório');
+    if (typeof cpfCnpj !== 'string' || !cpfCnpj.trim()) {
+      throw new ValidationError('cpfCnpj é obrigatório');
     }
-    if (typeof veiculoId !== 'string' || !veiculoId.trim()) {
-      throw new ValidationError('veiculoId é obrigatório');
+    if (typeof placa !== 'string' || !placa.trim()) {
+      throw new ValidationError('placa é obrigatória');
     }
     if (typeof quilometragemEntrada !== 'number' || quilometragemEntrada < 0) {
       throw new ValidationError('quilometragemEntrada deve ser um número não negativo');
