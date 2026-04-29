@@ -1,10 +1,10 @@
 import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
-import { OrdemServico } from '@domain/entities/ordem-servico.entity';
+import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
 
-function makeOS(status: 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA' = 'EM_ANDAMENTO'): OrdemServico {
-  const base = OrdemServico.create({
+function makeOS(status: StatusOS = 'EM_EXECUCAO'): OrdemServico {
+  return OrdemServico.create({
     id: 'os-uuid-1',
     numeroOS: 'OS-20260428-0001',
     clienteId: 'cliente-1',
@@ -12,7 +12,6 @@ function makeOS(status: 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA' = 
     quilometragemEntrada: 50000,
     status,
   });
-  return base;
 }
 
 function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepository> = {}): IOrdemServicoRepository {
@@ -29,13 +28,13 @@ function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepos
 }
 
 describe('ConcluirOSUseCase', () => {
-  it('transitions OS from EM_ANDAMENTO to CONCLUIDA', async () => {
-    const repo = makeRepo(makeOS('EM_ANDAMENTO'));
+  it('transitions OS from EM_EXECUCAO to FINALIZADA', async () => {
+    const repo = makeRepo(makeOS('EM_EXECUCAO'));
     const useCase = new ConcluirOSUseCase(repo);
 
     const result = await useCase.execute('os-uuid-1');
 
-    expect(result.status).toBe('CONCLUIDA');
+    expect(result.status).toBe('FINALIZADA');
     expect(result.dataConclusao).toBeDefined();
     expect(repo.update).toHaveBeenCalledTimes(1);
   });
@@ -48,8 +47,8 @@ describe('ConcluirOSUseCase', () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
-  it('throws ValidationError when OS is not EM_ANDAMENTO', async () => {
-    const repo = makeRepo(makeOS('ABERTA'));
+  it('throws ValidationError when OS is not EM_EXECUCAO', async () => {
+    const repo = makeRepo(makeOS('RECEBIDA'));
     const useCase = new ConcluirOSUseCase(repo);
 
     await expect(useCase.execute('os-uuid-1')).rejects.toThrow(ValidationError);

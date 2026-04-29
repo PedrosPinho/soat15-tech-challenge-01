@@ -51,9 +51,9 @@ describe('ListOrdensServicoUseCase', () => {
     const repo = makeRepo([]);
     const useCase = new ListOrdensServicoUseCase(repo);
 
-    await useCase.execute({ status: 'ABERTA' });
+    await useCase.execute({ status: 'RECEBIDA' });
 
-    expect(repo.list).toHaveBeenCalledWith(1, 20, { status: 'ABERTA' });
+    expect(repo.list).toHaveBeenCalledWith(1, 20, { status: 'RECEBIDA' });
   });
 
   it('passes clienteId filter to repository', async () => {
@@ -72,6 +72,6 @@ describe('ListOrdensServicoUseCase', () => {
     const result = await useCase.execute({});
 
     expect(result.ordens[0]!.id).toBe('os-1');
-    expect(result.ordens[0]!.status).toBe('ABERTA');
+    expect(result.ordens[0]!.status).toBe('RECEBIDA');
   });
 });

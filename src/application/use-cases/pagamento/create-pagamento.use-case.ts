@@ -18,8 +18,8 @@ export class CreatePagamentoUseCase {
     const os = await this.osRepo.findById(dto.ordemServicoId);
     if (!os) throw new NotFoundError(`Ordem de serviço ${dto.ordemServicoId} não encontrada`);
 
-    if (os.status !== 'EM_ANDAMENTO' && os.status !== 'CONCLUIDA') {
-      throw new ValidationError('Pagamento só pode ser registrado em OS em andamento ou concluída');
+    if (os.status !== 'EM_EXECUCAO' && os.status !== 'FINALIZADA') {
+      throw new ValidationError('Pagamento só pode ser registrado em OS em execução ou finalizada');
     }
 
     const pagamento = Pagamento.create(dto).confirmar();

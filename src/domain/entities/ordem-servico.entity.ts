@@ -2,7 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { ValidationError } from '@shared/errors/domain.error';
 import { Servico } from '@domain/entities/servico.entity';
 
-export type StatusOS = 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
+export type StatusOS =
+  | 'RECEBIDA'
+  | 'EM_DIAGNOSTICO'
+  | 'AGUARDANDO_APROVACAO'
+  | 'EM_EXECUCAO'
+  | 'FINALIZADA'
+  | 'ENTREGUE'
+  | 'CANCELADA';
 
 export interface OrdemServicoProps {
   id?: string;
@@ -49,7 +56,7 @@ export class OrdemServico {
       props.clienteId,
       props.veiculoId,
       props.quilometragemEntrada,
-      props.status ?? 'ABERTA',
+      props.status ?? 'RECEBIDA',
       props.dataAbertura ?? new Date(),
       props.dataInicio,
       props.dataConclusao,
@@ -68,40 +75,61 @@ export class OrdemServico {
   }
 
   adicionarServico(servico: Servico): OrdemServico {
-    if (this.status === 'CONCLUIDA' || this.status === 'CANCELADA') {
+    if (this.status === 'FINALIZADA' || this.status === 'ENTREGUE' || this.status === 'CANCELADA') {
       throw new ValidationError(
-        'Não é possível adicionar serviços a uma OS concluída ou cancelada',
+        'Não é possível adicionar serviços a uma OS finalizada, entregue ou cancelada',
       );
     }
     return this.copy({ servicos: [...this.servicos, servico] });
   }
 
   iniciar(): OrdemServico {
-    if (this.status !== 'ABERTA') {
-      throw new ValidationError('OS deve estar ABERTA para ser iniciada');
+    if (this.status !== 'RECEBIDA') {
+      throw new ValidationError('OS deve estar RECEBIDA para iniciar o diagnóstico');
     }
-    return this.copy({ status: 'EM_ANDAMENTO', dataInicio: new Date() });
+    return this.copy({ status: 'EM_DIAGNOSTICO', dataInicio: new Date() });
+  }
+
+  aguardarAprovacao(): OrdemServico {
+    if (this.status !== 'EM_DIAGNOSTICO') {
+      throw new ValidationError('OS deve estar EM_DIAGNOSTICO para aguardar aprovação');
+    }
+    return this.copy({ status: 'AGUARDANDO_APROVACAO' });
+  }
+
+  aprovar(): OrdemServico {
+    if (this.status !== 'AGUARDANDO_APROVACAO') {
+      throw new ValidationError('OS deve estar AGUARDANDO_APROVACAO para ser aprovada');
+    }
+    return this.copy({ status: 'EM_EXECUCAO' });
   }
 
   concluir(): OrdemServico {
-    if (this.status !== 'EM_ANDAMENTO') {
-      throw new ValidationError('OS deve estar EM_ANDAMENTO para ser concluída');
+    if (this.status !== 'EM_EXECUCAO') {
+      throw new ValidationError('OS deve estar EM_EXECUCAO para ser finalizada');
     }
-    return this.copy({ status: 'CONCLUIDA', dataConclusao: new Date() });
+    return this.copy({ status: 'FINALIZADA', dataConclusao: new Date() });
+  }
+
+  entregar(): OrdemServico {
+    if (this.status !== 'FINALIZADA') {
+      throw new ValidationError('OS deve estar FINALIZADA para ser entregue');
+    }
+    return this.copy({ status: 'ENTREGUE' });
   }
 
   cancelar(motivo: string): OrdemServico {
     if (!motivo.trim()) throw new ValidationError('Motivo de cancelamento é obrigatório');
-    if (this.status === 'CONCLUIDA')
-      throw new ValidationError('OS concluída não pode ser cancelada');
+    if (this.status === 'FINALIZADA' || this.status === 'ENTREGUE')
+      throw new ValidationError('OS finalizada ou entregue não pode ser cancelada');
     if (this.status === 'CANCELADA') throw new ValidationError('OS já está cancelada');
     if (this.temPagamento) throw new ValidationError('OS com pagamento não pode ser cancelada');
     return this.copy({ status: 'CANCELADA', motivoCancelamento: motivo });
   }
 
   registrarPagamento(): OrdemServico {
-    if (this.status !== 'EM_ANDAMENTO' && this.status !== 'CONCLUIDA') {
-      throw new ValidationError('Pagamento só pode ser registrado em OS em andamento ou concluída');
+    if (this.status !== 'EM_EXECUCAO' && this.status !== 'FINALIZADA') {
+      throw new ValidationError('Pagamento só pode ser registrado em OS em execução ou finalizada');
     }
     return this.copy({ temPagamento: true });
   }

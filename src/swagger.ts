@@ -196,7 +196,7 @@ export const swaggerSpec = {
           clienteId: { type: 'string', format: 'uuid' },
           veiculoId: { type: 'string', format: 'uuid' },
           quilometragemEntrada: { type: 'number', example: 52000 },
-          status: { type: 'string', enum: ['ABERTA', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA'] },
+          status: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] },
           dataAbertura: { type: 'string', format: 'date-time' },
           dataInicio: { type: 'string', format: 'date-time' },
           dataConclusao: { type: 'string', format: 'date-time' },
@@ -698,7 +698,7 @@ export const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/pageParam' },
           { $ref: '#/components/parameters/limitParam' },
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['ABERTA', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA'] } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] } },
           { name: 'clienteId', in: 'query', schema: { type: 'string', format: 'uuid' } },
           { name: 'veiculoId', in: 'query', schema: { type: 'string', format: 'uuid' } },
         ],
@@ -726,10 +726,36 @@ export const swaggerSpec = {
     '/api/ordens-servico/{id}/iniciar': {
       patch: {
         tags: ['Ordens de Serviço'],
-        summary: 'Iniciar OS (ABERTA → EM_ANDAMENTO)',
+        summary: 'Iniciar diagnóstico (RECEBIDA → EM_DIAGNOSTICO)',
         parameters: [{ $ref: '#/components/parameters/idParam' }],
         responses: {
-          200: { description: 'OS iniciada', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          200: { description: 'OS em diagnóstico', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/api/ordens-servico/{id}/aguardar-aprovacao': {
+      patch: {
+        tags: ['Ordens de Serviço'],
+        summary: 'Aguardar aprovação (EM_DIAGNOSTICO → AGUARDANDO_APROVACAO)',
+        parameters: [{ $ref: '#/components/parameters/idParam' }],
+        responses: {
+          200: { description: 'OS aguardando aprovação', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/api/ordens-servico/{id}/aprovar': {
+      patch: {
+        tags: ['Ordens de Serviço'],
+        summary: 'Aprovar OS (AGUARDANDO_APROVACAO → EM_EXECUCAO)',
+        parameters: [{ $ref: '#/components/parameters/idParam' }],
+        responses: {
+          200: { description: 'OS aprovada e em execução', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/NotFound' },
@@ -739,10 +765,23 @@ export const swaggerSpec = {
     '/api/ordens-servico/{id}/concluir': {
       patch: {
         tags: ['Ordens de Serviço'],
-        summary: 'Concluir OS (EM_ANDAMENTO → CONCLUIDA)',
+        summary: 'Finalizar OS (EM_EXECUCAO → FINALIZADA)',
         parameters: [{ $ref: '#/components/parameters/idParam' }],
         responses: {
-          200: { description: 'OS concluída', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          200: { description: 'OS finalizada', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/api/ordens-servico/{id}/entregar': {
+      patch: {
+        tags: ['Ordens de Serviço'],
+        summary: 'Entregar OS (FINALIZADA → ENTREGUE)',
+        parameters: [{ $ref: '#/components/parameters/idParam' }],
+        responses: {
+          200: { description: 'OS entregue ao cliente', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/NotFound' },

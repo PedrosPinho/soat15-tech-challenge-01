@@ -1,9 +1,9 @@
 import { IniciarOSUseCase } from '@application/use-cases/ordem-servico/iniciar-os.use-case';
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
-import { OrdemServico } from '@domain/entities/ordem-servico.entity';
+import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
 
-function makeOS(status: 'ABERTA' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA' = 'ABERTA'): OrdemServico {
+function makeOS(status: StatusOS = 'RECEBIDA'): OrdemServico {
   return OrdemServico.create({
     id: 'os-uuid-1',
     numeroOS: 'OS-20260428-0001',
@@ -28,13 +28,13 @@ function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepos
 }
 
 describe('IniciarOSUseCase', () => {
-  it('transitions OS from ABERTA to EM_ANDAMENTO', async () => {
-    const repo = makeRepo(makeOS('ABERTA'));
+  it('transitions OS from RECEBIDA to EM_DIAGNOSTICO', async () => {
+    const repo = makeRepo(makeOS('RECEBIDA'));
     const useCase = new IniciarOSUseCase(repo);
 
     const result = await useCase.execute('os-uuid-1');
 
-    expect(result.status).toBe('EM_ANDAMENTO');
+    expect(result.status).toBe('EM_DIAGNOSTICO');
     expect(result.dataInicio).toBeDefined();
     expect(repo.update).toHaveBeenCalledTimes(1);
   });
@@ -47,8 +47,8 @@ describe('IniciarOSUseCase', () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
-  it('throws ValidationError when OS is not ABERTA', async () => {
-    const repo = makeRepo(makeOS('EM_ANDAMENTO'));
+  it('throws ValidationError when OS is not RECEBIDA', async () => {
+    const repo = makeRepo(makeOS('EM_DIAGNOSTICO'));
     const useCase = new IniciarOSUseCase(repo);
 
     await expect(useCase.execute('os-uuid-1')).rejects.toThrow(ValidationError);

@@ -46,8 +46,8 @@ const ordemServicoSchema = new Schema<OrdemServicoDocument>(
     status: {
       type: String,
       required: true,
-      enum: ['ABERTA', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA'],
-      default: 'ABERTA',
+      enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'],
+      default: 'RECEBIDA',
     },
     dataAbertura: { type: Date, required: true },
     dataInicio: { type: Date },

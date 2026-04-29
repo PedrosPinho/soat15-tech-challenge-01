@@ -88,7 +88,7 @@ describe('CreateOrdemServicoUseCase', () => {
     expect(result.id).toBeDefined();
     expect(result.clienteId).toBe(CLIENT_ID);
     expect(result.veiculoId).toBe(VEICULO_ID);
-    expect(result.status).toBe('ABERTA');
+    expect(result.status).toBe('RECEBIDA');
     expect(result.temPagamento).toBe(false);
     expect(result.servicos).toHaveLength(0);
     expect(result.valorTotal).toBe(0);

@@ -1,9 +1,9 @@
 export interface DashboardResponseDto {
   ordensServico: {
     total: number;
-    abertas: number;
-    emAndamento: number;
-    concluidas: number;
+    recebidas: number;
+    emExecucao: number;
+    finalizadas: number;
     canceladas: number;
   };
   financeiro: {
