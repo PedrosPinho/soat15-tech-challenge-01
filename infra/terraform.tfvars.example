@@ -1,0 +1,16 @@
+# Copie para terraform.tfvars (já está no .gitignore) e preencha com valores reais.
+# Nunca commite terraform.tfvars — ele fica com segredos em texto plano.
+
+cluster_name           = "oficina"
+image_tag              = "oficina-api:local"
+install_metrics_server = true
+
+mongo_root_username = "admin"
+mongo_root_password = "CHANGE_ME"
+
+jwt_secret     = "CHANGE_ME"
+webhook_secret = "CHANGE_ME"
+
+# Deixe em branco para usar o Mailhog local (sem autenticação SMTP).
+smtp_user = ""
+smtp_pass = ""
