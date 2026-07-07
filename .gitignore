@@ -3,6 +3,7 @@ dist/
 .env
 coverage/
 *.log
+k8s/secret.yaml
 
 docs/*
 AGENTS.md
