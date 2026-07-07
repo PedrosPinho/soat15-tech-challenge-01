@@ -33,6 +33,12 @@ export const swaggerSpec = {
         scheme: 'bearer',
         bearerFormat: 'JWT',
       },
+      webhookSecret: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-webhook-secret',
+        description: 'Segredo compartilhado configurado via env var WEBHOOK_SECRET.',
+      },
     },
     schemas: {
       Error: {
@@ -689,6 +695,7 @@ export const swaggerSpec = {
         tags: ['Ordens de Serviço'],
         summary: 'Buscar ordens de serviço por CPF/CNPJ (público)',
         description: 'Endpoint público — não requer autenticação.',
+        security: [],
         parameters: [
           { name: 'cpfCnpj', in: 'query', required: true, schema: { type: 'string', example: '52998224725' }, description: 'CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente' },
           { $ref: '#/components/parameters/pageParam' },
@@ -836,6 +843,41 @@ export const swaggerSpec = {
           200: { description: 'OS cancelada', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
           400: { $ref: '#/components/responses/BadRequest' },
           401: { $ref: '#/components/responses/Unauthorized' },
+          404: { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+    '/api/ordens-servico/{id}/orcamento/webhook': {
+      post: {
+        tags: ['Ordens de Serviço'],
+        summary: 'Webhook de aprovação/recusa de orçamento pelo cliente',
+        description:
+          'Endpoint para notificação externa (não usa JWT de usuário). Autenticado via header x-webhook-secret, comparado contra a env var WEBHOOK_SECRET. Aprova (AGUARDANDO_APROVACAO → EM_EXECUCAO) ou cancela a OS, dependendo de `aprovado`.',
+        security: [{ webhookSecret: [] }],
+        parameters: [{ $ref: '#/components/parameters/idParam' }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['aprovado'],
+                properties: {
+                  aprovado: { type: 'boolean', example: true },
+                  motivo: {
+                    type: 'string',
+                    example: 'Valor acima do esperado',
+                    description: 'Usado como motivo de cancelamento quando aprovado=false (opcional; tem um padrão)',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'OS aprovada (EM_EXECUCAO) ou cancelada (CANCELADA)', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { description: 'Header x-webhook-secret ausente ou inválido', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
           404: { $ref: '#/components/responses/NotFound' },
         },
       },
