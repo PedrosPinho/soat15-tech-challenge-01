@@ -1,0 +1,53 @@
+# Servidor SMTP de teste local (equivalente ao serviço `mailhog` do docker-compose.yml).
+# Em um ambiente real, SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS no ConfigMap/Secret
+# apontariam para um provedor de verdade (SES/SendGrid) em vez deste Deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailhog
+  namespace: oficina
+  labels:
+    app: mailhog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailhog
+  template:
+    metadata:
+      labels:
+        app: mailhog
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mailhog
+          image: mailhog/mailhog:v1.0.1
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: web
+              containerPort: 8025
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+              ephemeral-storage: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog
+  namespace: oficina
+spec:
+  selector:
+    app: mailhog
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: smtp
+    - name: web
+      port: 8025
+      targetPort: web
