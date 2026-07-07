@@ -9,6 +9,7 @@ import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir
 import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
 import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
 import { GetOrdensByCpfCnpjUseCase } from '@application/use-cases/ordem-servico/get-ordens-by-cpfcnpj.use-case';
+import { ProcessarAprovacaoOrcamentoUseCase } from '@application/use-cases/ordem-servico/processar-aprovacao-orcamento.use-case';
 import { StatusOS } from '@domain/entities/ordem-servico.entity';
 import { ValidationError } from '@shared/errors/domain.error';
 
@@ -24,6 +25,7 @@ export class OrdemServicoController {
     private readonly entregarOS: EntregarOSUseCase,
     private readonly cancelarOS: CancelarOSUseCase,
     private readonly getOrdensByCpfCnpjUseCase: GetOrdensByCpfCnpjUseCase,
+    private readonly processarAprovacaoOrcamentoUseCase: ProcessarAprovacaoOrcamentoUseCase,
   ) {}
 
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -125,6 +127,25 @@ export class OrdemServicoController {
         id: req.params['id'] as string,
         motivo: req.body.motivo as string,
       });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async processarAprovacaoOrcamento(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const result = await this.processarAprovacaoOrcamentoUseCase.execute(
+        req.params['id'] as string,
+        {
+          aprovado: req.body.aprovado as boolean,
+          motivo: req.body.motivo as string | undefined,
+        },
+      );
       res.json(result);
     } catch (err) {
       next(err);
