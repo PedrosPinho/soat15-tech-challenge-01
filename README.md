@@ -175,6 +175,46 @@ SONAR_TOKEN=seu-token-aqui
 
 ---
 
+## CI/CD
+
+Pipeline em `.github/workflows/ci-cd.yml`, com 4 jobs sequenciais a cada push/PR na
+branch `main` (e em tags `v*`):
+
+1. **build** — `npm ci` + `npm run build` (compila TypeScript).
+2. **test** — `npm run test:coverage` contra um MongoDB real (service container), com
+   os thresholds do `jest.config.js` (mínimo 80%) como gate; publica o relatório de
+   cobertura como artefato do workflow e um resumo no sumário da execução.
+3. **docker-build** — builda a imagem e publica em `ghcr.io/<owner>/<repo>` (tags
+   `latest` e `<sha>`). Só publica em push para `main`/tag; em PRs só builda, para
+   validar o `Dockerfile` sem exigir permissão de escrita no registry.
+4. **deploy** — só roda em push para `main` ou tag `v*`. Sobe um cluster **kind
+   efêmero dentro do próprio runner**, carrega a imagem recém-buildada e aplica todos
+   os manifestos de `k8s/`, espera o rollout e faz um smoke test em `/health`. Ver a
+   justificativa dessa escolha (em vez de um cluster remoto persistente) nos
+   comentários do próprio workflow e em `infra/README.md`.
+
+### Secrets do GitHub
+
+Com o design atual (kind efêmero por execução), **nenhum secret adicional é
+necessário** — o job `docker-build` usa o `GITHUB_TOKEN` automático do Actions
+(permissão `packages: write`) para publicar no GHCR, e o job `deploy` usa valores de
+demonstração descartáveis (o cluster não sobrevive além do job).
+
+Se este pipeline for apontado para um cluster remoto persistente no futuro, os secrets
+a configurar em **Settings → Secrets and variables → Actions** seriam:
+
+| Secret | Uso |
+|---|---|
+| `KUBE_CONFIG` | Kubeconfig (base64) do cluster de destino, para `kubectl config use-context` no job `deploy` em vez de criar um kind efêmero |
+| `MONGO_ROOT_PASSWORD` | Senha root do MongoDB do cluster de destino |
+| `JWT_SECRET` | Segredo de assinatura dos JWTs da API |
+| `WEBHOOK_SECRET` | Segredo do header `x-webhook-secret` do endpoint de aprovação de orçamento |
+| `SMTP_USER` / `SMTP_PASS` | Credenciais de um provedor SMTP real (SES/SendGrid), no lugar do Mailhog local |
+
+Nenhum valor real desses secrets está neste repositório.
+
+---
+
 ## Scripts
 
 ```bash
