@@ -1,10 +1,17 @@
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
+import { IClienteRepository } from '@domain/repositories/cliente.repository';
+import { INotificationService } from '@domain/services/notification.service';
 import { NotFoundError } from '@shared/errors/domain.error';
 import { OrdemServicoResponseDto } from '@application/dtos/ordem-servico/ordem-servico.dto';
 import { OrdemServicoMapper } from '@application/mappers/ordem-servico.mapper';
+import { notificarMudancaStatusOS } from '@application/use-cases/ordem-servico/notificar-mudanca-status.helper';
 
 export class ConcluirOSUseCase {
-  constructor(private readonly osRepo: IOrdemServicoRepository) {}
+  constructor(
+    private readonly osRepo: IOrdemServicoRepository,
+    private readonly clienteRepo: IClienteRepository,
+    private readonly notificationService: INotificationService,
+  ) {}
 
   async execute(id: string): Promise<OrdemServicoResponseDto> {
     const os = await this.osRepo.findById(id);
@@ -12,6 +19,10 @@ export class ConcluirOSUseCase {
 
     const concluida = os.concluir();
     await this.osRepo.update(concluida);
+    notificarMudancaStatusOS(
+      { clienteRepo: this.clienteRepo, notificationService: this.notificationService },
+      concluida,
+    );
     return OrdemServicoMapper.toDto(concluida);
   }
 }

@@ -2,6 +2,7 @@ import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
 import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
+import { makeClienteRepo, makeNotificationService } from './notificacao-test-helpers';
 
 function makeOS(status: StatusOS = 'RECEBIDA', temPagamento = false): OrdemServico {
   return OrdemServico.create({
@@ -31,7 +32,7 @@ function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepos
 describe('CancelarOSUseCase', () => {
   it('cancels a RECEBIDA OS with a motivo', async () => {
     const repo = makeRepo(makeOS('RECEBIDA'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     const result = await useCase.execute({ id: 'os-uuid-1', motivo: 'Cliente desistiu do serviço' });
 
@@ -42,7 +43,7 @@ describe('CancelarOSUseCase', () => {
 
   it('cancels an EM_EXECUCAO OS', async () => {
     const repo = makeRepo(makeOS('EM_EXECUCAO'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     const result = await useCase.execute({ id: 'os-uuid-1', motivo: 'Peça indisponível' });
 
@@ -51,7 +52,7 @@ describe('CancelarOSUseCase', () => {
 
   it('throws NotFoundError when OS not found', async () => {
     const repo = makeRepo(null);
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'nao-existe', motivo: 'qualquer' })).rejects.toThrow(NotFoundError);
     expect(repo.update).not.toHaveBeenCalled();
@@ -59,7 +60,7 @@ describe('CancelarOSUseCase', () => {
 
   it('throws ValidationError when OS is FINALIZADA', async () => {
     const repo = makeRepo(makeOS('FINALIZADA'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'os-uuid-1', motivo: 'motivo' })).rejects.toThrow(ValidationError);
     expect(repo.update).not.toHaveBeenCalled();
@@ -67,7 +68,7 @@ describe('CancelarOSUseCase', () => {
 
   it('throws ValidationError when OS is ENTREGUE', async () => {
     const repo = makeRepo(makeOS('ENTREGUE'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'os-uuid-1', motivo: 'motivo' })).rejects.toThrow(ValidationError);
     expect(repo.update).not.toHaveBeenCalled();
@@ -75,21 +76,21 @@ describe('CancelarOSUseCase', () => {
 
   it('throws ValidationError when OS already CANCELADA', async () => {
     const repo = makeRepo(makeOS('CANCELADA'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'os-uuid-1', motivo: 'motivo' })).rejects.toThrow(ValidationError);
   });
 
   it('throws ValidationError when OS has payment', async () => {
     const repo = makeRepo(makeOS('EM_EXECUCAO', true));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'os-uuid-1', motivo: 'motivo' })).rejects.toThrow(ValidationError);
   });
 
   it('throws ValidationError when motivo is empty', async () => {
     const repo = makeRepo(makeOS('RECEBIDA'));
-    const useCase = new CancelarOSUseCase(repo);
+    const useCase = new CancelarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute({ id: 'os-uuid-1', motivo: '' })).rejects.toThrow(ValidationError);
   });
