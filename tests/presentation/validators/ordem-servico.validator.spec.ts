@@ -1,5 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { validateCreateOrdemServico, validateCancelarOS } from '@presentation/validators/ordem-servico.validator';
+import {
+  validateCreateOrdemServico,
+  validateCancelarOS,
+  validateAprovacaoWebhook,
+} from '@presentation/validators/ordem-servico.validator';
 
 const res = {} as Response;
 const next = jest.fn() as NextFunction;
@@ -109,6 +113,33 @@ describe('validateCancelarOS', () => {
 
   it('calls next(err) when motivo is missing', () => {
     validateCancelarOS(makeReq({}), res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+});
+
+describe('validateAprovacaoWebhook', () => {
+  it('calls next() when aprovado is true', () => {
+    validateAprovacaoWebhook(makeReq({ aprovado: true }), res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('calls next() when aprovado is false with motivo', () => {
+    validateAprovacaoWebhook(makeReq({ aprovado: false, motivo: 'Orçamento alto' }), res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('calls next(err) when aprovado is missing', () => {
+    validateAprovacaoWebhook(makeReq({}), res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('calls next(err) when aprovado is not boolean', () => {
+    validateAprovacaoWebhook(makeReq({ aprovado: 'sim' }), res, next);
+    expect(next).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('calls next(err) when motivo is not a string', () => {
+    validateAprovacaoWebhook(makeReq({ aprovado: false, motivo: 123 }), res, next);
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 });

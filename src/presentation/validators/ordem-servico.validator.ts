@@ -61,3 +61,21 @@ export const validateCancelarOS = (req: Request, _res: Response, next: NextFunct
     next(err);
   }
 };
+
+export const validateAprovacaoWebhook = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
+  try {
+    if (typeof req.body.aprovado !== 'boolean') {
+      throw new ValidationError('aprovado é obrigatório e deve ser booleano');
+    }
+    if (req.body.motivo !== undefined && typeof req.body.motivo !== 'string') {
+      throw new ValidationError('motivo deve ser uma string');
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
