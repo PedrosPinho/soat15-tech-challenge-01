@@ -1,5 +1,6 @@
 import express, { Application } from 'express';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import type { Router } from 'express';
 import type { ErrorRequestHandler } from 'express';
 import {
@@ -11,6 +12,10 @@ import {
 jest.setTimeout(30000);
 
 process.env['WEBHOOK_SECRET'] = 'test-webhook-secret';
+process.env['JWT_SECRET'] = 'test-jwt-secret';
+
+const authToken = jwt.sign({ userId: 'e2e-user', email: 'e2e@test.com' }, process.env['JWT_SECRET']);
+const authHeader = `Bearer ${authToken}`;
 
 jest.mock('nodemailer', () => ({
   createTransport: () => ({ sendMail: jest.fn().mockResolvedValue(undefined) }),
@@ -73,6 +78,7 @@ async function seedClienteEVeiculo(placa: string): Promise<{ cpfCnpj: string; pl
 
   const clienteRes = await request(app)
     .post('/api/clientes')
+    .set('Authorization', authHeader)
     .send({
       nome: 'Cliente E2E',
       cpfCnpj,
@@ -90,13 +96,16 @@ async function seedClienteEVeiculo(placa: string): Promise<{ cpfCnpj: string; pl
     });
   expect(clienteRes.status).toBe(201);
 
-  const veiculoRes = await request(app).post('/api/veiculos').send({
-    clienteId: clienteRes.body.id,
-    placa,
-    marca: 'Honda',
-    modelo: 'Civic',
-    ano: 2020,
-  });
+  const veiculoRes = await request(app)
+    .post('/api/veiculos')
+    .set('Authorization', authHeader)
+    .send({
+      clienteId: clienteRes.body.id,
+      placa,
+      marca: 'Honda',
+      modelo: 'Civic',
+      ano: 2020,
+    });
   expect(veiculoRes.status).toBe(201);
 
   return { cpfCnpj, placa };
@@ -108,18 +117,21 @@ describe('Ciclo completo de status da OS (E2E)', () => {
 
     const createRes = await request(app)
       .post('/api/ordens-servico')
+      .set('Authorization', authHeader)
       .send({ cpfCnpj, placa, quilometragemEntrada: 50000 });
     expect(createRes.status).toBe(201);
     expect(createRes.body.status).toBe('RECEBIDA');
     const osId = createRes.body.id as string;
 
-    const iniciarRes = await request(app).patch(`/api/ordens-servico/${osId}/iniciar`);
+    const iniciarRes = await request(app)
+      .patch(`/api/ordens-servico/${osId}/iniciar`)
+      .set('Authorization', authHeader);
     expect(iniciarRes.status).toBe(200);
     expect(iniciarRes.body.status).toBe('EM_DIAGNOSTICO');
 
-    const aguardarRes = await request(app).patch(
-      `/api/ordens-servico/${osId}/aguardar-aprovacao`,
-    );
+    const aguardarRes = await request(app)
+      .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
+      .set('Authorization', authHeader);
     expect(aguardarRes.status).toBe(200);
     expect(aguardarRes.body.status).toBe('AGUARDANDO_APROVACAO');
 
@@ -130,15 +142,21 @@ describe('Ciclo completo de status da OS (E2E)', () => {
     expect(webhookRes.status).toBe(200);
     expect(webhookRes.body.status).toBe('EM_EXECUCAO');
 
-    const concluirRes = await request(app).patch(`/api/ordens-servico/${osId}/concluir`);
+    const concluirRes = await request(app)
+      .patch(`/api/ordens-servico/${osId}/concluir`)
+      .set('Authorization', authHeader);
     expect(concluirRes.status).toBe(200);
     expect(concluirRes.body.status).toBe('FINALIZADA');
 
-    const entregarRes = await request(app).patch(`/api/ordens-servico/${osId}/entregar`);
+    const entregarRes = await request(app)
+      .patch(`/api/ordens-servico/${osId}/entregar`)
+      .set('Authorization', authHeader);
     expect(entregarRes.status).toBe(200);
     expect(entregarRes.body.status).toBe('ENTREGUE');
 
-    const finalGet = await request(app).get(`/api/ordens-servico/${osId}`);
+    const finalGet = await request(app)
+      .get(`/api/ordens-servico/${osId}`)
+      .set('Authorization', authHeader);
     expect(finalGet.body.status).toBe('ENTREGUE');
   });
 
@@ -147,11 +165,16 @@ describe('Ciclo completo de status da OS (E2E)', () => {
 
     const createRes = await request(app)
       .post('/api/ordens-servico')
+      .set('Authorization', authHeader)
       .send({ cpfCnpj, placa, quilometragemEntrada: 30000 });
     const osId = createRes.body.id as string;
 
-    await request(app).patch(`/api/ordens-servico/${osId}/iniciar`);
-    await request(app).patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`);
+    await request(app)
+      .patch(`/api/ordens-servico/${osId}/iniciar`)
+      .set('Authorization', authHeader);
+    await request(app)
+      .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
+      .set('Authorization', authHeader);
 
     const webhookRes = await request(app)
       .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
@@ -167,6 +190,7 @@ describe('Ciclo completo de status da OS (E2E)', () => {
     const { cpfCnpj, placa } = await seedClienteEVeiculo('DEF4G56');
     const createRes = await request(app)
       .post('/api/ordens-servico')
+      .set('Authorization', authHeader)
       .send({ cpfCnpj, placa, quilometragemEntrada: 10000 });
     const osId = createRes.body.id as string;
 
@@ -193,19 +217,32 @@ describe('Listagem/ordenação de OS (E2E)', () => {
       const { cpfCnpj } = await seedClienteEVeiculo(placa);
       const createRes = await request(app)
         .post('/api/ordens-servico')
+        .set('Authorization', authHeader)
         .send({ cpfCnpj, placa, quilometragemEntrada: 1000 });
       const osId = createRes.body.id as string;
 
       const steps = [
-        () => request(app).patch(`/api/ordens-servico/${osId}/iniciar`),
-        () => request(app).patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`),
+        () =>
+          request(app)
+            .patch(`/api/ordens-servico/${osId}/iniciar`)
+            .set('Authorization', authHeader),
+        () =>
+          request(app)
+            .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
+            .set('Authorization', authHeader),
         () =>
           request(app)
             .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
             .set('x-webhook-secret', 'test-webhook-secret')
             .send({ aprovado: true }),
-        () => request(app).patch(`/api/ordens-servico/${osId}/concluir`),
-        () => request(app).patch(`/api/ordens-servico/${osId}/entregar`),
+        () =>
+          request(app)
+            .patch(`/api/ordens-servico/${osId}/concluir`)
+            .set('Authorization', authHeader),
+        () =>
+          request(app)
+            .patch(`/api/ordens-servico/${osId}/entregar`)
+            .set('Authorization', authHeader),
       ];
 
       for (let i = 0; i < transitions; i += 1) {
@@ -214,7 +251,7 @@ describe('Listagem/ordenação de OS (E2E)', () => {
       }
     }
 
-    const listRes = await request(app).get('/api/ordens-servico');
+    const listRes = await request(app).get('/api/ordens-servico').set('Authorization', authHeader);
     expect(listRes.status).toBe(200);
     expect(listRes.body.total).toBe(4);
     expect(
@@ -223,6 +260,7 @@ describe('Listagem/ordenação de OS (E2E)', () => {
 
     const finalizadaRes = await request(app)
       .get('/api/ordens-servico')
+      .set('Authorization', authHeader)
       .query({ status: 'FINALIZADA' });
     expect(finalizadaRes.body.total).toBe(1);
     expect(finalizadaRes.body.ordens[0].status).toBe('FINALIZADA');

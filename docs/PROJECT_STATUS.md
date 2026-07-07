@@ -35,13 +35,15 @@ Nodemailer + Mailhog, refactor arquitetural "reforço leve" (mantém a estrutura
 camadas já existente), CI/CD via GitHub Actions.
 
 **Achados durante a Fase 2** (pré-existentes, não introduzidos por ela — ver
-"Notas e limitações conhecidas" no `README.md` para detalhes): `authMiddleware` não
-bloqueia requisições sem header `Authorization`; `npm run db:seed`/`db:reset`
-referenciam arquivos que ainda não existem (não há seed de usuário/dados); `npm run
-lint` está quebrado por incompatibilidade `eslint@10` vs. `.eslintrc.json` legado. Um
-achado menor foi corrigido nesta fase: `npm run test:unit`/`test:integration` usavam a
-flag `--testPathPattern`, removida nas versões atuais do Jest — atualizado para
-`--testPathPatterns`.
+"Notas e limitações conhecidas" no `README.md` para detalhes): `npm run
+db:seed`/`db:reset` referenciam arquivos que ainda não existem (não há seed de
+usuário/dados); `npm run lint` está quebrado por incompatibilidade `eslint@10` vs.
+`.eslintrc.json` legado. Dois achados foram corrigidos nesta fase:
+`npm run test:unit`/`test:integration` usavam a flag `--testPathPattern`, removida
+nas versões atuais do Jest — atualizado para `--testPathPatterns`; e `authMiddleware`
+não bloqueava requisições sem header `Authorization` (havia uma linha comentada com o
+comportamento correto, desativada durante a Fase 1 e nunca revertida) — corrigido para
+rejeitar com 401, com os testes de unidade e o E2E de OS atualizados de acordo.
 
 ---
 
