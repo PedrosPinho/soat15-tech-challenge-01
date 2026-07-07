@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { JwtService } from '@infrastructure/security/jwt.service';
+import { UnauthorizedError } from '@shared/errors/domain.error';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -13,8 +14,7 @@ export const authMiddleware = (
 ): void => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return next();
-    // return next(new UnauthorizedError('Missing or malformed Authorization header'));
+    return next(new UnauthorizedError('Missing or malformed Authorization header'));
   }
 
   const token = authHeader.split(' ')[1];
