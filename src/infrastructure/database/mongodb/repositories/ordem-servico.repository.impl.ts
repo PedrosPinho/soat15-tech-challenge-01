@@ -45,15 +45,43 @@ export class MongoOrdemServicoRepository implements IOrdemServicoRepository {
     filter?: ListOrdemServicoFilter,
   ): Promise<ListOrdemServicoResult> {
     const query: Record<string, unknown> = {};
-    if (filter?.status) query['status'] = filter.status;
+    if (filter?.status) {
+      query['status'] = filter.status;
+    } else {
+      query['status'] = { $nin: ['FINALIZADA', 'ENTREGUE'] };
+    }
     if (filter?.clienteId) query['clienteId'] = filter.clienteId;
     if (filter?.veiculoId) query['veiculoId'] = filter.veiculoId;
 
     const skip = (page - 1) * limit;
-    const [docs, total] = await Promise.all([
-      OrdemServicoModel.find(query).skip(skip).limit(limit).sort({ dataAbertura: -1 }),
-      OrdemServicoModel.countDocuments(query),
-    ]);
+    const [result] = (await OrdemServicoModel.aggregate([
+      { $match: query },
+      {
+        $addFields: {
+          statusWeight: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$status', 'EM_EXECUCAO'] }, then: 4 },
+                { case: { $eq: ['$status', 'AGUARDANDO_APROVACAO'] }, then: 3 },
+                { case: { $eq: ['$status', 'EM_DIAGNOSTICO'] }, then: 2 },
+                { case: { $eq: ['$status', 'RECEBIDA'] }, then: 1 },
+              ],
+              default: 0,
+            },
+          },
+        },
+      },
+      { $sort: { statusWeight: -1, dataAbertura: 1 } },
+      {
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limit }],
+          totalCount: [{ $count: 'count' }],
+        },
+      },
+    ])) as { data: OrdemServicoDocument[]; totalCount: { count: number }[] }[];
+
+    const docs = result?.data ?? [];
+    const total = result?.totalCount?.[0]?.count ?? 0;
     return { ordens: docs.map((d) => this.toDomain(d)), total };
   }
 
