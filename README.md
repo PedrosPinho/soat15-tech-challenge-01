@@ -369,13 +369,12 @@ A cada passo 7–11, o cliente recebe um e-mail automático com a atualização 
 Registradas aqui por transparência — nenhuma delas foi introduzida pela Fase 2, mas
 vale conhecê-las antes de usar o projeto em produção:
 
-- **`authMiddleware` não bloqueia requisições sem header `Authorization`** — em
-  `src/presentation/middlewares/auth.middleware.ts`, quando o header está ausente ou
-  malformado, o middleware chama `next()` sem autenticar, em vez de rejeitar (há uma
-  linha comentada no código com o comportamento correto, aparentemente desativada
-  durante o desenvolvimento da Fase 1 e nunca revertida). Um token *inválido* ainda é
-  corretamente rejeitado. Na prática, hoje, qualquer rota "protegida" pode ser
-  chamada sem token. Recomendado corrigir antes de expor o serviço publicamente.
+- ~~`authMiddleware` não bloqueia requisições sem header `Authorization``~~ —
+  **corrigido**. O middleware (`src/presentation/middlewares/auth.middleware.ts`)
+  tinha uma linha comentada com o comportamento correto (rejeitar com 401), desativada
+  durante o desenvolvimento da Fase 1 e nunca revertida; agora rejeita corretamente
+  requisições sem header `Authorization` ou com header malformado, além de tokens
+  inválidos (que já eram rejeitados antes).
 - **Sem seed de dados** — `npm run db:seed` e `npm run db:reset` apontam para
   `src/infrastructure/database/seeds/index.ts`/`reset.ts`, que ainda não existem no
   projeto. Não há usuário administrador nem dados de exemplo criados automaticamente.
