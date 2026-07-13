@@ -25,7 +25,8 @@
       "@application/*": ["application/*"],
       "@infrastructure/*": ["infrastructure/*"],
       "@presentation/*": ["presentation/*"],
-      "@shared/*": ["shared/*"]
+      "@shared/*": ["shared/*"],
+      "@main/*": ["main/*"]
     }
   },
   "include": ["src/**/*"],

@@ -2,6 +2,7 @@ import { AguardarAprovacaoOSUseCase } from '@application/use-cases/ordem-servico
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
 import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
+import { makeClienteRepo, makeNotificationService } from './notificacao-test-helpers';
 
 function makeOS(status: StatusOS = 'EM_DIAGNOSTICO'): OrdemServico {
   return OrdemServico.create({
@@ -30,7 +31,7 @@ function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepos
 describe('AguardarAprovacaoOSUseCase', () => {
   it('transitions OS from EM_DIAGNOSTICO to AGUARDANDO_APROVACAO', async () => {
     const repo = makeRepo(makeOS('EM_DIAGNOSTICO'));
-    const useCase = new AguardarAprovacaoOSUseCase(repo);
+    const useCase = new AguardarAprovacaoOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     const result = await useCase.execute('os-uuid-1');
 
@@ -40,7 +41,7 @@ describe('AguardarAprovacaoOSUseCase', () => {
 
   it('throws NotFoundError when OS not found', async () => {
     const repo = makeRepo(null);
-    const useCase = new AguardarAprovacaoOSUseCase(repo);
+    const useCase = new AguardarAprovacaoOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute('nao-existe')).rejects.toThrow(NotFoundError);
     expect(repo.update).not.toHaveBeenCalled();
@@ -48,7 +49,7 @@ describe('AguardarAprovacaoOSUseCase', () => {
 
   it('throws ValidationError when OS is not EM_DIAGNOSTICO', async () => {
     const repo = makeRepo(makeOS('RECEBIDA'));
-    const useCase = new AguardarAprovacaoOSUseCase(repo);
+    const useCase = new AguardarAprovacaoOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute('os-uuid-1')).rejects.toThrow(ValidationError);
     expect(repo.update).not.toHaveBeenCalled();

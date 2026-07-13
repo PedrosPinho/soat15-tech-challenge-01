@@ -9,6 +9,7 @@ jest.mock('@infrastructure/database/mongodb/schemas/ordem-servico.schema', () =>
     find: jest.fn(),
     countDocuments: jest.fn(),
     findByIdAndUpdate: jest.fn(),
+    aggregate: jest.fn(),
   },
   OSCounterModel: {
     findByIdAndUpdate: jest.fn(),
@@ -20,6 +21,7 @@ const { OrdemServicoModel, OSCounterModel } = require('@infrastructure/database/
   OrdemServicoModel: {
     create: jest.Mock; findById: jest.Mock; findOne: jest.Mock;
     find: jest.Mock; countDocuments: jest.Mock; findByIdAndUpdate: jest.Mock;
+    aggregate: jest.Mock;
   };
   OSCounterModel: { findByIdAndUpdate: jest.Mock; };
 };
@@ -63,6 +65,7 @@ beforeEach(() => {
   OrdemServicoModel.findByIdAndUpdate.mockResolvedValue(undefined);
   OrdemServicoModel.find.mockReturnValue(makeChain());
   OrdemServicoModel.countDocuments.mockResolvedValue(0);
+  OrdemServicoModel.aggregate.mockResolvedValue([{ data: [], totalCount: [] }]);
   OSCounterModel.findByIdAndUpdate.mockResolvedValue({ seq: 1 });
 });
 
@@ -124,24 +127,40 @@ describe('MongoOrdemServicoRepository', () => {
   it('list — returns empty list', async () => {
     const result = await repo.list(1, 10);
     expect(result.ordens).toHaveLength(0);
+    expect(result.total).toBe(0);
   });
 
   it('list — applies status, clienteId, veiculoId filters', async () => {
     await repo.list(1, 10, { status: 'RECEBIDA', clienteId: 'c-uuid-1', veiculoId: 'v-uuid-1' });
-    const findArg = OrdemServicoModel.find.mock.calls[0][0] as Record<string, unknown>;
-    expect(findArg['status']).toBe('RECEBIDA');
-    expect(findArg['clienteId']).toBe('c-uuid-1');
-    expect(findArg['veiculoId']).toBe('v-uuid-1');
+    const pipeline = OrdemServicoModel.aggregate.mock.calls[0][0] as Record<string, unknown>[];
+    const matchStage = pipeline[0] as { $match: Record<string, unknown> };
+    expect(matchStage.$match['status']).toBe('RECEBIDA');
+    expect(matchStage.$match['clienteId']).toBe('c-uuid-1');
+    expect(matchStage.$match['veiculoId']).toBe('v-uuid-1');
   });
 
-  it('list — returns mapped OS', async () => {
-    const chain = makeChain();
-    chain.sort = jest.fn().mockResolvedValue([osDoc]);
-    OrdemServicoModel.find.mockReturnValue(chain);
-    OrdemServicoModel.countDocuments.mockResolvedValue(1);
+  it('list — excludes FINALIZADA and ENTREGUE by default', async () => {
+    await repo.list(1, 10, {});
+    const pipeline = OrdemServicoModel.aggregate.mock.calls[0][0] as Record<string, unknown>[];
+    const matchStage = pipeline[0] as { $match: Record<string, unknown> };
+    expect(matchStage.$match['status']).toEqual({ $nin: ['FINALIZADA', 'ENTREGUE'] });
+  });
+
+  it('list — does not exclude FINALIZADA when explicitly filtered', async () => {
+    await repo.list(1, 10, { status: 'FINALIZADA' });
+    const pipeline = OrdemServicoModel.aggregate.mock.calls[0][0] as Record<string, unknown>[];
+    const matchStage = pipeline[0] as { $match: Record<string, unknown> };
+    expect(matchStage.$match['status']).toBe('FINALIZADA');
+  });
+
+  it('list — returns mapped OS and total from the facet result', async () => {
+    OrdemServicoModel.aggregate.mockResolvedValue([
+      { data: [osDoc], totalCount: [{ count: 1 }] },
+    ]);
     const result = await repo.list(1, 10, {});
     expect(result.ordens).toHaveLength(1);
     expect(result.ordens[0].clienteId).toBe('c-uuid-1');
+    expect(result.total).toBe(1);
   });
 
   it('update — calls OrdemServicoModel.findByIdAndUpdate', async () => {

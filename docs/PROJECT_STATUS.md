@@ -1,12 +1,53 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-04-28  
-**Testes**: 534 passando | **Cobertura**: Statements 93% | Branches 90% | Functions 84% | Lines 93%  
-**Status atual**: Fase 6 concluída → Fase 7 iniciando (Documentação & Entrega)
+**Última Atualização**: 2026-07-07
+**Testes**: 606 passando | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
+**Status atual**: Tech Challenge Fase 1 completa (histórico abaixo) → **Fase 2 (Evolução para Produção) em andamento**, Etapas 1–5 concluídas, Etapa 6 (documentação/entrega) em progresso
 
 ---
 
-## ✅ Fases Concluídas
+## 🚀 Tech Challenge — Fase 2 (Evolução para Produção)
+
+> Não confundir com "Fase 2: Peças & Estoque" listada em **Fases Concluídas** abaixo —
+> aquela é uma sub-fase interna do desenvolvimento da Fase 1 do curso. Esta seção
+> trata da **Fase 2 do Tech Challenge** (o segundo módulo/entrega do curso).
+
+Planejamento completo em [`docs/PHASE_2_PLAN.md`](PHASE_2_PLAN.md); checklist
+detalhado, item a item, em [`docs/PHASE_2_TASKS.md`](PHASE_2_TASKS.md). Resumo:
+
+| Etapa | Status | Destaques |
+|---|---|---|
+| 1. Evolução da aplicação | ✅ Concluída | Composition root (`src/main/`), port `INotificationService` + `NodemailerNotificationService`, webhook de aprovação de orçamento (`POST /:id/orcamento/webhook`), listagem de OS reordenada por status com `FINALIZADA`/`ENTREGUE` ocultas por padrão, e-mail automático a cada transição de status, testes de integração reais com MongoDB (`mongodb-memory-server`) e E2E via HTTP |
+| 2. Containerização | ✅ Concluída | `Dockerfile` validado pós-refactor; `docker-compose.yml` com serviço `mailhog` e novas env vars (SMTP, `WEBHOOK_SECRET`) |
+| 3. Kubernetes (`k8s/`) | ✅ Concluída* | Namespace, Deployment (2 réplicas), Service, ConfigMap, Secret (template), HPA (`autoscaling/v2`), MongoDB (StatefulSet + PVC), Mailhog |
+| 4. Terraform (`infra/`) | ✅ Concluída* | Provisiona cluster `kind` local + aplica os manifestos de `k8s/` via `null_resource`/`local-exec` (decisão documentada em `infra/README.md`) |
+| 5. CI/CD (GitHub Actions) | ✅ Concluída* | `.github/workflows/ci-cd.yml`: build → test (Mongo real) → docker-build (push GHCR) → deploy (kind efêmero no runner + smoke test) |
+| 6. Documentação e entregáveis | 🔄 Em progresso | README.md reescrito (endpoints, arquitetura, diagrama Mermaid, CI/CD, K8s/Terraform), Swagger completo, este arquivo atualizado — vídeo e PDF de entrega são passos manuais do aluno, fora do escopo de código |
+
+\* Validado estaticamente (build, `terraform validate`/`plan`, `actionlint`) — não
+executado contra um cluster/pipeline real neste ambiente de desenvolvimento (sem
+`kubectl`/`kind`/execução real do GitHub Actions disponíveis). Ver detalhes e
+instruções de validação local em `k8s/README.md`, `infra/README.md` e no próprio
+workflow.
+
+**Decisões de infraestrutura**: cluster `kind` local (sem custo de cloud), e-mail via
+Nodemailer + Mailhog, refactor arquitetural "reforço leve" (mantém a estrutura DDD em
+camadas já existente), CI/CD via GitHub Actions.
+
+**Achados durante a Fase 2** (pré-existentes, não introduzidos por ela — ver
+"Notas e limitações conhecidas" no `README.md` para detalhes): `npm run
+db:seed`/`db:reset` referenciam arquivos que ainda não existem (não há seed de
+usuário/dados); `npm run lint` está quebrado por incompatibilidade `eslint@10` vs.
+`.eslintrc.json` legado. Dois achados foram corrigidos nesta fase:
+`npm run test:unit`/`test:integration` usavam a flag `--testPathPattern`, removida
+nas versões atuais do Jest — atualizado para `--testPathPatterns`; e `authMiddleware`
+não bloqueava requisições sem header `Authorization` (havia uma linha comentada com o
+comportamento correto, desativada durante a Fase 1 e nunca revertida) — corrigido para
+rejeitar com 401, com os testes de unidade e o E2E de OS atualizados de acordo.
+
+---
+
+## ✅ Fases Concluídas (Tech Challenge — Fase 1)
 
 ### Fase 0: Project Bootstrap — COMPLETA
 
@@ -88,6 +129,13 @@
 ---
 
 ### Fase 3: Ordem de Serviço — COMPLETA
+
+> **Nota (2026-07-07)**: o fluxo de status documentado nesta seção (`ABERTA →
+> EM_ANDAMENTO → CONCLUIDA | CANCELADA`) é o que existia quando esta fase foi
+> concluída. Ele evoluiu, em commits posteriores a esta entrega, para
+> `RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA →
+> ENTREGUE` (mais `CANCELADA`), que é o fluxo atual — ver a seção **Tech Challenge —
+> Fase 2** no topo deste arquivo e a tabela de endpoints no `README.md`.
 
 #### Task 3.1 — OrdemServico aggregate + NumeroOS VO ✅
 - `src/domain/value-objects/numero-os.vo.ts`
@@ -234,10 +282,10 @@
 ## 📋 Pendente
 
 ### Fase 7: Documentação & Entrega
-- Swagger/OpenAPI completo
-- Atualização do README.md completo com instruções de uso e objetivos
-- Video demonstração (10–15 min)
-- PDF entregável
+- [x] Swagger/OpenAPI completo *(concluído na Fase 2 — endpoint de webhook documentado)*
+- [x] Atualização do README.md completo com instruções de uso e objetivos *(reescrito na Fase 2 — ver seção acima)*
+- [ ] Video demonstração (10–15 min) — agora cobre também a Fase 2 (deploy, CI/CD, autoscaling)
+- [ ] PDF entregável — idem
 
 ---
 
@@ -285,15 +333,15 @@
 - [x] OrdemServico REST API
 - [x] Pagamento REST API
 - [x] Relatórios REST API
-- [ ] Swagger/OpenAPI
+- [x] Swagger/OpenAPI
 
 ### Testes
 - [x] Unit — domain entities (Cliente, Veiculo, Peca, ItemEstoque, OrdemServico)
 - [x] Unit — value objects (CpfCnpj, Endereco, Placa, NumeroOS)
 - [x] Unit — use cases (cliente, veiculo, peca, inventory)
 - [x] Unit — services (jwt, hash)
-- [ ] Integration — repositórios MongoDB
-- [ ] E2E — fluxos completos
+- [x] Integration — repositórios MongoDB *(concluído na Fase 2, `ordem-servico`; via `mongodb-memory-server`)*
+- [x] E2E — fluxos completos *(concluído na Fase 2, ciclo de vida da OS + listagem, via `tests/integration/`)*
 - [x] Cobertura ≥ 80%
 
 ### Quality & Security
@@ -301,7 +349,7 @@
 - [x] Rate limiting configurado
 - [x] Security headers (Helmet)
 - [x] CORS configurado
-- [ ] ESLint sem warnings
+- [ ] ESLint sem warnings — *na verdade quebrado: `eslint@10` requer `eslint.config.js`, projeto ainda usa `.eslintrc.json` (achado da Fase 2, não corrigido — ver notas no README)*
 - [x] SonarQube e SonarScanner configurados
 - [x] npm audit limpo
 
@@ -315,6 +363,11 @@
 ---
 
 ## 🗂️ Estrutura de Arquivos Atual
+
+> Snapshot da Fase 1 (não inclui módulos adicionados depois, como
+> `catalogo-servico`/`pagamento`/`relatorios` — ver `src/` no repositório para a
+> árvore completa e atualizada). As adições da **Fase 2** estão listadas logo abaixo,
+> separadamente.
 
 ```
 src/
@@ -371,4 +424,28 @@ tests/
 └── application/services/
     ├── hash.service.spec.ts
     └── jwt.service.spec.ts
+```
+
+### Adições da Fase 2
+
+```
+src/
+├── domain/services/notification.service.ts       (port INotificationService)
+├── infrastructure/notifications/
+│   └── nodemailer-notification.service.ts
+├── presentation/middlewares/webhook-auth.middleware.ts
+├── application/use-cases/ordem-servico/
+│   ├── notificar-mudanca-status.helper.ts
+│   └── processar-aprovacao-orcamento.use-case.ts
+└── main/factories/ordem-servico.factory.ts        (composition root)
+
+tests/
+├── setup/mongo-memory.helper.ts                    (mongodb-memory-server)
+├── infrastructure/database/mongodb/repositories/
+│   └── ordem-servico.repository.integration.spec.ts
+└── integration/ordem-servico-lifecycle.spec.ts
+
+k8s/            (namespace, deployment, service, configmap, secret.example, hpa, mongodb, mailhog, README)
+infra/          (main.tf, variables.tf, outputs.tf, terraform.tfvars.example, README)
+.github/workflows/ci-cd.yml
 ```
