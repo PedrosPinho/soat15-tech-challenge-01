@@ -2,6 +2,7 @@ import { IniciarOSUseCase } from '@application/use-cases/ordem-servico/iniciar-o
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
 import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
+import { makeClienteRepo, makeNotificationService } from './notificacao-test-helpers';
 
 function makeOS(status: StatusOS = 'RECEBIDA'): OrdemServico {
   return OrdemServico.create({
@@ -30,7 +31,7 @@ function makeRepo(os: OrdemServico | null, overrides: Partial<IOrdemServicoRepos
 describe('IniciarOSUseCase', () => {
   it('transitions OS from RECEBIDA to EM_DIAGNOSTICO', async () => {
     const repo = makeRepo(makeOS('RECEBIDA'));
-    const useCase = new IniciarOSUseCase(repo);
+    const useCase = new IniciarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     const result = await useCase.execute('os-uuid-1');
 
@@ -41,7 +42,7 @@ describe('IniciarOSUseCase', () => {
 
   it('throws NotFoundError when OS not found', async () => {
     const repo = makeRepo(null);
-    const useCase = new IniciarOSUseCase(repo);
+    const useCase = new IniciarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute('nao-existe')).rejects.toThrow(NotFoundError);
     expect(repo.update).not.toHaveBeenCalled();
@@ -49,9 +50,23 @@ describe('IniciarOSUseCase', () => {
 
   it('throws ValidationError when OS is not RECEBIDA', async () => {
     const repo = makeRepo(makeOS('EM_DIAGNOSTICO'));
-    const useCase = new IniciarOSUseCase(repo);
+    const useCase = new IniciarOSUseCase(repo, makeClienteRepo(), makeNotificationService());
 
     await expect(useCase.execute('os-uuid-1')).rejects.toThrow(ValidationError);
     expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it('notifies the client after the transition', async () => {
+    const repo = makeRepo(makeOS('RECEBIDA'));
+    const notificationService = makeNotificationService();
+    const useCase = new IniciarOSUseCase(repo, makeClienteRepo(), notificationService);
+
+    await useCase.execute('os-uuid-1');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notificationService.enviarAtualizacaoStatus).toHaveBeenCalledWith(
+      'joao@email.com',
+      expect.objectContaining({ status: 'EM_DIAGNOSTICO' }),
+    );
   });
 });

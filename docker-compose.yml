@@ -19,6 +19,16 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: oficina-mailhog
+    restart: unless-stopped
+    ports:
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
+    networks:
+      - oficina-network
+
   app:
     build:
       context: .
@@ -29,13 +39,23 @@ services:
       - '3001:3001'
     environment:
       NODE_ENV: production
+      PORT: 3001
       MONGODB_URI: mongodb://admin:senha123@mongodb:27017/oficina?authSource=admin
       JWT_SECRET: change-this-in-production
       JWT_EXPIRES_IN: 1d
       BCRYPT_ROUNDS: 10
+      WEBHOOK_SECRET: change-this-in-production
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      SMTP_USER:
+      SMTP_PASS:
+      SMTP_FROM: no-reply@oficina.com
     depends_on:
       mongodb:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     networks:
       - oficina-network
     volumes:
@@ -80,12 +100,16 @@ services:
 
 volumes:
   mongodb_data:
+    name: tech-chl_mongodb_data
     driver: local
   sonarqube_data:
+    name: tech-chl_sonarqube_data
     driver: local
   sonarqube_logs:
+    name: tech-chl_sonarqube_logs
     driver: local
   sonarqube_extensions:
+    name: tech-chl_sonarqube_extensions
     driver: local
 
 networks:

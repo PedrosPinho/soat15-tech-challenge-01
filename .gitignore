@@ -3,6 +3,16 @@ dist/
 .env
 coverage/
 *.log
+k8s/secret.yaml
+
+# Terraform
+infra/.terraform/
+infra/terraform.tfvars
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
+infra/crash.log
+infra/crash.*.log
 
 docs/*
 AGENTS.md
