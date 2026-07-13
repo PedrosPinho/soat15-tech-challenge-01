@@ -39,6 +39,7 @@ services:
       - '3001:3001'
     environment:
       NODE_ENV: production
+      PORT: 3001
       MONGODB_URI: mongodb://admin:senha123@mongodb:27017/oficina?authSource=admin
       JWT_SECRET: change-this-in-production
       JWT_EXPIRES_IN: 1d
@@ -99,12 +100,16 @@ services:
 
 volumes:
   mongodb_data:
+    name: tech-chl_mongodb_data
     driver: local
   sonarqube_data:
+    name: tech-chl_sonarqube_data
     driver: local
   sonarqube_logs:
+    name: tech-chl_sonarqube_logs
     driver: local
   sonarqube_extensions:
+    name: tech-chl_sonarqube_extensions
     driver: local
 
 networks:
