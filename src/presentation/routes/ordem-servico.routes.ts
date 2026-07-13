@@ -1,44 +1,14 @@
 import { Router } from 'express';
-import { OrdemServicoController } from '@presentation/controllers/ordem-servico.controller';
 import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { webhookAuthMiddleware } from '@presentation/middlewares/webhook-auth.middleware';
 import {
   validateCreateOrdemServico,
   validateCancelarOS,
+  validateAprovacaoWebhook,
 } from '@presentation/validators/ordem-servico.validator';
-import { MongoOrdemServicoRepository } from '@infrastructure/database/mongodb/repositories/ordem-servico.repository.impl';
-import { MongoClienteRepository } from '@infrastructure/database/mongodb/repositories/cliente.repository.impl';
-import { MongoVeiculoRepository } from '@infrastructure/database/mongodb/repositories/veiculo.repository.impl';
-import { MongoCatalogoServicoRepository } from '@infrastructure/database/mongodb/repositories/catalogo-servico.repository.impl';
-import { MongoPecaRepository } from '@infrastructure/database/mongodb/repositories/peca.repository.impl';
-import { CreateOrdemServicoUseCase } from '@application/use-cases/ordem-servico/create-ordem-servico.use-case';
-import { GetOrdemServicoUseCase } from '@application/use-cases/ordem-servico/get-ordem-servico.use-case';
-import { ListOrdensServicoUseCase } from '@application/use-cases/ordem-servico/list-ordens-servico.use-case';
-import { IniciarOSUseCase } from '@application/use-cases/ordem-servico/iniciar-os.use-case';
-import { AguardarAprovacaoOSUseCase } from '@application/use-cases/ordem-servico/aguardar-aprovacao-os.use-case';
-import { AprovarOSUseCase } from '@application/use-cases/ordem-servico/aprovar-os.use-case';
-import { ConcluirOSUseCase } from '@application/use-cases/ordem-servico/concluir-os.use-case';
-import { EntregarOSUseCase } from '@application/use-cases/ordem-servico/entregar-os.use-case';
-import { CancelarOSUseCase } from '@application/use-cases/ordem-servico/cancelar-os.use-case';
-import { GetOrdensByCpfCnpjUseCase } from '@application/use-cases/ordem-servico/get-ordens-by-cpfcnpj.use-case';
+import { makeOrdemServicoController } from '@main/factories/ordem-servico.factory';
 
-const osRepo = new MongoOrdemServicoRepository();
-const clienteRepo = new MongoClienteRepository();
-const veiculoRepo = new MongoVeiculoRepository();
-const catalogoRepo = new MongoCatalogoServicoRepository();
-const pecaRepo = new MongoPecaRepository();
-
-const controller = new OrdemServicoController(
-  new CreateOrdemServicoUseCase(osRepo, clienteRepo, veiculoRepo, catalogoRepo, pecaRepo),
-  new GetOrdemServicoUseCase(osRepo),
-  new ListOrdensServicoUseCase(osRepo),
-  new IniciarOSUseCase(osRepo),
-  new AguardarAprovacaoOSUseCase(osRepo),
-  new AprovarOSUseCase(osRepo),
-  new ConcluirOSUseCase(osRepo),
-  new EntregarOSUseCase(osRepo),
-  new CancelarOSUseCase(osRepo),
-  new GetOrdensByCpfCnpjUseCase(osRepo, clienteRepo),
-);
+const controller = makeOrdemServicoController();
 
 export const ordemServicoRouter = Router();
 
@@ -78,4 +48,11 @@ ordemServicoRouter.patch('/:id/entregar', authMiddleware, (req, res, next) =>
 
 ordemServicoRouter.patch('/:id/cancelar', authMiddleware, validateCancelarOS, (req, res, next) =>
   controller.cancelar(req, res, next),
+);
+
+ordemServicoRouter.post(
+  '/:id/orcamento/webhook',
+  webhookAuthMiddleware,
+  validateAprovacaoWebhook,
+  (req, res, next) => controller.processarAprovacaoOrcamento(req, res, next),
 );

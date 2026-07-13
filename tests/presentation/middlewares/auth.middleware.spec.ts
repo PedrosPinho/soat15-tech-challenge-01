@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest, authMiddleware } from '@presentation/middlewares/auth.middleware';
 import { JwtService } from '@infrastructure/security/jwt.service';
+import { UnauthorizedError } from '@shared/errors/domain.error';
 
 jest.mock('@infrastructure/security/jwt.service');
 
@@ -16,14 +17,14 @@ const next = jest.fn() as NextFunction;
 beforeEach(() => jest.clearAllMocks());
 
 describe('authMiddleware', () => {
-  it('calls next() without error when no Authorization header', () => {
+  it('calls next(err) when no Authorization header', () => {
     authMiddleware(makeReq(), res, next);
-    expect(next).toHaveBeenCalledWith();
+    expect(next).toHaveBeenCalledWith(expect.any(UnauthorizedError));
   });
 
-  it('calls next() without error when Authorization does not start with Bearer', () => {
+  it('calls next(err) when Authorization does not start with Bearer', () => {
     authMiddleware(makeReq('Basic abc'), res, next);
-    expect(next).toHaveBeenCalledWith();
+    expect(next).toHaveBeenCalledWith(expect.any(UnauthorizedError));
   });
 
   it('sets userId and userEmail then calls next on valid token', () => {

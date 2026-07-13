@@ -67,3 +67,8 @@ export interface ListOrdensServicoResponseDto {
   page: number;
   limit: number;
 }
+
+export interface AprovacaoWebhookDto {
+  aprovado: boolean;
+  motivo?: string;
+}

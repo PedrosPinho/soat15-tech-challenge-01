@@ -1,0 +1,195 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      MONGODB_URI: mongodb://localhost:27017/oficina-ci
+      JWT_SECRET: ci-test-jwt-secret
+      WEBHOOK_SECRET: ci-test-webhook-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run tests with coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:coverage | tee coverage-output.txt
+
+      - name: Publish coverage summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Cobertura de testes'
+            echo '```'
+            tail -n 40 coverage-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  docker-build:
+    name: Docker Build & Push (GHCR)
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Sobe um cluster kind efêmero dentro do próprio runner e aplica os manifestos de
+  # k8s/ nele. Decisão de projeto (ver infra/README.md): como a Fase 2 usa kind local
+  # (sem custo de cloud), não existe um cluster remoto persistente para o GitHub
+  # Actions alcançar. Em vez de um job "deploy" que só documenta um alvo inacessível,
+  # este job prova de verdade que os manifestos sobem, o rollout completa e a API
+  # responde — o mesmo fluxo que um desenvolvedor roda localmente com
+  # `infra/README.md`/`k8s/README.md`, só que descartável a cada execução.
+  #
+  # Para apontar isto a um cluster real e persistente no futuro: troque os passos
+  # "Create kind cluster"/"Build image and load into kind" por um `kubectl config
+  # use-context` usando um kubeconfig vindo do secret KUBE_CONFIG, e troque a imagem
+  # usada no `sed` abaixo pela tag publicada no GHCR pelo job docker-build (o registry
+  # da imagem então precisaria de um imagePullSecret no cluster de destino).
+  deploy:
+    name: Deploy (kind efêmero no runner)
+    needs: docker-build
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: oficina
+          wait: 60s
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image and load into kind
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: oficina-api:ci
+          cache-from: type=gha
+
+      - run: kind load docker-image oficina-api:ci --name oficina
+
+      - name: Apply manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+
+          # Valores de demonstração: este cluster é descartado ao final do job, não
+          # guarda nenhum dado real. Para um cluster persistente, troque por
+          # `--from-literal=...=${{ secrets.NOME_DO_SECRET }}` (ver infra/README.md).
+          kubectl create secret generic oficina-api-secret -n oficina \
+            --from-literal=MONGODB_URI="mongodb://admin:ci-password@mongodb:27017/oficina?authSource=admin" \
+            --from-literal=MONGO_ROOT_USERNAME=admin \
+            --from-literal=MONGO_ROOT_PASSWORD=ci-password \
+            --from-literal=JWT_SECRET=ci-jwt-secret \
+            --from-literal=WEBHOOK_SECRET=ci-webhook-secret \
+            --from-literal=SMTP_USER="" \
+            --from-literal=SMTP_PASS="" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/mongodb.yaml
+          kubectl apply -f k8s/mailhog.yaml
+          sed 's|oficina-api:local|oficina-api:ci|' k8s/deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/oficina-api -n oficina --timeout=180s
+
+      - name: Smoke test /health
+        run: |
+          kubectl port-forward svc/oficina-api 3001:3001 -n oficina &
+          sleep 5
+          curl --fail --retry 5 --retry-delay 3 --retry-connrefused http://localhost:3001/health
+
+      - name: Cluster state (debug em caso de falha)
+        if: failure()
+        run: |
+          kubectl get all -n oficina
+          kubectl describe pods -n oficina
+          kubectl logs -l app=oficina-api -n oficina --tail=200

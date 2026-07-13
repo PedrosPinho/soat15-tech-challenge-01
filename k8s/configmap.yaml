@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-api-config
+  namespace: oficina
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  API_PREFIX: "/api"
+  JWT_EXPIRES_IN: "1d"
+  BCRYPT_ROUNDS: "10"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX_REQUESTS: "100"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  CORS_ORIGIN: "*"
+  MONGO_DB_NAME: "oficina"
+  SMTP_HOST: "mailhog"
+  SMTP_PORT: "1025"
+  SMTP_SECURE: "false"
+  SMTP_FROM: "no-reply@oficina.com"

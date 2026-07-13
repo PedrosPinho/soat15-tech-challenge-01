@@ -19,12 +19,13 @@ const mockConcluir = { execute: jest.fn() };
 const mockEntregar = { execute: jest.fn() };
 const mockCancelar = { execute: jest.fn() };
 const mockGetByCpfCnpj = { execute: jest.fn() };
+const mockProcessarAprovacaoOrcamento = { execute: jest.fn() };
 
 const ctrl = new OrdemServicoController(
   mockCreate as any, mockGet as any, mockList as any,
   mockIniciar as any, mockAguardarAprovacao as any, mockAprovar as any,
   mockConcluir as any, mockEntregar as any, mockCancelar as any,
-  mockGetByCpfCnpj as any,
+  mockGetByCpfCnpj as any, mockProcessarAprovacaoOrcamento as any,
 );
 
 beforeEach(() => jest.clearAllMocks());
@@ -212,6 +213,47 @@ describe('OrdemServicoController', () => {
     it('calls next(err) on failure', async () => {
       mockCancelar.execute.mockRejectedValue(new Error('fail'));
       await ctrl.cancelar({ params: { id: 'x' }, body: { motivo: 'm' } } as unknown as Request, makeRes(), next);
+      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    });
+  });
+
+  describe('processarAprovacaoOrcamento', () => {
+    it('returns updated OS when approved', async () => {
+      mockProcessarAprovacaoOrcamento.execute.mockResolvedValue({ ...osDto, status: 'EM_EXECUCAO' });
+      const res = makeRes();
+      await ctrl.processarAprovacaoOrcamento(
+        { params: { id: 'os1' }, body: { aprovado: true } } as unknown as Request, res, next,
+      );
+      expect(mockProcessarAprovacaoOrcamento.execute).toHaveBeenCalledWith('os1', {
+        aprovado: true,
+        motivo: undefined,
+      });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'EM_EXECUCAO' }));
+    });
+
+    it('returns updated OS when rejected with motivo', async () => {
+      mockProcessarAprovacaoOrcamento.execute.mockResolvedValue({ ...osDto, status: 'CANCELADA' });
+      const res = makeRes();
+      await ctrl.processarAprovacaoOrcamento(
+        {
+          params: { id: 'os1' },
+          body: { aprovado: false, motivo: 'Cliente recusou' },
+        } as unknown as Request,
+        res,
+        next,
+      );
+      expect(mockProcessarAprovacaoOrcamento.execute).toHaveBeenCalledWith('os1', {
+        aprovado: false,
+        motivo: 'Cliente recusou',
+      });
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'CANCELADA' }));
+    });
+
+    it('calls next(err) on failure', async () => {
+      mockProcessarAprovacaoOrcamento.execute.mockRejectedValue(new Error('fail'));
+      await ctrl.processarAprovacaoOrcamento(
+        { params: { id: 'x' }, body: { aprovado: true } } as unknown as Request, makeRes(), next,
+      );
       expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
