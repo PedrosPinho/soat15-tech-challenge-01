@@ -30,11 +30,21 @@ adiante.
 | `null_resource.namespace` | Aplica `k8s/namespace.yaml`. |
 | `null_resource.secret` | Cria/atualiza o Secret `oficina-api-secret` a partir das variáveis sensíveis (`kubectl create secret ... --dry-run=client -o yaml \| kubectl apply -f -`, idempotente). |
 | `null_resource.configmap` | Aplica `k8s/configmap.yaml`. |
-| `null_resource.mongodb` | Aplica `k8s/mongodb.yaml` (StatefulSet + Service + PVC). |
+| `null_resource.mongodb` | Aplica `k8s/mongodb.yaml` (StatefulSet + Service + PVC) e bloqueia (`kubectl rollout status`) até o pod ficar `Ready`. |
 | `null_resource.mailhog` | Aplica `k8s/mailhog.yaml`. |
-| `null_resource.deployment` | Aplica `k8s/deployment.yaml` e roda `kubectl rollout restart` (garante que uma imagem recarregada seja realmente usada pelos pods). |
+| `null_resource.deployment` | Aplica `k8s/deployment.yaml`, roda `kubectl rollout restart` (garante que uma imagem recarregada seja realmente usada pelos pods) e bloqueia até o rollout terminar. |
 | `null_resource.service` | Aplica `k8s/service.yaml`. |
 | `null_resource.hpa` | Aplica `k8s/hpa.yaml`. |
+
+Cada um desses `null_resource` tem um `trigger` com o hash (`filesha1`) do respectivo
+arquivo em `k8s/` — editar qualquer manifesto (mesmo sem tocar no código da API) faz o
+`terraform apply` seguinte reaplicá-lo. Isso foi corrigido depois de um incidente real:
+sem o trigger, um ajuste no `readinessProbe` de `mongodb.yaml` (timeout curto demais,
+StatefulSet nunca ficava `Ready`) ficou salvo no arquivo mas nunca foi reaplicado ao pod
+já existente — e nada acusava o problema, porque `kubectl apply` retorna sucesso
+imediatamente, sem esperar o pod ficar saudável. Os `rollout status` em `mongodb` e
+`deployment` existem pelo mesmo motivo: fazem o `apply` falhar (por timeout) se os pods
+não ficarem prontos, em vez de reportar sucesso com a API em CrashLoopBackOff por trás.
 
 Nenhum banco de dados gerenciado de cloud é criado — o MongoDB roda dentro do próprio
 cluster kind (StatefulSet + PVC via `local-path-provisioner`, que já vem por padrão no
@@ -92,11 +102,16 @@ kubectl --context kind-oficina port-forward svc/oficina-api 3001:3001 -n oficina
 curl http://localhost:3001/health
 ```
 
-## Iterando (rebuild após alterar código)
+## Iterando (rebuild após alterar código ou manifesto)
 
-Basta rodar `terraform apply` de novo: o hash em `local.app_hash` muda sempre que
-`Dockerfile`, `package.json`, `package-lock.json` ou qualquer arquivo em `src/` mudam, o
-que encadeia `build_image → load_image → deployment` (com `rollout restart`) automaticamente.
+Basta rodar `terraform apply` de novo:
+
+- Mudou `Dockerfile`, `package.json`, `package-lock.json` ou qualquer arquivo em `src/`?
+  O hash em `local.app_hash` muda, encadeando `build_image → load_image → deployment`
+  (com `rollout restart`) automaticamente.
+- Mudou qualquer arquivo em `k8s/` (ex.: `mongodb.yaml`, `deployment.yaml`, `hpa.yaml`)?
+  O `null_resource` correspondente tem um trigger com o hash desse arquivo e reaplica
+  sozinho, sem precisar de `terraform taint`.
 
 ## Destruir
 
