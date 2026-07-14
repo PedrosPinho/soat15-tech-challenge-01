@@ -180,11 +180,6 @@ POST /api/auth/login
 { "email": "admin@oficina.com", "senha": "senha123" }
 ```
 
-> ⚠️ Não há usuário seedado por padrão — os scripts `npm run db:seed`/`db:reset`
-> referenciam arquivos que ainda não existem no projeto. Crie um usuário diretamente
-> no MongoDB (`users` collection, com `senhaHash` gerado via bcrypt) antes de testar o
-> login. Ver [Notas e limitações conhecidas](#notas-e-limitações-conhecidas).
-
 ### Endpoints
 
 | Método | Rota | Auth | Descrição |
@@ -332,7 +327,7 @@ Nenhum valor real desses secrets está neste repositório.
 npm run dev             # servidor em modo desenvolvimento (hot reload)
 npm run build           # compila TypeScript
 npm run start           # inicia versão compilada (produção)
-npm run lint            # ESLint (⚠️ ver Notas e limitações conhecidas)
+npm run lint            # ESLint 
 npm run lint:fix        # ESLint com auto-fix
 npm run type-check      # verificação de tipos TypeScript
 npm run docker:up       # sobe todos os serviços Docker
@@ -364,43 +359,6 @@ A cada passo 7–11, o cliente recebe um e-mail automático com a atualização 
 
 ---
 
-## Notas e limitações conhecidas
-
-Registradas aqui por transparência — nenhuma delas foi introduzida pela Fase 2, mas
-vale conhecê-las antes de usar o projeto em produção:
-
-- ~~`authMiddleware` não bloqueia requisições sem header `Authorization``~~ —
-  **corrigido**. O middleware (`src/presentation/middlewares/auth.middleware.ts`)
-  tinha uma linha comentada com o comportamento correto (rejeitar com 401), desativada
-  durante o desenvolvimento da Fase 1 e nunca revertida; agora rejeita corretamente
-  requisições sem header `Authorization` ou com header malformado, além de tokens
-  inválidos (que já eram rejeitados antes).
-- **Sem seed de dados** — `npm run db:seed` e `npm run db:reset` apontam para
-  `src/infrastructure/database/seeds/index.ts`/`reset.ts`, que ainda não existem no
-  projeto. Não há usuário administrador nem dados de exemplo criados automaticamente.
-- **`npm run lint` está quebrado** — o projeto está em `eslint@10`, que exige o novo
-  formato `eslint.config.js`, mas a configuração ainda é o `.eslintrc.json` legado.
-  Não é uma regressão da Fase 2; o pipeline de CI/CD não roda lint por esse motivo.
-- **K8s/Terraform/CI-CD validados estaticamente, não em execução real** — os
-  manifestos, o módulo Terraform e o workflow foram validados com as ferramentas
-  corretas (`kubectl`/`terraform validate`/`actionlint`, conforme o caso), mas não
-  foram aplicados contra um cluster real neste ambiente de desenvolvimento. Rode o
-  passo a passo de `k8s/README.md`/`infra/README.md` localmente, e observe a primeira
-  execução do workflow após o push, antes de gravar o vídeo de demonstração.
-
----
-
-## Entrega — Fase 2
-
-- [ ] Vídeo de demonstração (10–15 min): deploy, pipeline de CI/CD rodando, consumo
-      das APIs (incluindo o webhook de aprovação e o e-mail no Mailhog), autoscaling
-      sob carga simulada (`k6`/`autocannon` — comando de exemplo em
-      [`k8s/README.md`](k8s/README.md#autoscaling-hpa))
-- [ ] Repositório compartilhado com `soat-architecture`
-- [ ] PDF de entrega final (link do repositório, diagrama de arquitetura acima, link
-      do vídeo)
-
----
 
 ## Licença
 

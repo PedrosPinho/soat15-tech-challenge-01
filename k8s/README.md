@@ -52,11 +52,11 @@ manualmente.
 kubectl apply -f k8s/namespace.yaml
 
 kubectl create secret generic oficina-api-secret -n oficina \
-  --from-literal=MONGODB_URI="mongodb://admin:SENHA_REAL@mongodb:27017/oficina?authSource=admin" \
+  --from-literal=MONGODB_URI="mongodb://admin:senha123@mongodb:27017/oficina?authSource=admin" \
   --from-literal=MONGO_ROOT_USERNAME=admin \
-  --from-literal=MONGO_ROOT_PASSWORD=SENHA_REAL \
-  --from-literal=JWT_SECRET=SEGREDO_REAL \
-  --from-literal=WEBHOOK_SECRET=SEGREDO_REAL \
+  --from-literal=MONGO_ROOT_PASSWORD=senha123 \
+  --from-literal=JWT_SECRET=change-this-in-production \
+  --from-literal=WEBHOOK_SECRET=change-this-in-production \
   --from-literal=SMTP_USER="" \
   --from-literal=SMTP_PASS=""
 ```
