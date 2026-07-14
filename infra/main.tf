@@ -101,6 +101,13 @@ resource "null_resource" "load_image" {
 resource "null_resource" "namespace" {
   depends_on = [null_resource.kind_cluster]
 
+  # Sem isso, editar namespace.yaml não recria o null_resource, e um `terraform apply`
+  # seguinte não reaplicaria o arquivo — mesma classe de bug do probe do mongodb.yaml
+  # (fix editado no arquivo, nunca reaplicado ao pod já existente).
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/namespace.yaml")
+  }
+
   provisioner "local-exec" {
     command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/namespace.yaml"
   }
@@ -138,6 +145,10 @@ resource "null_resource" "secret" {
 resource "null_resource" "configmap" {
   depends_on = [null_resource.namespace]
 
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/configmap.yaml")
+  }
+
   provisioner "local-exec" {
     command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/configmap.yaml"
   }
@@ -146,13 +157,30 @@ resource "null_resource" "configmap" {
 resource "null_resource" "mongodb" {
   depends_on = [null_resource.secret, null_resource.configmap]
 
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/mongodb.yaml")
+  }
+
   provisioner "local-exec" {
-    command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/mongodb.yaml"
+    interpreter = ["bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      kubectl --context "${local.kube_context}" apply -f ${local.k8s_dir}/mongodb.yaml
+      # Bloqueia até o pod ficar Ready — sem isso, `apply` "sucesso" não garante que o
+      # Mongo esteja de pé, e o oficina-api sobe em CrashLoopBackOff tentando conectar
+      # (visto ao vivo: readinessProbe com timeout curto demais deixava o StatefulSet
+      # preso em 0/1 indefinidamente e ninguém percebia até checar os pods manualmente).
+      kubectl --context "${local.kube_context}" rollout status statefulset/mongodb -n oficina --timeout=180s
+    EOT
   }
 }
 
 resource "null_resource" "mailhog" {
   depends_on = [null_resource.namespace]
+
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/mailhog.yaml")
+  }
 
   provisioner "local-exec" {
     command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/mailhog.yaml"
@@ -169,7 +197,8 @@ resource "null_resource" "deployment" {
   ]
 
   triggers = {
-    app_hash = local.app_hash
+    app_hash      = local.app_hash
+    manifest_hash = filesha1("${local.k8s_dir}/deployment.yaml")
   }
 
   provisioner "local-exec" {
@@ -178,12 +207,20 @@ resource "null_resource" "deployment" {
       set -euo pipefail
       kubectl --context "${local.kube_context}" apply -f ${local.k8s_dir}/deployment.yaml
       kubectl --context "${local.kube_context}" rollout restart deployment/oficina-api -n oficina
+      # Sem isso, `apply` "sucesso" não garante pods saudáveis — só que o manifesto foi
+      # aceito pelo API server. Falha aqui (timeout) é o sinal de que algo (ex.: Mongo
+      # não pronto, secret errado) está impedindo os pods de subir.
+      kubectl --context "${local.kube_context}" rollout status deployment/oficina-api -n oficina --timeout=180s
     EOT
   }
 }
 
 resource "null_resource" "service" {
   depends_on = [null_resource.deployment]
+
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/service.yaml")
+  }
 
   provisioner "local-exec" {
     command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/service.yaml"
@@ -192,6 +229,10 @@ resource "null_resource" "service" {
 
 resource "null_resource" "hpa" {
   depends_on = [null_resource.deployment]
+
+  triggers = {
+    manifest_hash = filesha1("${local.k8s_dir}/hpa.yaml")
+  }
 
   provisioner "local-exec" {
     command = "kubectl --context ${local.kube_context} apply -f ${local.k8s_dir}/hpa.yaml"
