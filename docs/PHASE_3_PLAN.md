@@ -1,0 +1,268 @@
+# Planejamento de Desenvolvimento — Fase 3 (Tech Challenge SOAT)
+
+## Contexto
+
+A Fase 2 elevou o sistema de gestão de oficina (Node.js 20 + TypeScript strict + Express 5 + MongoDB/Mongoose, DDD em camadas) a um estado "pronto para produção local": composition root em `src/main/`, port `INotificationService` com `NodemailerNotificationService`, webhook de aprovação de orçamento, listagem de OS reordenada por status, 606 testes com ~97% de cobertura, manifestos K8s em `k8s/`, Terraform em `infra/` provisionando um cluster **kind local**, e um pipeline `.github/workflows/ci-cd.yml` que builda, testa, publica no GHCR e faz deploy num kind efêmero dentro do runner.
+
+A Fase 3 muda o patamar: sai o ambiente local e entra **operação corporativa em nuvem**. O enunciado exige API Gateway, autenticação serverless por CPF, **banco de dados gerenciado relacional**, cluster Kubernetes gerenciado com escalabilidade, Terraform, observabilidade com dashboards e alertas, **quatro repositórios separados** com CI/CD e deploy automático, e documentação arquitetural formal (diagramas de componentes e sequência, RFCs, ADRs, modelo ER com justificativa).
+
+**Distância entre o que existe e o que a Fase 3 pede:**
+
+| Requisito da Fase 3 | Estado atual (fim da Fase 2) | Natureza do trabalho |
+|---|---|---|
+| API Gateway | Inexistente — Express exposto direto | Novo |
+| Autenticação serverless por CPF | JWT emitido pelo próprio app (`POST /api/auth/login`, e-mail + senha) | Novo + ajuste no app |
+| Banco gerenciado relacional | MongoDB/Mongoose em StatefulSet no cluster | **Migração** (maior risco da fase) |
+| Cluster K8s com escalabilidade | kind local + HPA já escrito | Portar para cluster gerenciado |
+| Terraform | `infra/` provisiona kind via `null_resource` | Reescrever para provider de nuvem |
+| Observabilidade | `/health` + logs de texto | Novo |
+| 4 repositórios com CI/CD | 1 repositório, 1 workflow | Split + 3 pipelines novas |
+| Documentação arquitetural (RFC/ADR/ER) | README + `docs/PROJECT_STATUS.md` | Novo |
+| Notificações serverless | Nodemailer + SMTP/Mailhog | Trocar implementação da port |
+
+Este documento é o **plano de desenvolvimento** (backlog priorizado por entrega, não o código em si). Assume decisões padrão pragmáticas para um projeto de curso; pontos de decisão estão marcados como **[DECISÃO]** para confirmação antes da implementação.
+
+**[DECISÃO] Padrões assumidos** (ajustáveis a qualquer momento):
+
+- **Nuvem: AWS.** O enunciado cita AWS API Gateway como primeiro exemplo e é a nuvem com o caminho mais curto entre os requisitos (API Gateway + Lambda + RDS + EKS num só provedor, com Terraform maduro). Alternativas: GCP (API Gateway + Cloud Functions + Cloud SQL + GKE) ou Azure.
+- **Custos:** usar AWS Free Tier / AWS Academy quando disponível, com `db.t4g.micro` Single-AZ, node group `t3.small` de 2 nós e NAT Gateway único. **EKS não tem free tier** (~US$ 0,10/h pelo control plane) — é o principal custo fixo da fase. Alternativa de menor custo: EKS Auto Mode desligado + destruir a infra entre sessões de trabalho (`terraform destroy`), documentando o custo no README.
+- **Banco gerenciado: Amazon RDS for PostgreSQL 16.** O enunciado exige "ajustes no modelo relacional, com diagramas ER e explicação dos relacionamentos" — o que descarta manter MongoDB (DocumentDB/Atlas não atenderiam ao pedido de modelo relacional). Alternativas: Aurora Serverless v2 (escala melhor, custa mais) ou RDS MySQL.
+- **Acesso a dados: driver `pg` + migrations com `node-pg-migrate`**, mantendo as interfaces de `src/domain/repositories/` intactas e escrevendo SQL explícito nos repositórios — mesma filosofia de "reforço leve" da Fase 2, sem introduzir um ORM que imponha seu próprio modelo. Alternativas: Prisma (migrations e tipos gerados, mas duplica a camada de modelo) ou TypeORM.
+- **Function serverless: AWS Lambda com Node.js 20 + TypeScript**, empacotada com `esbuild`, provisionada por Terraform no próprio repositório da Lambda.
+- **Autenticação: Lambda de emissão de token + Lambda Authorizer no API Gateway.** A primeira valida o CPF e emite o JWT; a segunda protege as rotas. O app continua validando o JWT por conta própria (defesa em profundidade — o Service do EKS não deve confiar apenas na borda).
+- **Cluster: Amazon EKS** com managed node group, IRSA (OIDC), `metrics-server` (pré-requisito do HPA já escrito) e AWS Load Balancer Controller.
+- **Observabilidade: New Relic.** Free tier perpétuo (100 GB/mês, 1 usuário full) cobre APM + infraestrutura K8s + logs + alertas + dashboards sem prazo de validade, ao contrário do trial de 14 dias do Datadog — relevante para um projeto que será avaliado depois de pronto. Alternativa: Datadog.
+- **Logs estruturados: `pino`** em JSON, com `correlationId` propagado via `AsyncLocalStorage` e header `x-correlation-id` (gerado no API Gateway quando ausente).
+- **Notificações serverless: Amazon SES** por trás da port `INotificationService` já existente. Alternativa mais aderente a "serverless": publicar evento em SNS/EventBridge consumido por uma Lambda de notificação (desacopla o envio da requisição HTTP, mas adiciona um quinto componente a operar).
+- **Estado do Terraform: backend S3 + trava em DynamoDB**, um `key` por repositório, com consumo cruzado via `terraform_remote_state` (o repo de K8s e a Lambda leem o endpoint do RDS; o repo da Lambda lê a VPC/subnets do repo de K8s).
+- **Credenciais de CI: OIDC do GitHub Actions → IAM Role** (`aws-actions/configure-aws-credentials`), sem access keys estáticas em Secrets.
+- **Branches:** `main` = produção, `homolog` = homologação. Ambas protegidas, merge só via Pull Request, deploy automático a cada push (que só ocorre via merge de PR).
+
+---
+
+## Visão geral das entregas (mapeadas ao enunciado)
+
+| # | Entrega | Requisito do enunciado |
+|---|---|---|
+| 0 | Fundação: contas AWS, backend de estado, split em 4 repositórios | Estrutura de Repositórios |
+| 1 | Banco de dados gerenciado + migração MongoDB → PostgreSQL | Infraestrutura obrigatória / Modelagem |
+| 2 | Autenticação serverless por CPF + API Gateway | Autenticação e API Gateway |
+| 3 | Cluster Kubernetes gerenciado via Terraform | Infraestrutura obrigatória |
+| 4 | Aplicação principal adaptada (dados, logs, notificações) | Aplicação em Kubernetes |
+| 5 | Monitoramento, dashboards e alertas | Monitoramento e Observabilidade |
+| 6 | Documentação arquitetural (componentes, sequência, RFC, ADR, ER) | Documentação da Arquitetura |
+| 7 | CI/CD por repositório, proteção de branches e entregáveis finais | CI/CD + Entregável |
+
+### Mapa dos 4 repositórios
+
+| Repositório | Conteúdo | Depende de |
+|---|---|---|
+| `soat15-tech-challenge-db-infra` | Terraform: VPC, RDS PostgreSQL, Secrets Manager, security groups | — |
+| `soat15-tech-challenge-k8s-infra` | Terraform: EKS, node group, ECR, addons, IRSA, aplicação dos manifestos | db-infra (VPC/SG) |
+| `soat15-tech-challenge-auth-lambda` | Lambda de autenticação por CPF + Lambda Authorizer + API Gateway (Terraform) | db-infra (endpoint/segredo), k8s-infra (VPC Link) |
+| `soat15-tech-challenge-01` (este) | Aplicação principal, manifestos `k8s/`, documentação arquitetural | todos os anteriores |
+
+**[DECISÃO] Onde fica a VPC:** assumida no repositório de banco (é quem precisa de subnets privadas primeiro), exportada por `terraform_remote_state` para os demais. Alternativa: um quinto repositório só de rede — descartado por contrariar o enunciado (quatro repositórios).
+
+---
+
+## Etapa 0 — Fundação e split de repositórios
+
+- Criar conta/organização AWS de trabalho, usuário IAM administrativo para bootstrap e a role OIDC consumida pelos pipelines (`GitHubActionsDeployRole`, com trust policy restrita a `repo:PedrosPinho/*:ref:refs/heads/main` e `.../homolog`).
+- Bootstrap manual (uma vez, fora dos 4 repos ou num diretório `bootstrap/` do repo de banco): bucket S3 versionado para o estado e tabela DynamoDB de lock.
+- Criar os 3 repositórios novos, cada um já com: `README.md`, `.gitignore`, workflow de CI, e as branches `main` + `homolog`.
+- Aplicar em **todos os 4** as regras de proteção exigidas: `main` e `homolog` sem push direto, PR obrigatório com pelo menos 1 aprovação, status checks de CI obrigatórios, sem force-push. Documentar as regras num `docs/BRANCH_PROTECTION.md` (ou seção do README) e capturar screenshot para o PDF de entrega.
+- Adicionar o usuário **`soat-architecture`** como colaborador nos 4 repositórios (item explícito do entregável).
+- Neste repositório: nada é removido nesta etapa. `infra/` (kind) e `k8s/mongodb.yaml`/`k8s/mailhog.yaml` só saem quando os substitutos estiverem funcionando (Etapas 1 e 3), preservando um caminho de execução local funcional durante toda a migração.
+
+---
+
+## Etapa 1 — Banco de dados gerenciado e migração relacional
+
+### 1.1 Provisionamento (`soat15-tech-challenge-db-infra`)
+
+- VPC com subnets públicas e privadas em 2 AZs, Internet Gateway, NAT Gateway único, route tables.
+- `aws_db_subnet_group` nas subnets privadas + `aws_security_group` liberando 5432 apenas para o SG dos nós do EKS e para o SG da Lambda.
+- `aws_db_instance` PostgreSQL 16, `db.t4g.micro`, 20 GB gp3, `storage_encrypted = true`, backup retention 7 dias, `deletion_protection` ligado em produção.
+- Senha gerada por `random_password` e guardada em `aws_secretsmanager_secret` — nunca em variável de ambiente do pipeline nem no estado em texto plano visível.
+- Ambientes `homolog` e `prod` via workspaces do Terraform ou diretórios `envs/`.
+- Outputs: `db_endpoint`, `db_name`, `db_secret_arn`, `vpc_id`, `private_subnet_ids`, `db_security_group_id`.
+
+### 1.2 Modelo relacional
+
+Normalizar o que hoje é documento. O ponto central é a coleção `ordens-servico`, que embute o array `servicos`, que por sua vez embute `pecasUtilizadas`:
+
+| Tabela | Origem | Observações |
+|---|---|---|
+| `clientes` | `clientes` | `cpf_cnpj` UNIQUE; `tipo` enum (`PF`/`PJ`); endereço achatado em colunas (`logradouro`, `numero`, `cidade`, `uf`, `cep`) — o VO `Endereco` continua reconstruindo-o no domínio |
+| `veiculos` | `veiculos` | FK `cliente_id`; `placa` UNIQUE |
+| `pecas` | `pecas` | `codigo` UNIQUE; enums `categoria_peca` e `unidade_medida`; índice GIN `to_tsvector('portuguese', descricao)` substituindo o índice `$text` do Mongo |
+| `itens_estoque` | `itens-estoque` | FK `peca_id` UNIQUE (1:1); `CHECK (quantidade_disponivel >= 0 AND quantidade_reservada >= 0)` — invariantes hoje garantidas só no `ItemEstoque` |
+| `catalogo_servicos` | `catalogo-servicos` | — |
+| `ordens_servico` | `ordens-servico` (raiz) | FKs `cliente_id`, `veiculo_id`; `numero_os` UNIQUE; enum `status_os` |
+| `servicos_os` | array `servicos` embutido | **Novo**: FK `ordem_servico_id` ON DELETE CASCADE, enum `status_servico`, `ordem` para preservar a sequência do array |
+| `servico_pecas` | array `pecasUtilizadas` embutido | **Novo**: FKs `servico_os_id` + `peca_id`, `quantidade`, `preco_unitario` (preço histórico, não segue o preço atual da peça) |
+| `pagamentos` | `pagamentos` | FK `ordem_servico_id`; enums `forma_pagamento`, `status_pagamento`; índice único parcial garantindo no máximo um pagamento `CONFIRMADO` por OS (hoje isso é a flag `temPagamento` na OS) |
+| `usuarios` | `users` | Usuários internos da oficina (login e-mail/senha) — distinto de `clientes`, que autenticam por CPF via Lambda |
+
+- `OSCounterModel` (coleção-contador de `numeroOS`, incrementada por `findByIdAndUpdate` + `$inc`) é substituída por uma **`SEQUENCE` nativa** do PostgreSQL: a mesma garantia de atomicidade, sem uma coleção auxiliar e sem um round-trip extra por criação de OS.
+- Todas as chaves permanecem `uuid` em `VARCHAR(36)`/`UUID` para não invalidar IDs já emitidos e manter as factories `create()` do domínio inalteradas.
+- Migrations versionadas em `src/infrastructure/database/postgres/migrations/`, aplicadas por `npm run db:migrate` — e como **Job de `initContainer`/`Job` do K8s** antes do rollout (ver Etapa 3), nunca manualmente.
+- Corrigir de passagem os scripts `db:seed`/`db:reset` do `package.json`, que hoje apontam para arquivos inexistentes (achado registrado na Fase 2): passam a semear usuário admin, catálogo de serviços e peças no novo schema.
+
+### 1.3 Camada de infraestrutura na aplicação
+
+- Novo diretório `src/infrastructure/database/postgres/` com `pool.ts` (pool `pg` com retry e graceful shutdown, espelhando o `connection.ts` do Mongo), `repositories/` e `mappers/`.
+- Cada repositório novo implementa a **mesma interface** de `src/domain/repositories/` — logo, use cases, controllers, DTOs, mappers de aplicação e todos os testes de `tests/domain` e `tests/application` permanecem intactos. O blast radius fica confinado a `src/infrastructure/database/` e ao composition root `src/main/factories/`.
+- Traduções não triviais a atenção especial:
+  - **Listagem ordenada de OS** (`MongoOrdemServicoRepository.list()`): o `$addFields`/`$switch` que atribui peso ao status vira `ORDER BY CASE status WHEN 'EM_EXECUCAO' THEN 1 ... END, data_abertura ASC`; o `$nin: ['FINALIZADA','ENTREGUE']` vira `WHERE status <> ALL(...)`.
+  - **Carga da OS completa**: hoje um único `findOne` traz a árvore inteira; em SQL vira um `JOIN` de 3 níveis (`ordens_servico` → `servicos_os` → `servico_pecas`) remontado em memória pelo mapper. Cuidado com N+1 na listagem — carregar serviços em lote por `WHERE ordem_servico_id = ANY($1)`.
+  - **Escrita da OS**: `save()` de uma raiz de agregação passa a ser transacional (`BEGIN` … `COMMIT`) com `DELETE`+`INSERT` dos filhos, já que a entidade é imutável e sempre chega inteira.
+  - **Estoque**: `reservar`/`utilizar` passam a usar `UPDATE ... WHERE quantidade_disponivel >= $1` (atualização condicional) ou `SELECT ... FOR UPDATE`, para não perder concorrência que o documento único garantia de graça.
+- Testes: substituir `mongodb-memory-server` por **Testcontainers PostgreSQL** nos testes de `tests/infrastructure/` e `tests/integration/`, com um `globalSetup` do Jest subindo um container por execução e as migrations aplicadas antes da suíte. Meta: manter os thresholds atuais (≥80% no `jest.config.js`; a cobertura real é ~97%).
+- Remoção do Mongo (`mongoose`, schemas, `k8s/mongodb.yaml`) só depois que a suíte completa passar contra PostgreSQL.
+
+---
+
+## Etapa 2 — Autenticação serverless por CPF e API Gateway
+
+### 2.1 Lambda de emissão de token (`soat15-tech-challenge-auth-lambda`)
+
+Handler `POST /auth/token` recebendo `{ "cpf": "12345678901" }`:
+
+1. **Validar o CPF** — reaproveitar a lógica de dígitos verificadores de `src/domain/value-objects/cpf-cnpj.vo.ts`. **[DECISÃO]** copiar o arquivo para o repo da Lambda (simples, sem infraestrutura de publicação) em vez de extrair um pacote npm compartilhado no GitHub Packages; se a duplicação incomodar, o pacote é o caminho, ao custo de mais um pipeline.
+2. **Consultar o cliente** no RDS (`SELECT id, nome, ativo FROM clientes WHERE cpf_cnpj = $1`), com credenciais lidas do Secrets Manager e cacheadas entre invocações.
+3. **Emitir o JWT** assinado com o mesmo `JWT_SECRET` que a API usa (também no Secrets Manager), com claims `sub` (id do cliente), `cpf`, `scope: "cliente"` e expiração curta.
+
+Respostas: `200` com o token; `400` CPF inválido; `404` cliente não cadastrado; `403` cliente inativo. **Nunca** revelar por mensagem de erro a diferença entre "não existe" e "inativo" no corpo público — diferenciar apenas no log estruturado.
+
+Detalhes operacionais: Lambda em subnet privada (para alcançar o RDS), `reserved_concurrency` limitado, timeout 10s. **[DECISÃO]** conexão direta ao PostgreSQL com pool de tamanho 1 e `SET idle_session_timeout` — RDS Proxy resolveria o esgotamento de conexões em rajada, mas custa por hora e o volume do projeto não justifica; registrar como risco no ADR.
+
+### 2.2 Lambda Authorizer + API Gateway
+
+- **HTTP API** (mais barata e simples que a REST API; se `usage plans`/API keys forem exigidos na demonstração, trocar por REST API).
+- Rotas **públicas**: `POST /auth/token` (integração direta com a Lambda), `GET /health`, `GET /api/docs`.
+- Rotas **protegidas** (todo o resto de `/api/*`): integração `HTTP_PROXY` via **VPC Link** para o Network Load Balancer interno do EKS, com um **Lambda Authorizer** (`REQUEST`, com cache de 300s por token) validando assinatura, expiração e situação do cliente.
+- O authorizer injeta `clienteId`/`cpf` no contexto, repassados como headers ao backend.
+- Throttling e logging de acesso do API Gateway habilitados (o `express-rate-limit` do app continua como segunda linha).
+
+### 2.3 Ajustes na aplicação principal
+
+- `authMiddleware` passa a aceitar **dois tipos de token**: o de usuário interno (fluxo `POST /api/auth/login` já existente, claim `scope: "interno"`) e o de cliente por CPF (`scope: "cliente"`). Continua validando a assinatura localmente — a borda não é o único guardião.
+- **[DECISÃO] Autorização por escopo:** o token de cliente só dá acesso aos próprios dados (consulta de status das próprias OS, aprovação de orçamento); rotas de gestão (peças, catálogo, relatórios, criação de OS) exigem `scope: "interno"`. Isso é uma restrição nova sobre rotas que hoje aceitam qualquer JWT válido — vale um teste de integração por rota protegida.
+- O endpoint público `GET /api/ordens-servico/buscar?cpfCnpj=` (hoje sem autenticação) passa a exigir o token de cliente, atendendo a "proteger rotas sensíveis da aplicação com autenticação via CPF".
+
+---
+
+## Etapa 3 — Infraestrutura Kubernetes gerenciada (`soat15-tech-challenge-k8s-infra`)
+
+- `aws_eks_cluster` + `aws_eks_node_group` gerenciado (`t3.small`, min 2 / max 4) nas subnets privadas da VPC exportada pelo repo de banco.
+- Addons: `vpc-cni`, `coredns`, `kube-proxy`, **`metrics-server`** (sem ele o `k8s/hpa.yaml` já escrito não coleta métricas) e AWS Load Balancer Controller via Helm.
+- OIDC provider + IRSA: ServiceAccount da aplicação com role IAM permitindo `secretsmanager:GetSecretValue` e `ses:SendEmail` — sem credenciais estáticas no Deployment.
+- `aws_ecr_repository` para a imagem da API, com lifecycle policy mantendo as últimas N tags.
+- Namespace `oficina` + External Secrets Operator (ou `aws_secretsmanager` → Secret sincronizado) substituindo o `k8s/secret.example.yaml` preenchido à mão.
+- Manifestos: reaproveitar `k8s/` deste repositório com as mudanças — remover `mongodb.yaml` e `mailhog.yaml`, trocar `image: oficina-api:local` pela tag do ECR, adicionar `Service` do tipo LoadBalancer **interno** (NLB) como alvo do VPC Link, e um `Job` de migration executado antes do rollout. **[DECISÃO]** os manifestos continuam versionados no repositório da aplicação (é ela quem os altera a cada mudança de env var) e o repo de infra aplica-os por referência; a alternativa é movê-los para o repo de infra, ao custo de acoplar dois pipelines a cada nova variável.
+- HPA: manter o `autoscaling/v2` por CPU já escrito, agora sobre métricas reais, e demonstrar o escalonamento sob carga (`k6`) no vídeo.
+
+---
+
+## Etapa 4 — Aplicação principal adaptada
+
+- **Dados**: trocar a fábrica de repositórios em `src/main/factories/` para as implementações PostgreSQL (Etapa 1) e remover `mongoose`.
+- **Logs estruturados**: substituir os `console.log`/`console.error` por `pino` em JSON, com um middleware que lê ou gera `x-correlation-id`, guarda em `AsyncLocalStorage` e injeta em todo log da requisição — inclusive nos logs da Lambda, para correlacionar a autenticação com a chamada subsequente.
+- **Notificações**: nova implementação `SesNotificationService` da port `INotificationService` já existente. `NodemailerNotificationService` fica como implementação de desenvolvimento local (Mailhog no `docker-compose.yml`), escolhida por env var — a port foi desenhada exatamente para isso na Fase 2.
+- **Healthchecks**: separar `/health/live` (processo vivo) de `/health/ready` (banco alcançável), alinhando com as probes já diferenciadas no `k8s/deployment.yaml`.
+- **Swagger**: atualizar `src/swagger.ts` com o fluxo de token por CPF, o novo esquema de segurança e os escopos, e exportar uma collection Postman para o entregável.
+- **`docker-compose.yml`**: trocar `mongodb` por `postgres:16` + manter `mailhog`, para que o ambiente local continue subindo com um comando.
+
+---
+
+## Etapa 5 — Monitoramento e observabilidade (New Relic)
+
+- **APM**: agente `newrelic` no app (carregado antes do bundle), Lambda instrumentada por layer do New Relic.
+- **Infraestrutura K8s**: `nri-bundle` via Helm no EKS — coleta CPU/memória de pods e nós, eventos e estado do cluster.
+- **Logs**: forwarder do New Relic consumindo o stdout JSON dos pods; `correlationId` como atributo indexado, ligando log ↔ trace ↔ requisição.
+- **Métricas de negócio**: instrumentar `src/application/use-cases/ordem-servico/notificar-mudanca-status.helper.ts` — ele já é chamado por **todos** os use-cases de transição de status, sendo o ponto natural para emitir um evento customizado `OrdemServicoStatusChanged`. Hoje ele recebe apenas a OS já atualizada; para calcular tempo por status é preciso passar também o status anterior (ajuste de assinatura pequeno, propagado aos 6 use-cases que o chamam). Vale de passagem trocar o `console.error` do `catch` pelo logger estruturado, para que a falha de notificação apareça no alerta de integrações.
+- **Dashboards exigidos**:
+  - Volume diário de OS abertas (contagem de `RECEBIDA` por dia).
+  - Tempo médio por status (Diagnóstico, Execução, Finalização) — derivado do evento customizado acima.
+  - Erros e falhas nas integrações (SES, RDS, Lambda de auth).
+  - Latência p50/p95/p99 por rota e consumo de CPU/memória do cluster.
+- **Alertas** (NRQL alert conditions → e-mail/Slack): taxa de erro 5xx acima do limite, p95 de latência degradado, **falha no processamento de ordens de serviço** (exceção em qualquer use-case de transição de status), pods em `CrashLoopBackOff`, healthcheck/uptime via Synthetics, e CPU sustentada acima do alvo do HPA.
+
+---
+
+## Etapa 6 — Documentação da arquitetura
+
+Fonte da verdade em `docs/architecture/` **neste** repositório, com link nos READMEs dos outros três:
+
+- `component-diagram.md` — diagrama de componentes (Mermaid) com a visão de nuvem: cliente → API Gateway → (Lambda Authorizer, Lambda de token) → VPC Link → NLB → EKS (pods da API + HPA) → RDS PostgreSQL, mais SES, Secrets Manager, ECR e New Relic.
+- `sequence-auth.md` — diagrama de sequência do fluxo de autenticação por CPF (cliente → API Gateway → Lambda → RDS → JWT → chamada protegida → Authorizer → EKS).
+- `sequence-abertura-os.md` — diagrama de sequência da abertura de OS, incluindo a transação no PostgreSQL e a notificação via SES.
+- `rfcs/` — `RFC-001` escolha da nuvem; `RFC-002` escolha do banco de dados (com a justificativa formal exigida pelo enunciado: por que relacional, por que PostgreSQL, o que se ganha e o que se perde saindo do MongoDB); `RFC-003` estratégia de autenticação (CPF + serverless, por que não Cognito); `RFC-004` estratégia de observabilidade.
+- `adrs/` — `ADR-001` REST síncrono via API Gateway como padrão de comunicação; `ADR-002` HPA por CPU (limiares e por que não KEDA/métricas customizadas); `ADR-003` split em quatro repositórios e ordem de aplicação do Terraform; `ADR-004` modelo relacional normalizado (por que `servicos_os`/`servico_pecas` em vez de colunas `jsonb`); `ADR-005` notificações via SES por trás da port existente.
+- `data-model.md` — **diagrama ER** (Mermaid `erDiagram`) com todas as tabelas da Etapa 1.2, cardinalidades, chaves e a explicação de cada relacionamento; seção sobre índices e sobre as invariantes que migraram do código para constraints do banco.
+- Templates curtos de RFC e ADR (`rfcs/TEMPLATE.md`, `adrs/TEMPLATE.md`) para manter o formato consistente.
+- Atualizar `docs/PROJECT_STATUS.md` com a Fase 3 conforme o progresso, como foi feito na Fase 2.
+
+---
+
+## Etapa 7 — CI/CD, proteção de branches e entregáveis
+
+Um pipeline por repositório, todos autenticando na AWS via OIDC:
+
+| Repositório | Pipeline |
+|---|---|
+| `db-infra` | `fmt` → `validate` → `tflint` → `plan` (em PR, comentado no PR) → `apply` (push em `homolog`/`main`) |
+| `k8s-infra` | idem, mais um smoke test `kubectl get nodes` pós-apply |
+| `auth-lambda` | lint → testes unitários (validação de CPF, emissão de token) → build `esbuild` → `terraform apply` → teste de fumaça invocando a Lambda com um CPF de fixture |
+| Aplicação | build → testes com Testcontainers → build da imagem → push no ECR → `Job` de migration → `kubectl set image` + `rollout status` → smoke test `/health` |
+
+- **Deploy automático por branch**: push em `homolog` implanta no ambiente de homologação; push em `main` implanta em produção. Como ambas são protegidas, todo deploy nasce de um PR aprovado.
+- Rollback: `kubectl rollout undo` documentado no README da aplicação; para Terraform, revert do PR + novo `apply`.
+- **Entregáveis finais**:
+  - `README.md` em cada repositório com propósito, tecnologias, passos de execução e deploy, **diagrama da arquitetura específica daquele repositório**, e link do Swagger/Postman (no repo da aplicação).
+  - Links dos deploys ativos (endpoint do API Gateway, dashboard do New Relic).
+  - **Vídeo de até 15 minutos** — roteiro sugerido: (1) autenticação com CPF via API Gateway, 2 min; (2) pipeline de CI/CD executando a partir de um PR, 3 min; (3) deploy automatizado chegando ao EKS, 2 min; (4) consumo das APIs protegidas, 3 min; (5) dashboard de monitoramento com análise ao vivo sob carga do `k6`, mostrando o HPA escalando, 3 min; (6) logs e traces correlacionados, 2 min.
+  - **PDF único** no Portal do Aluno: links dos 4 repositórios, link do vídeo, links das documentações, e confirmação de `soat-architecture` como colaborador nos 4.
+
+---
+
+## Ordem de execução recomendada
+
+A ordem é ditada pelas dependências entre repositórios — infraestrutura de baixo para cima, aplicação por último:
+
+1. **Etapa 0** (fundação, repositórios, proteção de branches) — destrava todo o resto.
+2. **Etapa 1** (RDS + migração relacional) — é o trabalho mais longo e mais arriscado da fase, e tudo depende do banco existir. Começar cedo, e manter a suíte de testes verde a cada repositório migrado.
+3. **Etapa 3** (EKS) em paralelo com o fim da Etapa 1, já que só depende da VPC.
+4. **Etapa 2** (Lambda + API Gateway) — precisa do banco (consulta de cliente) e do cluster (VPC Link).
+5. **Etapa 4** (aplicação adaptada) — integra tudo e é o primeiro momento em que o fluxo fim-a-fim roda na nuvem.
+6. **Etapa 5** (observabilidade) — instrumentar depois que o comportamento estiver estável, senão os dashboards medem um alvo em movimento.
+7. **Etapa 6** (documentação) — escrever com a arquitetura já materializada; as RFCs, porém, devem ser **rascunhadas antes** das decisões que documentam (é o propósito de uma RFC), consolidando-as ao final.
+8. **Etapa 7** (pipelines finais, vídeo, PDF) — por último, com tudo funcional.
+
+---
+
+## Riscos e pontos de atenção
+
+| Risco | Impacto | Mitigação |
+|---|---|---|
+| Migração MongoDB → PostgreSQL maior que o previsto | Atrasa toda a fase | Interfaces de repositório já isolam o Mongo; migrar um agregado por vez com a suíte verde a cada passo; começar por `Cliente`/`Veiculo` (simples) e deixar `OrdemServico` (árvore de 3 níveis) por último, com o aprendizado acumulado |
+| Custo do EKS + NAT Gateway estourando o orçamento | Ambiente derrubado no meio da avaliação | `terraform destroy` entre sessões, alarme de billing, gravar o vídeo com a infra recém-aplicada |
+| Esgotamento de conexões do RDS por rajada de Lambdas | 5xx na autenticação | Pool de 1 conexão, `reserved_concurrency`, monitorar `DatabaseConnections`; RDS Proxy como plano B |
+| Estado do Terraform compartilhado entre 4 repos | Apply quebrado por dependência ausente | `terraform_remote_state` com outputs explícitos, ordem de apply documentada no README de cada repo de infra |
+| Cold start da Lambda na demonstração | Latência ruim no vídeo | Aquecer antes de gravar; considerar `provisioned_concurrency` apenas se necessário |
+| Free tier do New Relic estourado por volume de logs | Perda de observabilidade | Amostragem de logs de nível `debug`, retenção curta, alerta de consumo |
+
+---
+
+## Verificação
+
+- `npm run build` / `npm run type-check` sem erros após a migração de banco.
+- `npm run test:coverage` verde contra PostgreSQL via Testcontainers, mantendo os thresholds do `jest.config.js` (≥80%; patamar atual ~97%).
+- `docker compose up -d` sobe `app` + `postgres` + `mailhog` saudáveis; smoke test dos endpoints principais e das migrations aplicadas do zero.
+- `terraform validate` + `plan` limpos nos três repositórios de infraestrutura; `apply` completo em `homolog` a partir do zero, seguido de `destroy` sem recursos órfãos.
+- Fluxo fim-a-fim na nuvem: `POST /auth/token` com CPF de um cliente cadastrado devolve JWT; o mesmo token abre uma OS através do API Gateway; CPF inválido/inexistente/inativo devolve 400/404/403.
+- `kubectl get hpa -n oficina` mostra métricas reais; teste de carga com `k6` faz o número de réplicas subir e descer.
+- Dashboards do New Relic populados com os quatro painéis exigidos; um erro provocado de propósito num use-case de transição de status dispara o alerta correspondente.
+- Os 4 repositórios com CI verde, `main`/`homolog` protegidas (push direto rejeitado), `soat-architecture` como colaborador, e README com diagrama próprio.
