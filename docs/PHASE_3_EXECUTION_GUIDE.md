@@ -20,6 +20,11 @@ O que **já foi feito em código** até agora, sem depender de conta nenhuma:
 - Camada PostgreSQL de `OrdemServico`/`Servico`/`Pagamento` (agregado transacional
   de 3 níveis) — todos os agregados da aplicação principal já têm repositório
   Postgres testado (ver `PHASE_3_TASKS.md`).
+- **Etapa 4 completa**: fábrica de repositórios trocada para Postgres, MongoDB
+  removido do código e das dependências, logs estruturados (`pino` +
+  `correlationId`), `SesNotificationService` selecionável por env var,
+  `/health/live`+`/health/ready`, `docker-compose.yml` com `postgres:16`,
+  collection Postman versionada — ver `PHASE_3_TASKS.md`.
 
 O que **já foi feito por você**, fora deste repositório: validação dos serviços no
 Learner Lab (Passo 0), bootstrap do backend Terraform — bucket S3 + tabela DynamoDB
@@ -33,10 +38,11 @@ repositórios (nenhum tem `.github/workflows/` ainda), e
 `scripts/refresh-aws-secrets.sh`.
 
 O que seus próprios agentes de código podem continuar fazendo sem depender do lab
-estar com sessão ativa: Etapa 4 — trocar a fábrica de repositórios para Postgres e
-remover o Mongo, logs `pino`, `SesNotificationService`, healthchecks, Swagger
-(**próxima tarefa recomendada**, agora destravada), e os workflows de CI/CD dos 4
-repositórios (o *código* do workflow não exige sessão ativa — só a execução do
+estar com sessão ativa: Etapa 2.3 — `authMiddleware` aceitando o token de cliente
+por CPF além do interno, com restrição por escopo nas rotas sensíveis
+(**próxima tarefa recomendada**, destrava também a documentação do fluxo CPF no
+Swagger, deixada pendente na Etapa 4); e os workflows de CI/CD dos 4 repositórios
+(o *código* do workflow não exige sessão ativa — só a execução do
 `apply`/deploy exige).
 
 ---
@@ -157,8 +163,12 @@ Só depois que o Passo 3 estiver com credenciais válidas e o código Terraform 
 - Se confirmar proteção de branch (Passo 2) e status checks ainda não estiverem
   configurados: aviso para eu ajustar o roteiro do PDF de entrega.
 - A qualquer momento, para eu continuar o código que não depende de sessão ativa do
-  lab: **próxima tarefa recomendada = Etapa 4** (troca da fábrica de repositórios
-  para Postgres, remoção do Mongo, logs `pino`, `SesNotificationService`,
-  healthchecks, Swagger — já destravada, todos os agregados têm repositório
-  Postgres testado); em paralelo, workflows de CI/CD dos 4 repositórios e
-  `scripts/refresh-aws-secrets.sh`.
+  lab: **próxima tarefa recomendada = Etapa 2.3** (token de cliente por CPF +
+  escopos no `authMiddleware` da aplicação principal — já destravada, Lambda de
+  auth já escrita em `auth-lambda`); em paralelo, workflows de CI/CD dos 4
+  repositórios e `scripts/refresh-aws-secrets.sh`.
+- Também valide num ambiente com rede irrestrita: `docker compose build app`
+  não completou neste sandbox (`npm ci` falhou dentro do container com
+  timeout/erro de rede) — o `Dockerfile`/`docker-compose.yml` foram validados
+  por config e pela app rodando localmente contra o Postgres do compose, mas o
+  build da imagem em si ainda não foi confirmado de ponta a ponta.
