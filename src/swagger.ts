@@ -338,26 +338,66 @@ export const swaggerSpec = {
   },
   security: [{ bearerAuth: [] }],
   paths: {
-    '/health': {
+    '/health/live': {
       get: {
         tags: ['Health'],
-        summary: 'Health check',
+        summary: 'Processo vivo (nunca toca o banco)',
         security: [],
         responses: {
           200: {
-            description: 'Aplicação em funcionamento',
+            description: 'Processo em execução',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
-                    status: { type: 'string', example: 'ok' },
+                    status: { type: 'string', example: 'UP' },
                     timestamp: { type: 'string', format: 'date-time' },
+                    uptime: { type: 'number' },
                   },
                 },
               },
             },
           },
+        },
+      },
+    },
+    '/health/ready': {
+      get: {
+        tags: ['Health'],
+        summary: 'Banco alcançável (usado pela readinessProbe)',
+        security: [],
+        responses: {
+          200: {
+            description: 'Postgres alcançável',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', example: 'UP' },
+                    timestamp: { type: 'string', format: 'date-time' },
+                    database: { type: 'string', example: 'CONNECTED' },
+                  },
+                },
+              },
+            },
+          },
+          503: {
+            description: 'Postgres inalcançável',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+        },
+      },
+    },
+    '/health': {
+      get: {
+        tags: ['Health'],
+        summary: 'Alias de /health/ready (compatibilidade)',
+        security: [],
+        responses: {
+          200: { description: 'Postgres alcançável' },
+          503: { description: 'Postgres inalcançável' },
         },
       },
     },
