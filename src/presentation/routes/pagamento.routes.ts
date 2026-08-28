@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PagamentoController } from '@presentation/controllers/pagamento.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import { validateCreatePagamento } from '@presentation/validators/pagamento.validator';
 import { PostgresPagamentoRepository } from '@infrastructure/database/postgres/repositories/pagamento.repository.impl';
 import { PostgresOrdemServicoRepository } from '@infrastructure/database/postgres/repositories/ordem-servico.repository.impl';
@@ -25,12 +25,12 @@ const getController = (): PagamentoController => {
 
 export const pagamentoRouter = Router();
 
-pagamentoRouter.post('/', authMiddleware, validateCreatePagamento, (req, res, next) =>
+pagamentoRouter.post('/', authMiddleware, requireInternalScope, validateCreatePagamento, (req, res, next) =>
   getController().create(req, res, next),
 );
 
-pagamentoRouter.get('/', authMiddleware, (req, res, next) => getController().list(req, res, next));
+pagamentoRouter.get('/', authMiddleware, requireInternalScope, (req, res, next) => getController().list(req, res, next));
 
-pagamentoRouter.get('/:id', authMiddleware, (req, res, next) =>
+pagamentoRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().getById(req, res, next),
 );

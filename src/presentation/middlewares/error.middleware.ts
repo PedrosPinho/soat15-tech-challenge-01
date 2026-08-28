@@ -5,6 +5,7 @@ import {
   ValidationError,
   ConflictError,
   UnauthorizedError,
+  ForbiddenError,
 } from '@shared/errors/domain.error';
 import { logger } from '@shared/logger';
 
@@ -27,6 +28,11 @@ export const errorHandler = (
 ): void => {
   if (err instanceof UnauthorizedError) {
     res.status(401).json({ status: 'error', message: err.message });
+    return;
+  }
+
+  if (err instanceof ForbiddenError) {
+    res.status(403).json({ status: 'error', message: err.message });
     return;
   }
 
