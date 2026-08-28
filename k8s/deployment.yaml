@@ -18,8 +18,10 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: oficina-api
-          # Construída localmente e carregada no kind (ver k8s/README.md), ou publicada
-          # no GHCR pelo pipeline de CI/CD (Etapa 5) e referenciada por tag/digest.
+          # Substituída em tempo de deploy pelo CI/CD (.github/workflows/ci-cd.yml,
+          # sed na tag do ECR = SHA do commit) — ver k8s/README.md para uso local
+          # com kind, onde a imagem é carregada manualmente em vez de puxada de um
+          # registry.
           image: oficina-api:local
           imagePullPolicy: IfNotPresent
           ports:

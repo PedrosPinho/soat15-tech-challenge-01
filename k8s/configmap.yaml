@@ -12,10 +12,11 @@ data:
   RATE_LIMIT_WINDOW_MS: "900000"
   RATE_LIMIT_MAX_REQUESTS: "100"
   LOG_LEVEL: "info"
-  LOG_FORMAT: "json"
   CORS_ORIGIN: "*"
-  MONGO_DB_NAME: "oficina"
-  SMTP_HOST: "mailhog"
-  SMTP_PORT: "1025"
-  SMTP_SECURE: "false"
-  SMTP_FROM: "no-reply@oficina.com"
+  # "ses" no EKS (ver ADR-005); "smtp" continua sendo o default do binário para
+  # não depender de configuração extra em ambientes que não populam esta ConfigMap
+  # (ex.: rodando fora do K8s). SES_FROM_EMAIL/AWS_REGION não são segredo — só o
+  # que autentica no SES é a LabRole herdada pelos nós via instance profile.
+  NOTIFICATION_PROVIDER: "ses"
+  AWS_REGION: "us-east-1"
+  SES_FROM_EMAIL: "no-reply@oficina.com"
