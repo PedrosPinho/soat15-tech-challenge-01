@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { RelatoriosController } from '@presentation/controllers/relatorios.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import { PostgresOrdemServicoRepository } from '@infrastructure/database/postgres/repositories/ordem-servico.repository.impl';
 import { PostgresPagamentoRepository } from '@infrastructure/database/postgres/repositories/pagamento.repository.impl';
 import { PostgresItemEstoqueRepository } from '@infrastructure/database/postgres/repositories/item-estoque.repository.impl';
@@ -23,6 +23,6 @@ const getController = (): RelatoriosController => {
 
 export const relatoriosRouter = Router();
 
-relatoriosRouter.get('/dashboard', authMiddleware, (req, res, next) =>
+relatoriosRouter.get('/dashboard', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().getDashboard(req, res, next),
 );

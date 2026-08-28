@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ClienteController } from '@presentation/controllers/cliente.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import {
   validateCreateCliente,
   validateUpdateCliente,
@@ -30,20 +30,20 @@ const getController = (): ClienteController => {
 
 export const clienteRouter = Router();
 
-clienteRouter.post('/', authMiddleware, validateCreateCliente, (req, res, next) =>
+clienteRouter.post('/', authMiddleware, requireInternalScope, validateCreateCliente, (req, res, next) =>
   getController().create(req, res, next),
 );
 
-clienteRouter.get('/', authMiddleware, (req, res, next) => getController().list(req, res, next));
+clienteRouter.get('/', authMiddleware, requireInternalScope, (req, res, next) => getController().list(req, res, next));
 
-clienteRouter.get('/:id', authMiddleware, (req, res, next) =>
+clienteRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().getById(req, res, next),
 );
 
-clienteRouter.put('/:id', authMiddleware, validateUpdateCliente, (req, res, next) =>
+clienteRouter.put('/:id', authMiddleware, requireInternalScope, validateUpdateCliente, (req, res, next) =>
   getController().update(req, res, next),
 );
 
-clienteRouter.delete('/:id', authMiddleware, (req, res, next) =>
+clienteRouter.delete('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().deactivate(req, res, next),
 );
