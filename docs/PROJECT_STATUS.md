@@ -22,7 +22,7 @@ arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
 |---|---|
 | Documentação arquitetural (`docs/architecture/`: componentes, sequências, ER, 4 RFCs, 6 ADRs) | ✅ Concluída |
 | Guia de execução para as etapas que dependem de conta ([`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md)) | ✅ Concluído |
-| Camada PostgreSQL — agregados simples (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) | 🔄 Em andamento |
+| Camada PostgreSQL — agregados simples (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Camada PostgreSQL — `OrdemServico`/`Servico`/`Pagamento` (agregado transacional de 3 níveis) | ⏳ Não iniciada (propositalmente por último) |
 | Ajustes de aplicação (Etapa 4: logs `pino`, `SesNotificationService`, healthchecks, Swagger) | ⏳ Não iniciada |
 | Terraform, Lambdas, split em 4 repositórios, cluster, observabilidade | ⏳ Depende de ações do aluno (conta AWS Academy, criação de repositórios) — ver `PHASE_3_EXECUTION_GUIDE.md` |
