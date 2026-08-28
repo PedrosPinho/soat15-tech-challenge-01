@@ -3,13 +3,14 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import type { Router } from 'express';
 import type { ErrorRequestHandler } from 'express';
+import { setPool } from '@infrastructure/database/postgres/pool';
 import {
-  connectTestDatabase,
-  disconnectTestDatabase,
+  startTestDatabase,
+  stopTestDatabase,
   clearTestDatabase,
-} from '../setup/mongo-memory.helper';
+} from '../setup/postgres-testcontainer.helper';
 
-jest.setTimeout(30000);
+jest.setTimeout(120000);
 
 process.env['WEBHOOK_SECRET'] = 'test-webhook-secret';
 process.env['JWT_SECRET'] = 'test-jwt-secret';
@@ -44,7 +45,8 @@ app.use('/api/ordens-servico', ordemServicoRouter);
 app.use(errorHandler);
 
 beforeAll(async () => {
-  await connectTestDatabase();
+  const pool = await startTestDatabase();
+  setPool(pool);
 });
 
 afterEach(async () => {
@@ -52,7 +54,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await disconnectTestDatabase();
+  await stopTestDatabase();
 });
 
 function computeCpfCheckDigit(digits: string, weightStart: number): number {
