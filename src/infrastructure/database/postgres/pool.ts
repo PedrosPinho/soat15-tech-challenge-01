@@ -1,4 +1,5 @@
 import { Pool, PoolConfig } from 'pg';
+import { logger } from '@shared/logger';
 
 let pool: Pool | undefined;
 
@@ -37,7 +38,7 @@ export const connectDatabase = async (options: ConnectOptions = {}): Promise<Poo
   const candidate = new Pool(config);
 
   candidate.on('error', (error) => {
-    console.error('PostgreSQL pool error:', error);
+    logger.error({ error }, 'PostgreSQL pool error');
   });
 
   const retries = options.retries ?? 5;
@@ -52,8 +53,9 @@ export const connectDatabase = async (options: ConnectOptions = {}): Promise<Poo
       return pool;
     } catch (error) {
       lastError = error;
-      console.warn(
-        `PostgreSQL connection attempt ${attempt}/${retries} failed. Retrying in ${retryDelayMs}ms...`,
+      logger.warn(
+        { attempt, retries, retryDelayMs },
+        'PostgreSQL connection attempt failed, retrying',
       );
       if (attempt < retries) {
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
