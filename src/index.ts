@@ -4,8 +4,10 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import swaggerUi from 'swagger-ui-express';
-import { connectDatabase } from '@infrastructure/database/mongodb/connection';
+import { connectDatabase, disconnectDatabase } from '@infrastructure/database/postgres/pool';
+import { correlationIdMiddleware } from '@presentation/middlewares/correlation-id.middleware';
 import { errorHandler } from '@presentation/middlewares/error.middleware';
+import { logger } from '@shared/logger';
 import { swaggerSpec, swaggerUiOptions } from './swagger';
 import { healthRouter } from '@presentation/routes/health.routes';
 import { authRouter } from '@presentation/routes/auth.routes';
@@ -29,6 +31,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use(correlationIdMiddleware);
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
@@ -56,30 +59,34 @@ app.use('/api/servicos', catalogoServicoRouter);
 
 app.use(errorHandler);
 
+let httpServer: ReturnType<Application['listen']> | undefined;
+
 const startServer = async (): Promise<void> => {
   try {
+    // As rotas (importadas acima) constroem seus repositórios Postgres de
+    // forma preguiçosa, no primeiro request — mas o pool precisa estar
+    // conectado antes que o servidor comece a aceitar requisições.
     await connectDatabase();
-    console.warn('Database connected successfully');
+    logger.info('Database connected successfully');
 
-    app.listen(PORT, () => {
-      console.warn(`Server running on port ${PORT}`);
-      console.warn(`Health Check: http://localhost:${PORT}/health`);
+    httpServer = app.listen(PORT, () => {
+      logger.info({ port: PORT }, 'Server running');
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error({ error }, 'Failed to start server');
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', () => {
-  console.warn('SIGTERM received: closing server');
+const shutdown = async (signal: string): Promise<void> => {
+  logger.info({ signal }, 'Signal received: closing server');
+  httpServer?.close();
+  await disconnectDatabase();
   process.exit(0);
-});
+};
 
-process.on('SIGINT', () => {
-  console.warn('SIGINT received: closing server');
-  process.exit(0);
-});
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 startServer();
 
