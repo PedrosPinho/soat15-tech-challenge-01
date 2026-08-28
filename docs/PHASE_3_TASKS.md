@@ -1,12 +1,67 @@
 # Tasks & Checklist — Fase 3 (Tech Challenge SOAT)
 
-**Base**: `docs/PHASE_3_PLAN.md` (Etapas 1 e 4)
+**Base**: `docs/PHASE_3_PLAN.md` (Etapas 1, 2.3 e 4)
 **Status atual**: camada PostgreSQL implementada e testada para **todos** os
 agregados (Etapa 1, ver seções abaixo). **Etapa 4 concluída**: fábrica de
 repositórios trocada para Postgres, MongoDB removido do código e das
 dependências, logs estruturados (`pino` + `correlationId`), `SesNotificationService`
 selecionável por env var, healthchecks `/health/live`+`/health/ready`,
 `docker-compose.yml` com `postgres:16`, e collection Postman versionada.
+**Etapa 2.3 concluída**: `authMiddleware` aceita token interno e token de
+cliente por CPF, com autorização por escopo nas rotas sensíveis.
+
+---
+
+## Etapa 2.3 — Ajustes de autenticação na aplicação principal
+
+- [x] `JwtService`/`JwtPayload` reformulados em dois tipos de claim —
+  `InternoTokenPayload` (`sub`, `email`, `scope: 'interno'`) e
+  `ClienteTokenPayload` (`sub`, `cpf`, `scope: 'cliente'`) — o formato bate
+  exatamente com o que o Lambda Authorizer de `soat15-tech-challenge-auth-lambda`
+  já valida (`ClienteTokenClaims`/`InternoTokenClaims`), já que os dois lados
+  assinam/validam com o mesmo `JWT_SECRET` (RFC-003). `LoginUseCase` passou a
+  assinar `{ sub, email, scope: 'interno' }` (antes: `{ userId, email }`, sem
+  `scope`).
+- [x] `authMiddleware` aceita os dois tipos de token e popula
+  `req.scope`+`req.userId`/`req.userEmail` (interno) ou
+  `req.scope`+`req.clienteId`/`req.cpfCnpj` (cliente) — continua validando a
+  assinatura localmente, defesa em profundidade mesmo com o Lambda Authorizer
+  na borda.
+- [x] Novo `requireInternalScope`, encadeado depois de `authMiddleware` em
+  **todas** as rotas de gestão (clientes, veículos, peças, catálogo,
+  pagamentos, relatórios, e todas as rotas de OS exceto `/buscar`) — um token
+  de cliente válido mas de escopo errado agora recebe `403` (`ForbiddenError`,
+  branch novo em `error.middleware.ts`), não mais aceito como antes.
+- [x] `GET /api/ordens-servico/buscar` deixou de ser público: exige
+  `authMiddleware`; com `scope: cliente` só aceita o próprio CPF/CNPJ
+  (comparação por dígitos, tolera formatação), com `scope: interno` consulta
+  qualquer CPF/CNPJ livremente.
+- [x] Testes: `jwt.service.spec.ts` e `auth.middleware.spec.ts` atualizados
+  para os dois formatos de claim + testes novos de `requireInternalScope`; 5
+  testes de integração novos em `ordem-servico-lifecycle.spec.ts` cobrindo
+  403 em rota de gestão com token de cliente, 401 em `/buscar` sem token, 200
+  com o próprio CPF, 403 com CPF de outro cliente, 200 com token interno em
+  qualquer CPF.
+- [x] Swagger (`bearerAuth` + path `/api/ordens-servico/buscar`) documentado
+  com os dois escopos — item que tinha ficado pendente na Etapa 4 por
+  depender desta.
+- [x] `npm run type-check` limpo; 533 testes (528 anteriores + 5 novos) +
+  9 testes de integração em `ordem-servico-lifecycle.spec.ts` passando;
+  validado também manualmente via `curl` contra Postgres real (os 5 cenários
+  de escopo acima, todos com o status HTTP esperado).
+
+### Observações / desvios
+
+- Rotas de cliente/veículo (`cliente.routes.ts`, `veiculo.routes.ts`) também
+  passaram a exigir `scope: interno` — o plano só cita explicitamente peças,
+  catálogo, relatórios e criação de OS, mas a decisão registrada ("o token de
+  cliente só dá acesso aos próprios dados") implica que tudo fora de
+  `/buscar` fica fechado por padrão para o token de cliente; abrir rotas
+  adicionais para o cliente é decisão de produto, não uma correção deste
+  ajuste.
+- `POST /api/ordens-servico/:id/orcamento/webhook` não foi tocado — continua
+  atrás de `webhookAuthMiddleware` (segredo compartilhado), mecanismo
+  independente do JWT.
 
 ---
 
