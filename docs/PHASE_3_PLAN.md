@@ -169,7 +169,10 @@ Normalizar o que hoje é documento. O ponto central é a coleção `ordens-servi
 
 > **Status**: 2.1/2.2 (Lambdas de token/authorizer + API Gateway) ✅ código escrito
 > e pushado em `auth-lambda`, `terraform apply` não confirmado. 2.3 (ajustes de
-> `authMiddleware`/escopos na aplicação principal) ⏳ não iniciada.
+> `authMiddleware`/escopos na aplicação principal) ✅ **concluída** — token
+> interno e de cliente aceitos, `requireInternalScope` nas rotas de gestão,
+> `/buscar` fechado por CPF próprio. Detalhes em
+> [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 
 ### 2.1 Lambda de emissão de token (`soat15-tech-challenge-auth-lambda`)
 
@@ -218,9 +221,8 @@ Detalhes operacionais: Lambda em subnet privada (para alcançar o RDS), **role d
 
 > **Status**: ✅ Concluída — dados, logs, notificações, healthchecks e
 > `docker-compose.yml` feitos e testados (528 testes + 65 de integração
-> Postgres, smoke test manual ponta a ponta). Swagger com o fluxo de CPF fica
-> pendente até a Etapa 2.3 existir de fato na aplicação (documentar agora
-> descreveria um contrato inexistente); Postman collection genérica já feita.
+> Postgres, smoke test manual ponta a ponta). Swagger com o fluxo de CPF e
+> Postman collection também concluídos, depois que a Etapa 2.3 foi feita.
 > Detalhes em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 
 - **Dados**: trocar a fábrica de repositórios em `src/main/factories/` para as implementações PostgreSQL (Etapa 1) e remover `mongoose`.
