@@ -185,11 +185,10 @@
       "name": "Ordens de Serviço",
       "item": [
         {
-          "name": "Buscar OS por CPF/CNPJ (público)",
+          "name": "Buscar as próprias OS por CPF/CNPJ",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/ordens-servico/buscar?cpfCnpj=52998224725",
-            "auth": { "type": "noauth" }
+            "url": "{{base_url}}/api/ordens-servico/buscar?cpfCnpj=52998224725"
           }
         },
         {
