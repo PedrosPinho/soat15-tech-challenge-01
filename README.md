@@ -236,8 +236,9 @@ Com a API rodando, acesse:
 - **OpenAPI JSON**: http://localhost:3001/api/docs.json
 
 Para importar no Postman/Insomnia: **Import → Link** apontando para
-`http://localhost:3001/api/docs.json` — não há uma collection `.json` separada
-versionada no repositório, o Swagger já serve como fonte única.
+`http://localhost:3001/api/docs.json`, ou importar a collection versionada em
+[`docs/postman/oficina-api.postman_collection.json`](docs/postman/oficina-api.postman_collection.json)
+(login preenche `{{token}}` automaticamente via test script).
 
 ---
 
