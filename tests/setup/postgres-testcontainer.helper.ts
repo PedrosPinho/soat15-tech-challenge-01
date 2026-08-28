@@ -54,11 +54,14 @@ export const startTestDatabase = async (): Promise<Pool> => {
   return pool;
 };
 
-/** Limpa todas as tabelas dos agregados simples entre testes. */
+/** Limpa todas as tabelas entre testes (`CASCADE` cobre a árvore de `ordens_servico`). */
 export const clearTestDatabase = async (): Promise<void> => {
   if (!pool) return;
   await pool.query(
-    'TRUNCATE TABLE itens_estoque, veiculos, clientes, pecas, catalogo_servicos, usuarios RESTART IDENTITY CASCADE',
+    `TRUNCATE TABLE
+      pagamentos, servico_pecas, servicos_os, ordens_servico, contadores_numero_os,
+      itens_estoque, veiculos, clientes, pecas, catalogo_servicos, usuarios
+     RESTART IDENTITY CASCADE`,
   );
 };
 
