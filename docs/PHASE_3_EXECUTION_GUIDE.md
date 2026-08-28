@@ -30,23 +30,22 @@ O que **já foi feito em código** até agora, sem depender de conta nenhuma:
   `auth-lambda` já valida); `requireInternalScope` protege as rotas de
   gestão; `GET /api/ordens-servico/buscar` deixou de ser público — ver
   `PHASE_3_TASKS.md`.
+- **Etapa 7 (CI/CD) escrita nos 4 repositórios**: `.github/workflows/` em
+  todos, mais `scripts/refresh-aws-secrets.sh` — ver `PHASE_3_TASKS.md` para
+  o que cada pipeline faz. **Nenhum foi executado de verdade ainda** (precisa
+  de sessão ativa + secrets publicados).
 
 O que **já foi feito por você**, fora deste repositório: validação dos serviços no
 Learner Lab (Passo 0), bootstrap do backend Terraform — bucket S3 + tabela DynamoDB
-(Passo 1), criação dos 3 repositórios novos + proteção de branch +
-`soat-architecture` como colaborador nos 4 (Passo 2), e você já tem em mãos o ARN da
-`LabRole` e as credenciais temporárias da sessão atual (Passo 3).
+(Passo 1), criação dos 3 repositórios novos + `soat-architecture` como colaborador
+nos 4 (Passo 2), e você já tem em mãos o ARN da `LabRole` e as credenciais
+temporárias da sessão atual (Passo 3).
 
-O que falta e nenhum agente de código já cobriu: confirmar se `terraform apply`
-rodou de fato nos 3 repositórios de infra (Passos 4–6), CI/CD em qualquer um dos 4
-repositórios (nenhum tem `.github/workflows/` ainda), e
-`scripts/refresh-aws-secrets.sh`.
-
-O que seus próprios agentes de código podem continuar fazendo sem depender do lab
-estar com sessão ativa: os workflows de CI/CD dos 4 repositórios e
-`scripts/refresh-aws-secrets.sh` (**próxima tarefa recomendada** — o único item
-de código que ainda falta na Fase 3; o *código* do workflow não exige sessão
-ativa, só a execução do `apply`/deploy exige).
+**Não há mais nenhum item de código puro pendente na Fase 3** — todo o resto
+depende de sessão ativa do Learner Lab e de ações suas: confirmar proteção de
+branch (Passo 2), rodar `scripts/refresh-aws-secrets.sh` (Passo 3), disparar os
+pipelines de verdade pela primeira vez (Passos 4–7) e ajustar o que quebrar
+(esperado numa primeira execução real), e observabilidade (Passo 8).
 
 ---
 
@@ -86,48 +85,68 @@ de duas etapas prontas custa muito mais caro que esta checagem.
    - Proteção de `main`/`homolog` (sem push direto, PR ≥1 aprovação, status checks
      obrigatórios, sem force-push) e screenshot para o PDF — **confirmar
      explicitamente se já foi feito**, não verificado nesta atualização.
-3. Terraform/Lambda dos 3 repositórios: **feito** (ver `docs/PROJECT_STATUS.md`).
-   CI/CD (workflows) ainda **não** — é o próximo item de código a escrever.
+3. Terraform/Lambda dos 3 repositórios: **feito**. CI/CD (workflows) também
+   **feito** nos 4 (`.github/workflows/`) — ver `docs/PROJECT_STATUS.md`.
 
-## Passo 3 — Credenciais de CI ✅ Credenciais em mãos (script ainda não escrito)
+## Passo 3 — Credenciais de CI ✅ Credenciais em mãos, script pronto
 
 1. ~~Gerar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`~~ — já
    disponíveis.
-2. Publicar como GitHub Secrets nos 4 repositórios — pendente até existir workflow
-   de CI que os consuma. `scripts/refresh-aws-secrets.sh` ainda não foi escrito.
+2. Publicar como GitHub Secrets nos 4 repositórios: rode
+   `./scripts/refresh-aws-secrets.sh` (lê o profile default do AWS CLI ou as env
+   vars já exportadas, valida com `aws sts get-caller-identity` e publica nos 4
+   repos via `gh secret set`). Também precisa configurar manualmente, uma vez só
+   (não é AWS): `WEBHOOK_SECRET` como secret do repositório da aplicação.
 3. **Lembrete operacional**: essas credenciais expiram com a sessão (~4h). Se a
    primeira pipeline do dia falhar com `ExpiredToken`, rode o script de novo e
    re-execute — não é instabilidade da pipeline.
 
 ## Passo 4 — `apply` do banco (`db-infra`)
 
-Só depois que o Passo 3 estiver com credenciais válidas e o código Terraform de
-`db-infra` estiver escrito (código, eu faço; `apply`, só você/CI com a sessão ativa):
+Automatizado pelo pipeline (`terraform.yml`, job `apply`, dispara em push em
+`main`/`homolog`) — ou manual, se preferir rodar fora do CI antes de confiar nele:
 
-1. `terraform apply` em `db-infra` (workspace/env conforme decidido).
-2. Rodar `npm run db:migrate` contra o endpoint do RDS.
-3. Rodar `npm run db:seed` — o banco é recriado a cada sessão, então isso vira parte
-   do procedimento, não conveniência opcional (sem cliente cadastrado não há CPF para
-   a Lambda autenticar na demonstração).
+1. `terraform apply` em `db-infra` (workspace/env conforme a branch).
+2. `db:migrate` roda automaticamente dentro dos pipelines que precisam do schema
+   (job `test` da aplicação, `deploy` da aplicação); para rodar manualmente contra
+   o RDS real, aponte `DATABASE_URL` para o endpoint do RDS e rode
+   `npm run db:migrate`.
+3. **`npm run db:seed` ainda não existe** (script no `package.json` aponta para
+   `src/infrastructure/database/seeds/index.ts`, que nunca foi criado — achado já
+   registrado desde a Fase 2). Sem seed, não há CPF cadastrado para testar a
+   Lambda/demonstração — precisa ser escrito antes da gravação do vídeo, ou o
+   cliente de teste precisa ser criado manualmente via `POST /api/clientes`.
 
 ## Passo 5 — `apply` do cluster (`k8s-infra`)
 
-1. `terraform apply` em `k8s-infra` (depende dos outputs de `db-infra` via
-   `terraform_remote_state` — precisa rodar depois do Passo 4).
-2. Smoke test: `kubectl get nodes`, `kubectl get hpa -n oficina`.
+Automatizado pelo pipeline (`terraform.yml`, job `apply`, já inclui o smoke test):
+
+1. `terraform apply` em `k8s-infra` (depende dos outputs de `db-infra` — precisa
+   rodar depois do Passo 4).
+2. Smoke test automático: `kubectl get nodes` + `kubectl wait --for=condition=Ready`.
+   `kubectl get hpa -n oficina-prod`/`oficina-homolog` só faz sentido depois do
+   Passo 7 (a aplicação ainda não foi implantada neste ponto).
 
 ## Passo 6 — `apply` da autenticação (`auth-lambda`)
 
-1. `terraform apply` em `auth-lambda` (depende de `db-infra` e `k8s-infra`).
-2. Teste de fumaça: invocar a Lambda com um CPF de fixture cadastrado no seed do
-   Passo 4.
+Automatizado pelo pipeline (`ci-cd.yml`, job `apply`, já inclui o teste de fumaça):
+
+1. `terraform apply` em `auth-lambda` (depende de `db-infra` e `k8s-infra`) — fase
+   1 (`enable_vpc_link_integration=false`, o default). A fase 2 (VPC Link) é
+   manual, só depois do Passo 7 — ver `terraform/README.md` daquele repositório.
+2. Teste de fumaça automático: invoca a Lambda com um CPF de fixture, aceita
+   `200`/`400`/`403`/`404` (não exige seed — ver ressalva no Passo 4).
 
 ## Passo 7 — Deploy da aplicação
 
-1. Pipeline do repositório da aplicação builda a imagem, publica no ECR, roda o `Job`
-   de migration e faz `kubectl set image` + `rollout status`.
-2. Fluxo fim a fim: `POST /auth/token` com CPF de cliente cadastrado → JWT → chamada
-   protegida via API Gateway → `200`.
+Automatizado pelo pipeline (`ci-cd.yml`, job `deploy`):
+
+1. Builda a imagem, publica no ECR, monta o Secret a partir do SSM, roda o `Job`
+   de migration, aplica `k8s/` (namespace por ambiente) e espera o rollout.
+2. Smoke test automático em `/health/ready`.
+3. Fluxo fim a fim (manual, depois que os 4 pipelines já rodaram e a fase 2 do
+   VPC Link de `auth-lambda` estiver ligada): `POST /auth/token` com CPF de
+   cliente cadastrado → JWT → chamada protegida via API Gateway → `200`.
 
 ## Passo 8 — Observabilidade
 
@@ -159,17 +178,21 @@ Só depois que o Passo 3 estiver com credenciais válidas e o código Terraform 
 
 ## Onde me chamar de novo
 
-- **Confirmar se `terraform apply` já rodou** em `db-infra`/`k8s-infra`/`auth-lambda`
-  (fase 1) — se sim, me passar os outputs relevantes (endpoint do RDS, nome do
-  cluster) para eu seguir com os Passos 4–7 sabendo o estado real; se não, decidir
-  se aplicamos agora (custo/tempo de sessão) ou seguimos só escrevendo código.
+- **Depois de rodar `scripts/refresh-aws-secrets.sh` e disparar os 4 pipelines
+  pela primeira vez**: me passar os logs/erros de qualquer um que falhar — a
+  primeira execução real contra a AWS Learner Lab tende a expor coisas que não
+  dá pra prever sem a conta (nomes de recurso colidindo, permissão faltando na
+  `LabRole`, etc.), e eu ajusto o código a partir do erro real.
 - Se confirmar proteção de branch (Passo 2) e status checks ainda não estiverem
   configurados: aviso para eu ajustar o roteiro do PDF de entrega.
-- A qualquer momento, para eu continuar o código que não depende de sessão ativa do
-  lab: **próxima tarefa recomendada = workflows de CI/CD dos 4 repositórios +
-  `scripts/refresh-aws-secrets.sh`** — único item de código pendente na Fase 3;
-  tudo antes disso (Etapas 1, 2.3, 4, Terraform dos 3 repos satélite) já está
-  escrito.
+- **Não há mais código puro pendente na Fase 3** — o próximo item de código
+  (`npm run db:seed`, ver Passo 4) só vale a pena escrever quando você souber
+  que o schema de fato aplicado bate com o que o seed vai popular (ou seja,
+  depois de pelo menos uma execução real do pipeline de `db-infra`).
+- `terraform validate`/`tflint` dos 3 repositórios de infra **não puderam ser
+  confirmados neste sandbox** (`terraform init` falha ao baixar os providers —
+  parece limitação de rede do ambiente, não do HCL) — vale rodar localmente ou
+  deixar o próprio CI confirmar na primeira execução.
 - Também valide num ambiente com rede irrestrita: `docker compose build app`
   não completou neste sandbox (`npm ci` falhou dentro do container com
   timeout/erro de rede) — o `Dockerfile`/`docker-compose.yml` foram validados
