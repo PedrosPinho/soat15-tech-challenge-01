@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-08-28
-**Testes**: 606 passando (app principal) + 45 testes de integração PostgreSQL (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, migração PostgreSQL da aplicação principal em progresso (agregados simples concluídos, `OrdemServico` pendente)
+**Testes**: 528 unitários/aplicação/apresentação + 65 de integração PostgreSQL (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, aplicação principal 100% em PostgreSQL (MongoDB removido), Etapas 1 e 4 concluídas
 
 ---
 
@@ -17,30 +17,31 @@ New Relic (dashboards, alertas, logs estruturados com correlação) e documenta�
 arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
 
 **Status**: fundação de nuvem pronta, infraestrutura como código escrita nos 3
-repositórios satélite, aplicação principal ainda migrando para Postgres.
+repositórios satélite, aplicação principal 100% migrada para Postgres (Mongo
+removido do código e das dependências).
 
 | Item | Status |
 |---|---|
 | Documentação arquitetural (`docs/architecture/`: componentes, sequências, ER, 4 RFCs, 6 ADRs) | ✅ Concluída |
 | Guia de execução para as etapas que dependem de conta ([`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md)) | ✅ Concluído |
 | Etapa 0 — Learner Lab validado, 4 repositórios GitHub criados (`main`+`homolog`), bootstrap do estado Terraform (S3 + DynamoDB lock), `soat-architecture` como colaborador | ✅ Concluída |
-| Camada PostgreSQL — agregados simples (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
-| Camada PostgreSQL — `OrdemServico`/`Servico`/`Pagamento` (agregado transacional de 3 níveis, primeira transação real do projeto) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
-| Ajustes de aplicação (Etapa 4: troca de fábrica para Postgres, logs `pino`, `SesNotificationService`, healthchecks, Swagger, `docker-compose` com Postgres) | ⏳ Não iniciada — **próxima tarefa recomendada**, agora destravada |
+| Etapa 1 — camada PostgreSQL para todos os agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
+| Etapa 4 — fábrica trocada para Postgres, Mongo removido, logs `pino`+correlationId, `SesNotificationService` por env var, healthchecks `/live`+`/ready`, `docker-compose` com `postgres:16`, collection Postman — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída (Swagger com fluxo CPF fica para quando a Etapa 2.3 existir) |
 | Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ Código escrito e pushado (2 commits) — `terraform apply` ainda não confirmado |
 | Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ Código escrito e pushado (2 commits) — depende de `db-infra` aplicado antes; `terraform apply` ainda não confirmado |
 | `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Código escrito e pushado (3 commits) — apply em duas fases (VPC Link só depois do NLB do EKS existir); `terraform apply` ainda não confirmado |
+| Etapa 2.3 — `authMiddleware` aceitando token de CPF + escopos `interno`/`cliente` na aplicação principal | ⏳ Não iniciada — **próxima tarefa recomendada** |
 | CI/CD (workflow por repositório: `fmt`/`validate`/`plan`/`apply` nos 3 de infra, build/test/deploy na aplicação) | ❌ Não iniciado em nenhum dos 4 repositórios |
 | `scripts/refresh-aws-secrets.sh` (renovação de credenciais temporárias do lab via `gh secret set`) | ❌ Não iniciado |
 | Observabilidade (New Relic: APM, `nri-bundle`, dashboards, alertas) | ⏳ Não iniciada — depende da app rodando no EKS |
 
-**Próxima tarefa recomendada**: Etapa 4 — trocar a fábrica de repositórios em
-`src/main/factories/` (e `pagamento.routes.ts`/`relatorios.routes.ts`, que hoje
-instanciam Mongo diretamente) para as implementações Postgres, remover `mongoose`,
-adicionar logs `pino`, `SesNotificationService`, split de healthchecks e atualizar
-Swagger/`docker-compose`. Todos os agregados já têm repositório Postgres testado —
-nenhum bloqueio de código restante. Em paralelo, CI/CD e a confirmação do
-`terraform apply` dos 3 repositórios de infra podem avançar sem dependência entre si.
+**Próxima tarefa recomendada**: Etapa 2.3 — ajustar `authMiddleware` para
+aceitar o token de cliente emitido pela Lambda (`scope: "cliente"`) além do
+token interno já existente, e restringir por escopo as rotas que hoje aceitam
+qualquer JWT válido (incluindo proteger `GET /api/ordens-servico/buscar`, hoje
+público). Isso também destrava a documentação do fluxo CPF no Swagger, deixada
+pendente na Etapa 4. Em paralelo: CI/CD dos 4 repositórios e a confirmação do
+`terraform apply` de `db-infra`/`k8s-infra`/`auth-lambda`.
 
 ---
 

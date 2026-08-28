@@ -216,6 +216,13 @@ Detalhes operacionais: Lambda em subnet privada (para alcançar o RDS), **role d
 
 ## Etapa 4 — Aplicação principal adaptada
 
+> **Status**: ✅ Concluída — dados, logs, notificações, healthchecks e
+> `docker-compose.yml` feitos e testados (528 testes + 65 de integração
+> Postgres, smoke test manual ponta a ponta). Swagger com o fluxo de CPF fica
+> pendente até a Etapa 2.3 existir de fato na aplicação (documentar agora
+> descreveria um contrato inexistente); Postman collection genérica já feita.
+> Detalhes em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
+
 - **Dados**: trocar a fábrica de repositórios em `src/main/factories/` para as implementações PostgreSQL (Etapa 1) e remover `mongoose`.
 - **Logs estruturados**: substituir os `console.log`/`console.error` por `pino` em JSON, com um middleware que lê ou gera `x-correlation-id`, guarda em `AsyncLocalStorage` e injeta em todo log da requisição — inclusive nos logs da Lambda, para correlacionar a autenticação com a chamada subsequente.
 - **Notificações**: nova implementação `SesNotificationService` da port `INotificationService` já existente. `NodemailerNotificationService` fica como implementação de desenvolvimento local (Mailhog no `docker-compose.yml`), escolhida por env var — a port foi desenhada exatamente para isso na Fase 2.
