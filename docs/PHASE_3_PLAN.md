@@ -266,6 +266,13 @@ Fonte da verdade em `docs/architecture/` **neste** repositório, com link nos RE
 
 ## Etapa 7 — CI/CD, proteção de branches e entregáveis
 
+> **Status**: pipelines dos 4 repositórios ✅ **escritos e commitados**
+> (`scripts/refresh-aws-secrets.sh` incluído) — nenhum ainda **executado** de
+> verdade (depende de sessão ativa do Learner Lab + `terraform apply` dos 3
+> repos de infra confirmado). Proteção de branches e entregáveis finais
+> (README por repo, vídeo, PDF) seguem pendentes. Detalhes em
+> [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
+
 Um pipeline por repositório, todos autenticando na AWS com as credenciais temporárias do Learner Lab (`aws-actions/configure-aws-credentials` com `aws-session-token`), renovadas por `scripts/refresh-aws-secrets.sh` no início de cada sessão:
 
 | Repositório | Pipeline |
