@@ -1,6 +1,7 @@
 import { OrdemServico } from '@domain/entities/ordem-servico.entity';
 import { IClienteRepository } from '@domain/repositories/cliente.repository';
 import { INotificationService } from '@domain/services/notification.service';
+import { logger } from '@shared/logger';
 
 export interface NotificarMudancaStatusDeps {
   clienteRepo: IClienteRepository;
@@ -15,6 +16,6 @@ export const notificarMudancaStatusOS = (deps: NotificarMudancaStatusDeps, os: O
       return deps.notificationService.enviarAtualizacaoStatus(cliente.email, os);
     })
     .catch((err) => {
-      console.error(`Falha ao notificar cliente da OS ${os.numeroOS}:`, err);
+      logger.error({ err, numeroOS: os.numeroOS }, 'Falha ao notificar cliente da OS');
     });
 };
