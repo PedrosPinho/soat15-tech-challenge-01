@@ -25,6 +25,11 @@ O que **já foi feito em código** até agora, sem depender de conta nenhuma:
   `correlationId`), `SesNotificationService` selecionável por env var,
   `/health/live`+`/health/ready`, `docker-compose.yml` com `postgres:16`,
   collection Postman versionada — ver `PHASE_3_TASKS.md`.
+- **Etapa 2.3 completa**: `authMiddleware` aceita token interno e token de
+  cliente por CPF (mesmo formato de claims que o Lambda Authorizer de
+  `auth-lambda` já valida); `requireInternalScope` protege as rotas de
+  gestão; `GET /api/ordens-servico/buscar` deixou de ser público — ver
+  `PHASE_3_TASKS.md`.
 
 O que **já foi feito por você**, fora deste repositório: validação dos serviços no
 Learner Lab (Passo 0), bootstrap do backend Terraform — bucket S3 + tabela DynamoDB
@@ -38,12 +43,10 @@ repositórios (nenhum tem `.github/workflows/` ainda), e
 `scripts/refresh-aws-secrets.sh`.
 
 O que seus próprios agentes de código podem continuar fazendo sem depender do lab
-estar com sessão ativa: Etapa 2.3 — `authMiddleware` aceitando o token de cliente
-por CPF além do interno, com restrição por escopo nas rotas sensíveis
-(**próxima tarefa recomendada**, destrava também a documentação do fluxo CPF no
-Swagger, deixada pendente na Etapa 4); e os workflows de CI/CD dos 4 repositórios
-(o *código* do workflow não exige sessão ativa — só a execução do
-`apply`/deploy exige).
+estar com sessão ativa: os workflows de CI/CD dos 4 repositórios e
+`scripts/refresh-aws-secrets.sh` (**próxima tarefa recomendada** — o único item
+de código que ainda falta na Fase 3; o *código* do workflow não exige sessão
+ativa, só a execução do `apply`/deploy exige).
 
 ---
 
@@ -163,10 +166,10 @@ Só depois que o Passo 3 estiver com credenciais válidas e o código Terraform 
 - Se confirmar proteção de branch (Passo 2) e status checks ainda não estiverem
   configurados: aviso para eu ajustar o roteiro do PDF de entrega.
 - A qualquer momento, para eu continuar o código que não depende de sessão ativa do
-  lab: **próxima tarefa recomendada = Etapa 2.3** (token de cliente por CPF +
-  escopos no `authMiddleware` da aplicação principal — já destravada, Lambda de
-  auth já escrita em `auth-lambda`); em paralelo, workflows de CI/CD dos 4
-  repositórios e `scripts/refresh-aws-secrets.sh`.
+  lab: **próxima tarefa recomendada = workflows de CI/CD dos 4 repositórios +
+  `scripts/refresh-aws-secrets.sh`** — único item de código pendente na Fase 3;
+  tudo antes disso (Etapas 1, 2.3, 4, Terraform dos 3 repos satélite) já está
+  escrito.
 - Também valide num ambiente com rede irrestrita: `docker compose build app`
   não completou neste sandbox (`npm ci` falhou dentro do container com
   timeout/erro de rede) — o `Dockerfile`/`docker-compose.yml` foram validados
