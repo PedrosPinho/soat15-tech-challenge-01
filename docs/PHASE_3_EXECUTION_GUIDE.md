@@ -6,22 +6,42 @@ código não pode fazer sozinho**. Complementa o backlog completo e as justifica
 cada decisão em [`PHASE_3_PLAN.md`](PHASE_3_PLAN.md) — leia lá o "porquê"; aqui está o
 "o que fazer, na ordem certa".
 
-O que **já foi feito em código** nesta sessão, sem depender de conta nenhuma:
+O que **já foi feito em código** até agora, sem depender de conta nenhuma:
 - Documentação arquitetural completa em [`docs/architecture/`](architecture/)
   (diagrama de componentes, diagramas de sequência, modelo ER, RFCs, ADRs).
 - Camada PostgreSQL (migrations + repositórios) para os agregados simples
   (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) — ver commit
   correspondente e o relatório do agente que fez o trabalho.
+- Terraform de `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM
+  Parameter Store, security groups), `soat15-tech-challenge-k8s-infra` (EKS,
+  node group, addons, ECR) e `soat15-tech-challenge-auth-lambda` (Lambdas de
+  token/authorizer + API Gateway) — código escrito e commitado nos 3
+  repositórios; `terraform apply` ainda não confirmado.
+- Camada PostgreSQL de `OrdemServico`/`Servico`/`Pagamento` (agregado transacional
+  de 3 níveis) — todos os agregados da aplicação principal já têm repositório
+  Postgres testado (ver `PHASE_3_TASKS.md`).
 
-O que seus próprios agentes de código podem continuar fazendo sem você, à medida que
-as etapas abaixo destravam pré-requisitos: migração de `OrdemServico`/`Servico`/
-`Pagamento` (agregado complexo, deixado por último de propósito), ajustes de aplicação
-(logs `pino`, `SesNotificationService`, healthchecks, Swagger), Lambdas e Terraform
-(o *código* pode ser escrito sem uma sessão ativa do lab — só o `apply` exige).
+O que **já foi feito por você**, fora deste repositório: validação dos serviços no
+Learner Lab (Passo 0), bootstrap do backend Terraform — bucket S3 + tabela DynamoDB
+(Passo 1), criação dos 3 repositórios novos + proteção de branch +
+`soat-architecture` como colaborador nos 4 (Passo 2), e você já tem em mãos o ARN da
+`LabRole` e as credenciais temporárias da sessão atual (Passo 3).
+
+O que falta e nenhum agente de código já cobriu: confirmar se `terraform apply`
+rodou de fato nos 3 repositórios de infra (Passos 4–6), CI/CD em qualquer um dos 4
+repositórios (nenhum tem `.github/workflows/` ainda), e
+`scripts/refresh-aws-secrets.sh`.
+
+O que seus próprios agentes de código podem continuar fazendo sem depender do lab
+estar com sessão ativa: Etapa 4 — trocar a fábrica de repositórios para Postgres e
+remover o Mongo, logs `pino`, `SesNotificationService`, healthchecks, Swagger
+(**próxima tarefa recomendada**, agora destravada), e os workflows de CI/CD dos 4
+repositórios (o *código* do workflow não exige sessão ativa — só a execução do
+`apply`/deploy exige).
 
 ---
 
-## Passo 0 — Validação da conta (fazer antes de qualquer Terraform)
+## Passo 0 — Validação da conta (fazer antes de qualquer Terraform) ✅ Concluído
 
 1. Abra o AWS Academy Learner Lab, inicie uma sessão e copie o ARN da `LabRole`
    (Console IAM → Roles → `LabRole`). Você vai colar esse ARN em variáveis do
@@ -39,34 +59,33 @@ as etapas abaixo destravam pré-requisitos: migração de `OrdemServico`/`Servic
 Não prossiga para o Passo 1 sem terminar esta validação — descobrir um bloqueio depois
 de duas etapas prontas custa muito mais caro que esta checagem.
 
-## Passo 1 — Bootstrap do estado do Terraform (uma vez só)
+## Passo 1 — Bootstrap do estado do Terraform (uma vez só) ✅ Concluído
 
 1. Criar manualmente (console ou CLI, fora de qualquer repositório dos 4): um bucket S3
    versionado para o state e uma tabela DynamoDB para lock.
 2. **Estes dois recursos não entram no ciclo `destroy` de fim de sessão** — se forem
    destruídos, o estado do Terraform se perde junto.
 
-## Passo 2 — Criar os 3 repositórios novos no GitHub
+## Passo 2 — Criar os 3 repositórios novos no GitHub ✅ Concluído
 
-1. Criar `soat15-tech-challenge-db-infra`, `soat15-tech-challenge-k8s-infra`,
-   `soat15-tech-challenge-auth-lambda` (vazios, com `README.md` e `.gitignore`
-   iniciais).
-2. Em cada um dos **4 repositórios** (os 3 novos + este):
-   - Criar a branch `homolog` a partir de `main`.
-   - Proteger `main` e `homolog`: sem push direto, PR obrigatório com ≥1 aprovação,
-     status checks de CI obrigatórios, sem force-push.
-   - Adicionar `soat-architecture` como colaborador.
-   - Capturar screenshot das regras de proteção para o PDF de entrega.
-3. Depois de criados, me avise — eu preencho o conteúdo inicial (Terraform, Lambda,
-   workflows de CI) de cada um a partir do que já está planejado.
+1. ~~Criar `soat15-tech-challenge-db-infra`, `soat15-tech-challenge-k8s-infra`,
+   `soat15-tech-challenge-auth-lambda`~~ — criados, com Terraform (e Lambda, no caso
+   de `auth-lambda`) já escrito e commitado.
+2. Em cada um dos **4 repositórios**:
+   - Branch `homolog` a partir de `main` — feito.
+   - `soat-architecture` como colaborador — feito.
+   - Proteção de `main`/`homolog` (sem push direto, PR ≥1 aprovação, status checks
+     obrigatórios, sem force-push) e screenshot para o PDF — **confirmar
+     explicitamente se já foi feito**, não verificado nesta atualização.
+3. Terraform/Lambda dos 3 repositórios: **feito** (ver `docs/PROJECT_STATUS.md`).
+   CI/CD (workflows) ainda **não** — é o próximo item de código a escrever.
 
-## Passo 3 — Credenciais de CI
+## Passo 3 — Credenciais de CI ✅ Credenciais em mãos (script ainda não escrito)
 
-1. Gerar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` da sessão
-   ativa do Learner Lab.
-2. Publicar como GitHub Secrets nos 4 repositórios. Posso escrever o script
-   `scripts/refresh-aws-secrets.sh` (usa `gh secret set`) para automatizar isso a cada
-   sessão — é só pedir.
+1. ~~Gerar `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`~~ — já
+   disponíveis.
+2. Publicar como GitHub Secrets nos 4 repositórios — pendente até existir workflow
+   de CI que os consuma. `scripts/refresh-aws-secrets.sh` ainda não foi escrito.
 3. **Lembrete operacional**: essas credenciais expiram com a sessão (~4h). Se a
    primeira pipeline do dia falhar com `ExpiredToken`, rode o script de novo e
    re-execute — não é instabilidade da pipeline.
@@ -131,10 +150,15 @@ Só depois que o Passo 3 estiver com credenciais válidas e o código Terraform 
 
 ## Onde me chamar de novo
 
-- Depois do **Passo 0**: se algum serviço estiver bloqueado, para ajustarmos o plano
-  antes de eu escrever Terraform para um serviço inexistente.
-- Depois do **Passo 2**: para eu popular os 3 repositórios novos com o código já
-  planejado (Terraform, Lambda, workflows).
-- A qualquer momento, para eu continuar a migração de código que não depende de conta
-  nenhuma: `OrdemServico`/`Servico`/`Pagamento` no Postgres, ajustes de aplicação
-  (Etapa 4), Terraform e Lambda (código, não `apply`).
+- **Confirmar se `terraform apply` já rodou** em `db-infra`/`k8s-infra`/`auth-lambda`
+  (fase 1) — se sim, me passar os outputs relevantes (endpoint do RDS, nome do
+  cluster) para eu seguir com os Passos 4–7 sabendo o estado real; se não, decidir
+  se aplicamos agora (custo/tempo de sessão) ou seguimos só escrevendo código.
+- Se confirmar proteção de branch (Passo 2) e status checks ainda não estiverem
+  configurados: aviso para eu ajustar o roteiro do PDF de entrega.
+- A qualquer momento, para eu continuar o código que não depende de sessão ativa do
+  lab: **próxima tarefa recomendada = Etapa 4** (troca da fábrica de repositórios
+  para Postgres, remoção do Mongo, logs `pino`, `SesNotificationService`,
+  healthchecks, Swagger — já destravada, todos os agregados têm repositório
+  Postgres testado); em paralelo, workflows de CI/CD dos 4 repositórios e
+  `scripts/refresh-aws-secrets.sh`.

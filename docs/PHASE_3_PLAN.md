@@ -95,7 +95,11 @@ manifestos de `k8s/` (incluindo o HPA) funcionam igual.
 
 ---
 
-## Etapa 0 — Fundação e split de repositórios
+## Etapa 0 — Fundação e split de repositórios ✅ Concluída
+
+> Learner Lab validado, 4 repositórios criados (`main`+`homolog`), bootstrap do
+> estado Terraform (S3+DynamoDB) e `soat-architecture` como colaborador nos 4.
+> Status detalhado em [`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md).
 
 - Abrir o Learner Lab, rodar a checklist de validação da seção anterior e anotar o ARN da `LabRole` (é entrada de variável em praticamente todos os módulos Terraform).
 - Bootstrap manual (uma vez, fora dos 4 repos ou num diretório `bootstrap/` do repo de banco): bucket S3 versionado para o estado e tabela DynamoDB de lock. **Estes dois sobrevivem ao ciclo destroy/apply** — não entram no `terraform destroy` de fim de sessão, senão o estado morre junto.
@@ -108,6 +112,12 @@ manifestos de `k8s/` (incluindo o HPA) funcionam igual.
 ---
 
 ## Etapa 1 — Banco de dados gerenciado e migração relacional
+
+> **Status**: 1.1 (Terraform do RDS) ✅ código escrito e pushado em `db-infra`,
+> `terraform apply` não confirmado. 1.2/1.3 (modelo relacional + camada Postgres na
+> aplicação) ✅ **concluídas** — todos os agregados, incluindo `OrdemServico`/
+> `Servico`/`Pagamento`, têm repositório Postgres testado. Detalhes em
+> [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 
 ### 1.1 Provisionamento (`soat15-tech-challenge-db-infra`)
 
@@ -157,6 +167,10 @@ Normalizar o que hoje é documento. O ponto central é a coleção `ordens-servi
 
 ## Etapa 2 — Autenticação serverless por CPF e API Gateway
 
+> **Status**: 2.1/2.2 (Lambdas de token/authorizer + API Gateway) ✅ código escrito
+> e pushado em `auth-lambda`, `terraform apply` não confirmado. 2.3 (ajustes de
+> `authMiddleware`/escopos na aplicação principal) ⏳ não iniciada.
+
 ### 2.1 Lambda de emissão de token (`soat15-tech-challenge-auth-lambda`)
 
 Handler `POST /auth/token` recebendo `{ "cpf": "12345678901" }`:
@@ -186,6 +200,9 @@ Detalhes operacionais: Lambda em subnet privada (para alcançar o RDS), **role d
 ---
 
 ## Etapa 3 — Infraestrutura Kubernetes gerenciada (`soat15-tech-challenge-k8s-infra`)
+
+> **Status**: ✅ código escrito e pushado (EKS, node group, addons, ECR),
+> `terraform apply` não confirmado.
 
 - `aws_eks_cluster` + `aws_eks_node_group` gerenciado (`t3.small`, min 2 / max 4) nas subnets privadas da VPC exportada pelo repo de banco.
 - Addons: `vpc-cni`, `coredns`, `kube-proxy`, **`metrics-server`** (sem ele o `k8s/hpa.yaml` já escrito não coleta métricas) e AWS Load Balancer Controller via Helm.
