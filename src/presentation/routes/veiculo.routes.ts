@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { VeiculoController } from '@presentation/controllers/veiculo.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import {
   validateCreateVeiculo,
   validateUpdateVeiculo,
@@ -30,21 +30,21 @@ const getController = (): VeiculoController => {
 
 export const veiculoRouter = Router();
 
-veiculoRouter.post('/', authMiddleware, validateCreateVeiculo, (req, res, next) =>
+veiculoRouter.post('/', authMiddleware, requireInternalScope, validateCreateVeiculo, (req, res, next) =>
   getController().create(req, res, next),
 );
 
-veiculoRouter.get('/:id', authMiddleware, (req, res, next) =>
+veiculoRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().getById(req, res, next),
 );
 
-veiculoRouter.put('/:id', authMiddleware, validateUpdateVeiculo, (req, res, next) =>
+veiculoRouter.put('/:id', authMiddleware, requireInternalScope, validateUpdateVeiculo, (req, res, next) =>
   getController().update(req, res, next),
 );
 
 // Mounted separately under /api/clientes/:clienteId/veiculos
 export const veiculosByClienteRouter = Router({ mergeParams: true });
 
-veiculosByClienteRouter.get('/', authMiddleware, (req, res, next) =>
+veiculosByClienteRouter.get('/', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().listByCliente(req, res, next),
 );

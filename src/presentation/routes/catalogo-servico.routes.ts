@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { CatalogoServicoController } from '@presentation/controllers/catalogo-servico.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import {
   validateCreateCatalogoServico,
   validateUpdateCatalogoServico,
@@ -30,22 +30,22 @@ const getController = (): CatalogoServicoController => {
 
 export const catalogoServicoRouter = Router();
 
-catalogoServicoRouter.post('/', authMiddleware, validateCreateCatalogoServico, (req, res, next) =>
+catalogoServicoRouter.post('/', authMiddleware, requireInternalScope, validateCreateCatalogoServico, (req, res, next) =>
   getController().create(req, res, next),
 );
 
-catalogoServicoRouter.get('/', authMiddleware, (req, res, next) =>
+catalogoServicoRouter.get('/', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().list(req, res, next),
 );
 
-catalogoServicoRouter.get('/:id', authMiddleware, (req, res, next) =>
+catalogoServicoRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().getById(req, res, next),
 );
 
-catalogoServicoRouter.put('/:id', authMiddleware, validateUpdateCatalogoServico, (req, res, next) =>
+catalogoServicoRouter.put('/:id', authMiddleware, requireInternalScope, validateUpdateCatalogoServico, (req, res, next) =>
   getController().update(req, res, next),
 );
 
-catalogoServicoRouter.delete('/:id', authMiddleware, (req, res, next) =>
+catalogoServicoRouter.delete('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
   getController().delete(req, res, next),
 );

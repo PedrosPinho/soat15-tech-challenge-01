@@ -29,7 +29,7 @@ export class LoginUseCase {
     const valid = await this.hashService.compare(dto.senha, user.senhaHash);
     if (!valid) throw new UnauthorizedError('Invalid credentials');
 
-    const token = this.jwtService.sign({ userId: user.id, email: user.email });
+    const token = this.jwtService.sign({ sub: user.id, email: user.email, scope: 'interno' });
     return { token, userId: user.id, nome: user.nome, email: user.email };
   }
 }

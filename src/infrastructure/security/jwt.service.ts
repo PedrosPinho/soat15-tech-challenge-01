@@ -1,12 +1,36 @@
 import jwt from 'jsonwebtoken';
 import { UnauthorizedError } from '@shared/errors/domain.error';
 
-export interface JwtPayload {
-  userId: string;
+/**
+ * Token de usuário interno da oficina (fluxo `POST /api/auth/login`,
+ * e-mail/senha). `email` é conveniência da aplicação — não faz parte do
+ * contrato mínimo (`sub`+`scope`) que o Lambda Authorizer de
+ * `soat15-tech-challenge-auth-lambda` valida, mas não atrapalha por lá.
+ */
+export interface InternoTokenPayload {
+  sub: string;
   email: string;
+  scope: 'interno';
   iat?: number;
   exp?: number;
 }
+
+/**
+ * Token de cliente por CPF, emitido pela Lambda `POST /auth/token` do
+ * repositório `soat15-tech-challenge-auth-lambda` — nunca por esta aplicação.
+ * O formato (`sub`, `cpf`, `scope`) precisa bater exatamente com o que o
+ * Lambda Authorizer usa (`ClienteTokenClaims`), já que ambos assinam/validam
+ * com o mesmo `JWT_SECRET` (defesa em profundidade — ver RFC-003).
+ */
+export interface ClienteTokenPayload {
+  sub: string;
+  cpf: string;
+  scope: 'cliente';
+  iat?: number;
+  exp?: number;
+}
+
+export type JwtPayload = InternoTokenPayload | ClienteTokenPayload;
 
 export class JwtService {
   constructor(
@@ -14,7 +38,8 @@ export class JwtService {
     private readonly expiresIn: string,
   ) {}
 
-  sign(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
+  /** Esta aplicação só emite tokens internos — os de cliente vêm da Lambda de CPF. */
+  sign(payload: Omit<InternoTokenPayload, 'iat' | 'exp'>): string {
     return jwt.sign(payload, this.secret, { expiresIn: this.expiresIn } as jwt.SignOptions);
   }
 
