@@ -6,6 +6,7 @@ import {
   ConflictError,
   UnauthorizedError,
 } from '@shared/errors/domain.error';
+import { logger } from '@shared/logger';
 
 export class AppError extends Error {
   constructor(
@@ -49,6 +50,6 @@ export const errorHandler = (
     return;
   }
 
-  console.error('Unexpected error:', err);
+  logger.error({ err }, 'Unexpected error');
   res.status(500).json({ status: 'error', message: 'Internal server error' });
 };
