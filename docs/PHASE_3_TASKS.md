@@ -1,6 +1,6 @@
 # Tasks & Checklist — Fase 3 (Tech Challenge SOAT)
 
-**Base**: `docs/PHASE_3_PLAN.md` (Etapas 1, 2.3 e 4)
+**Base**: `docs/PHASE_3_PLAN.md` (Etapas 1, 2.3, 4 e 7)
 **Status atual**: camada PostgreSQL implementada e testada para **todos** os
 agregados (Etapa 1, ver seções abaixo). **Etapa 4 concluída**: fábrica de
 repositórios trocada para Postgres, MongoDB removido do código e das
@@ -9,6 +9,8 @@ selecionável por env var, healthchecks `/health/live`+`/health/ready`,
 `docker-compose.yml` com `postgres:16`, e collection Postman versionada.
 **Etapa 2.3 concluída**: `authMiddleware` aceita token interno e token de
 cliente por CPF, com autorização por escopo nas rotas sensíveis.
+**Etapa 7 (CI/CD) escrita nos 4 repositórios** — código pronto, execução real
+ainda não confirmada (depende de sessão do Learner Lab).
 
 ---
 
@@ -220,3 +222,73 @@ não tocados por esta tarefa (`src/domain/entities/cliente.entity.ts`), portanto
 pré-existente. Não corrigido aqui por estar fora do escopo; validação de estilo
 feita via `type-check` + revisão manual de consistência com os arquivos Mongo
 existentes.
+
+---
+
+## Etapa 7 — CI/CD (código escrito, execução ainda não confirmada)
+
+- [x] `soat15-tech-challenge-01/.github/workflows/ci-cd.yml` reescrito:
+  `build` (type-check + build) → `test` (Postgres via service container para
+  `health.spec.ts`, Testcontainers para o resto) → `docker-build-push` (ECR,
+  só em push) → `deploy` (`aws eks update-kubeconfig`, Secret montado do SSM
+  em tempo de deploy, `Job` de migration antes do rollout, `configmap`/
+  `deployment`/`service`/`hpa` de `k8s/` com namespace por ambiente —
+  `oficina-prod`/`oficina-homolog` no mesmo cluster — via `sed`, smoke test
+  `/health/ready`).
+- [x] `k8s/` migrado para Postgres/EKS: `configmap.yaml`/`secret.example.yaml`
+  trocam Mongo por `DATABASE_URL`+config de notificação; `mongodb.yaml`/
+  `mailhog.yaml` removidos; `service.yaml` vira `LoadBalancer` com annotations
+  de NLB interno (alvo do VPC Link de `auth-lambda`); novo `job-migrate.yaml`.
+- [x] `soat15-tech-challenge-db-infra/.github/workflows/terraform.yml`:
+  fmt/validate/tflint (informativo)/plan (comentado na PR)/apply, com
+  `terraform workspace select -or-create` por branch (`main`→`prod`,
+  `homolog`→`homolog`).
+- [x] `soat15-tech-challenge-k8s-infra/.github/workflows/terraform.yml`: idem,
+  sem seleção de workspace (cluster único), com smoke test
+  `kubectl get nodes`/`kubectl wait --for=condition=Ready` pós-apply.
+- [x] `soat15-tech-challenge-auth-lambda/.github/workflows/ci-cd.yml`:
+  type-check+testes → build (`esbuild`) → terraform fmt/validate/tflint →
+  plan ou apply → teste de fumaça invocando a Lambda de token com um CPF de
+  fixture (aceita `200`/`400`/`403`/`404` — não exige seed de dados, só
+  `5xx`/timeout é falha real).
+- [x] `scripts/refresh-aws-secrets.sh`: publica
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` da sessão
+  atual do Learner Lab nos 4 repositórios via `gh secret set`, com validação
+  prévia via `aws sts get-caller-identity`.
+- [x] `.tflint.hcl` mínimo (plugin `terraform`, preset `recommended`) nos 3
+  repositórios de infra — sem plugin `aws` (evita dependência de download
+  extra em CI para um projeto de curso); passo `tflint` é
+  `continue-on-error: true`, informativo, não bloqueia o pipeline.
+- [x] `README.md` da aplicação atualizado (stack, quick start, endpoints,
+  testes, diagrama, seção CI/CD) — ainda tinha várias referências a
+  MongoDB/kind/GHCR da Fase 2 que sobraram das Etapas 2.3/4.
+
+### Observações / desvios
+
+- **Nenhum pipeline foi executado de verdade** — só validado localmente:
+  YAML sintaticamente válido (`yaml.safe_load`), manifestos `k8s/` aplicados
+  com sucesso contra um cluster kind descartável (`kind create cluster` +
+  `kubectl apply`, depois destruído), `terraform fmt -check` limpo nos 3
+  repos. `terraform validate`/`tflint` **não** puderam ser confirmados neste
+  ambiente — `terraform init` falha com erro de checksum ao baixar os
+  providers (`hashicorp/aws`, `hashicorp/random`), aparentemente uma
+  limitação de rede do sandbox, não um problema do código HCL (o mesmo HCL já
+  existia e foi revisado manualmente linha a linha nas sessões anteriores).
+- **Endpoint do RDS**: não tem parâmetro SSM próprio (só a senha). O job
+  `deploy` da aplicação resolve via `aws rds describe-db-instances` pelo
+  `db-instance-identifier` (`soat15-tc-${TF_ENV}-db`, mesma convenção de nome
+  de `db-infra/locals.tf`), em vez de um parâmetro adicional — evita
+  depender de mais um recurso Terraform fora do escopo desta tarefa.
+- **`WEBHOOK_SECRET`**: não é compartilhado com nenhuma Lambda, não tem
+  parâmetro SSM — é um GitHub Secret próprio do repositório da aplicação,
+  configurado manualmente (fora do escopo de `refresh-aws-secrets.sh`, que é
+  só para as credenciais AWS de sessão).
+- **Namespace por ambiente**: `k8s/` continua com `namespace: oficina`
+  hardcoded nos manifestos (mais simples de ler/testar localmente); o
+  pipeline troca para `oficina-prod`/`oficina-homolog` via `sed` antes de
+  aplicar — mesmo padrão já usado para trocar a tag da imagem, em vez de
+  introduzir Kustomize/Helm só para isso.
+- **`lab_role_arn`/nomes de recursos**: os 3 workflows assumem os defaults já
+  fixados nos `variables.tf` de cada repositório (`project_name = soat15-tc`,
+  conta `442534931336`, `us-east-1`) — se algum desses defaults mudar, os
+  workflows (nomes de cluster/repo ECR/identifiers) precisam acompanhar.

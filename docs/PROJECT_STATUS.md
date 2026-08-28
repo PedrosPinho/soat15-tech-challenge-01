@@ -2,7 +2,7 @@
 
 **Última Atualização**: 2026-08-28
 **Testes**: 533 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, aplicação principal 100% em PostgreSQL (MongoDB removido), Etapas 1, 2.3 e 4 concluídas
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, aplicação principal 100% em PostgreSQL (MongoDB removido), Etapas 1, 2.3 e 4 concluídas, CI/CD dos 4 repositórios escrito (execução real ainda não confirmada)
 
 ---
 
@@ -18,7 +18,9 @@ arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
 
 **Status**: fundação de nuvem pronta, infraestrutura como código escrita nos 3
 repositórios satélite, aplicação principal 100% migrada para Postgres (Mongo
-removido do código e das dependências).
+removido do código e das dependências), CI/CD escrito nos 4 repositórios.
+**Todo o código da Fase 3 que não depende de sessão do Learner Lab está
+pronto** — o que resta é execução (aplicar, secretar, observar).
 
 | Item | Status |
 |---|---|
@@ -28,20 +30,23 @@ removido do código e das dependências).
 | Etapa 1 — camada PostgreSQL para todos os agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 4 — fábrica trocada para Postgres, Mongo removido, logs `pino`+correlationId, `SesNotificationService` por env var, healthchecks `/live`+`/ready`, `docker-compose` com `postgres:16`, collection Postman — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 2.3 — `authMiddleware` com token interno + token de cliente por CPF, `requireInternalScope` nas rotas de gestão, `/buscar` fechado por CPF próprio — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
-| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ Código escrito e pushado (2 commits) — `terraform apply` ainda não confirmado |
-| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ Código escrito e pushado (2 commits) — depende de `db-infra` aplicado antes; `terraform apply` ainda não confirmado |
-| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Código escrito e pushado (3 commits) — apply em duas fases (VPC Link só depois do NLB do EKS existir); `terraform apply` ainda não confirmado |
-| CI/CD (workflow por repositório: `fmt`/`validate`/`plan`/`apply` nos 3 de infra, build/test/deploy na aplicação) | ❌ Não iniciado em nenhum dos 4 repositórios — **próxima tarefa recomendada** |
-| `scripts/refresh-aws-secrets.sh` (renovação de credenciais temporárias do lab via `gh secret set`) | ❌ Não iniciado |
+| Etapa 7 — CI/CD nos 4 repositórios (`fmt`/`validate`/`plan`/`apply` nos 3 de infra; build/test/push ECR/deploy EKS na aplicação) + `scripts/refresh-aws-secrets.sh` — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Código escrito e commitado — **execução real ainda não confirmada** |
+| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ Código escrito e pushado — `terraform apply` ainda não confirmado |
+| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ Código escrito e pushado — depende de `db-infra` aplicado antes; `terraform apply` ainda não confirmado |
+| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Código escrito e pushado — apply em duas fases (VPC Link só depois do NLB do EKS existir); `terraform apply` ainda não confirmado |
+| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ⏳ Precisa confirmação explícita (não verificado nesta sessão, sem `gh` CLI aqui) |
 | Observabilidade (New Relic: APM, `nri-bundle`, dashboards, alertas) | ⏳ Não iniciada — depende da app rodando no EKS |
 
-**Próxima tarefa recomendada**: CI/CD — workflows de GitHub Actions para os
-4 repositórios (`fmt`/`validate`/`plan`/`apply` nos 3 de infra; build/test/
-deploy na aplicação) e `scripts/refresh-aws-secrets.sh`. É código puro (não
-exige `gh`/`aws` CLI para escrever, só para executar depois) e é o único
-item de código ainda pendente na Fase 3 — o que resta depois disso
-(`terraform apply`, secrets, observabilidade) depende de sessão ativa do
-Learner Lab e de você.
+**Próxima tarefa recomendada**: esta é a primeira vez, desde o início da Fase 3,
+que **não há mais nenhum item de código puro pendente** — tudo que resta
+depende de você ter uma sessão ativa do Learner Lab: (1) rodar
+`scripts/refresh-aws-secrets.sh` para publicar as credenciais nos 4 repos, (2)
+fazer merge/push em `homolog` para disparar os 4 pipelines pela primeira vez e
+ver se passam de verdade contra a AWS real, (3) a partir do resultado, ajustar
+o que quebrar (nomes de recurso, permissões da `LabRole`, etc. — esperado na
+primeira execução real de qualquer pipeline). Observabilidade (New Relic) é o
+próximo passo de código depois disso, mas só faz sentido com a app já rodando
+no EKS.
 
 ---
 
