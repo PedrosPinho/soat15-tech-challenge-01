@@ -6,6 +6,29 @@
 
 ---
 
+## 🧭 Tech Challenge — Fase 3 (Cloud, Serverless e Observabilidade)
+
+Planejamento completo em [`docs/PHASE_3_PLAN.md`](PHASE_3_PLAN.md) (baseado em
+`docs/13SOAT - Fase 3 - Tech Challenge.pdf`). Resumo do escopo: autenticação via
+CPF com Function Serverless + API Gateway, segregação em 4 repositórios com
+CI/CD e deploy automático em nuvem (Lambda, infra K8s via Terraform, infra de
+banco gerenciado via Terraform, aplicação no Kubernetes), observabilidade com
+New Relic (dashboards, alertas, logs estruturados com correlação) e documentação
+arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
+
+**Status**: implementação iniciada — parte que não depende de conta AWS/GitHub:
+
+| Item | Status |
+|---|---|
+| Documentação arquitetural (`docs/architecture/`: componentes, sequências, ER, 4 RFCs, 6 ADRs) | ✅ Concluída |
+| Guia de execução para as etapas que dependem de conta ([`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md)) | ✅ Concluído |
+| Camada PostgreSQL — agregados simples (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) | 🔄 Em andamento |
+| Camada PostgreSQL — `OrdemServico`/`Servico`/`Pagamento` (agregado transacional de 3 níveis) | ⏳ Não iniciada (propositalmente por último) |
+| Ajustes de aplicação (Etapa 4: logs `pino`, `SesNotificationService`, healthchecks, Swagger) | ⏳ Não iniciada |
+| Terraform, Lambdas, split em 4 repositórios, cluster, observabilidade | ⏳ Depende de ações do aluno (conta AWS Academy, criação de repositórios) — ver `PHASE_3_EXECUTION_GUIDE.md` |
+
+---
+
 ## 🚀 Tech Challenge — Fase 2 (Evolução para Produção)
 
 > Não confundir com "Fase 2: Peças & Estoque" listada em **Fases Concluídas** abaixo —
