@@ -16,6 +16,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
+# Migrations são .js puro (não passam pelo build do tsc) — copiadas à parte
+# para que `npm run db:migrate` funcione a partir da imagem final.
+COPY --from=builder /app/src/infrastructure/database/postgres/migrations ./src/infrastructure/database/postgres/migrations
 
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
