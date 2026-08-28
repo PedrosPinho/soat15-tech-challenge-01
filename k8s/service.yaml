@@ -1,10 +1,23 @@
+# Service tipo LoadBalancer, NLB interno — é o alvo do VPC Link do API Gateway em
+# soat15-tech-challenge-auth-lambda (rotas protegidas /api/*). "Interno" porque o
+# tráfego chega via VPC Link, não da internet pública; o AWS Load Balancer
+# Controller (provisionado em soat15-tech-challenge-k8s-infra) cria o NLB a partir
+# destas annotations e aplica automaticamente a tag `kubernetes.io/service-name`
+# que o Terraform de auth-lambda usa para localizar o NLB dinamicamente — ver o
+# comentário em auth-lambda/terraform/api_gateway.tf sobre o apply em duas fases.
+#
+# Em kind (uso local, sem cloud), o tipo LoadBalancer nunca sai de "pending" —
+# use `kubectl port-forward` para testar localmente (ver README.md).
 apiVersion: v1
 kind: Service
 metadata:
   name: oficina-api
   namespace: oficina
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   selector:
     app: oficina-api
   ports:
