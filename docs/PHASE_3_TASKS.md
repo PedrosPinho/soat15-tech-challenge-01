@@ -1,10 +1,80 @@
 # Tasks & Checklist — Fase 3 (Tech Challenge SOAT)
 
-**Base**: `docs/PHASE_3_PLAN.md` (Etapa 1 — Banco de dados gerenciado e migração relacional)
+**Base**: `docs/PHASE_3_PLAN.md` (Etapas 1 e 4)
 **Status atual**: camada PostgreSQL implementada e testada para **todos** os
-agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de
-3 níveis). MongoDB continua em uso em `src/main/factories/` — a troca de fábrica
-(Etapa 4) é o próximo passo, agora destravado.
+agregados (Etapa 1, ver seções abaixo). **Etapa 4 concluída**: fábrica de
+repositórios trocada para Postgres, MongoDB removido do código e das
+dependências, logs estruturados (`pino` + `correlationId`), `SesNotificationService`
+selecionável por env var, healthchecks `/health/live`+`/health/ready`,
+`docker-compose.yml` com `postgres:16`, e collection Postman versionada.
+
+---
+
+## Etapa 4 — Aplicação principal adaptada
+
+- [x] **Dados**: `src/main/factories/ordem-servico.factory.ts` e as 6 rotas que
+  antes instanciavam Mongo direto no módulo (`cliente`, `veiculo`, `peca`,
+  `catalogo-servico`, `pagamento`, `relatorios`) trocadas para os repositórios
+  Postgres — construção **adiada para o primeiro request** em vez de eager no
+  import, porque `getPool()` lança se chamado antes do pool conectar (diferente
+  do Mongoose, que bufferizava comandos). `auth.controller.ts` já construía por
+  request; só trocou a classe.
+- [x] `src/index.ts`: bootstrap agora conecta o pool Postgres
+  (`postgres/pool.ts`) antes de aceitar requisições, com `disconnectDatabase()`
+  no `SIGTERM`/`SIGINT` (antes: nenhum shutdown gracioso existia).
+- [x] Removido `src/infrastructure/database/mongodb/` inteiro (conexão, 8
+  repositórios, 8 schemas), `mongoose` e `mongodb-memory-server` do
+  `package.json`, e os testes específicos de Mongo (unitários e de integração).
+- [x] `tests/integration/ordem-servico-lifecycle.spec.ts` portado de
+  `mongodb-memory-server` para Testcontainers Postgres (`setPool()` +
+  `startTestDatabase()`), mesmo padrão dos testes de repositório.
+- [x] Logs estruturados: `src/shared/logger.ts` (`pino` + `AsyncLocalStorage`)
+  e `correlation-id.middleware.ts` (lê/gera `x-correlation-id`, ecoa no
+  response). Todos os `console.*` de `src/` substituídos.
+- [x] `SesNotificationService` (`@aws-sdk/client-ses`) implementando a mesma
+  `INotificationService`; seleção por `NOTIFICATION_PROVIDER=ses|smtp` (default
+  `smtp`) em `src/main/factories/notification.factory.ts`, conforme `ADR-005`.
+- [x] Healthchecks separados: `HealthController.live()` (nunca toca o banco) e
+  `.ready()` (`SELECT 1` no pool); `GET /health` mantido como alias de
+  `/health/ready` por compatibilidade. `k8s/deployment.yaml` atualizado
+  (`readinessProbe` → `/health/ready`, `livenessProbe` → `/health/live`,
+  trocando o `tcpSocket` anterior).
+- [x] `docker-compose.yml`: serviço `mongodb` trocado por `postgres:16-alpine`
+  (`pg_isready` healthcheck); `app` roda `npm run db:migrate` antes de subir.
+  `Dockerfile` passou a copiar `src/.../migrations/` (JS puro, não compilado
+  pelo `tsc`) para a imagem final.
+- [x] Collection Postman versionada em
+  `docs/postman/oficina-api.postman_collection.json` (todas as rotas reais,
+  login preenche `{{token}}` via test script), referenciada no `README.md`.
+- [ ] **Swagger (`src/swagger.ts`) — parcialmente fora de escopo**: o fluxo de
+  token por CPF e os escopos `interno`/`cliente` exigem a Etapa 2.3
+  (`authMiddleware` aceitando o token da Lambda), que ainda não está
+  implementada na aplicação principal — documentar esse esquema de segurança
+  agora descreveria um contrato que a API não tem de fato. Fica para quando a
+  Etapa 2.3 for feita.
+- [ ] **`InventoryService` não religado aos métodos atômicos do Postgres**
+  (`reservar`/`utilizar` de `PostgresItemEstoqueRepository`, ver Etapa 1.3b):
+  hoje `InventoryService` não é chamado por nenhum use-case (integração órfã,
+  confirmado por investigação) — mudar a interface `IItemEstoqueRepository`
+  só para um componente sem consumidor real reescreveria 12 testes sem
+  benefício de comportamento observável. Registrado aqui para não se perder.
+
+### Verificação (Etapa 4)
+
+- `npm run type-check` limpo; 528 testes de domínio/aplicação/apresentação
+  passando (nenhuma regressão); 65 testes de integração Postgres passando.
+- Smoke test manual ponta a ponta contra Postgres real (`docker compose up
+  postgres mailhog` + `npm run db:migrate` + app local): `POST /api/clientes`
+  → `POST /api/veiculos` → `POST /api/ordens-servico` retornou
+  `numeroOS: OS-20260828-0001` (sequência atômica funcionando);
+  `/health/live`, `/health/ready` e `/health` responderam `200`;
+  `x-correlation-id` gerado e ecoado corretamente.
+- `docker compose config` válido; `docker compose build app` **não foi
+  possível concluir neste ambiente** — `npm ci` falha dentro do container com
+  `Exit handler never called!` (limitação de rede do sandbox para builds
+  Docker, não um problema do código; `npm install` direto no host funciona
+  normalmente). Recomenda-se validar `docker compose up -d --build` num
+  ambiente com acesso de rede irrestrito antes de gravar o vídeo de entrega.
 
 ---
 
