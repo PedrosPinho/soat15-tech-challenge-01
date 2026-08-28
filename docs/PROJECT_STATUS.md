@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-07-07
-**Testes**: 606 passando | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Tech Challenge Fase 1 completa (histórico abaixo) → **Fase 2 (Evolução para Produção) em andamento**, Etapas 1–5 concluídas, Etapa 6 (documentação/entrega) em progresso
+**Última Atualização**: 2026-08-28
+**Testes**: 606 passando (app principal) + 45 testes de integração PostgreSQL (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, migração PostgreSQL da aplicação principal em progresso (agregados simples concluídos, `OrdemServico` pendente)
 
 ---
 
@@ -16,16 +16,31 @@ banco gerenciado via Terraform, aplicação no Kubernetes), observabilidade com
 New Relic (dashboards, alertas, logs estruturados com correlação) e documentação
 arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
 
-**Status**: implementação iniciada — parte que não depende de conta AWS/GitHub:
+**Status**: fundação de nuvem pronta, infraestrutura como código escrita nos 3
+repositórios satélite, aplicação principal ainda migrando para Postgres.
 
 | Item | Status |
 |---|---|
 | Documentação arquitetural (`docs/architecture/`: componentes, sequências, ER, 4 RFCs, 6 ADRs) | ✅ Concluída |
 | Guia de execução para as etapas que dependem de conta ([`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md)) | ✅ Concluído |
+| Etapa 0 — Learner Lab validado, 4 repositórios GitHub criados (`main`+`homolog`), bootstrap do estado Terraform (S3 + DynamoDB lock), `soat-architecture` como colaborador | ✅ Concluída |
 | Camada PostgreSQL — agregados simples (Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
-| Camada PostgreSQL — `OrdemServico`/`Servico`/`Pagamento` (agregado transacional de 3 níveis) | ⏳ Não iniciada (propositalmente por último) |
-| Ajustes de aplicação (Etapa 4: logs `pino`, `SesNotificationService`, healthchecks, Swagger) | ⏳ Não iniciada |
-| Terraform, Lambdas, split em 4 repositórios, cluster, observabilidade | ⏳ Depende de ações do aluno (conta AWS Academy, criação de repositórios) — ver `PHASE_3_EXECUTION_GUIDE.md` |
+| Camada PostgreSQL — `OrdemServico`/`Servico`/`Pagamento` (agregado transacional de 3 níveis, primeira transação real do projeto) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
+| Ajustes de aplicação (Etapa 4: troca de fábrica para Postgres, logs `pino`, `SesNotificationService`, healthchecks, Swagger, `docker-compose` com Postgres) | ⏳ Não iniciada — **próxima tarefa recomendada**, agora destravada |
+| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ Código escrito e pushado (2 commits) — `terraform apply` ainda não confirmado |
+| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ Código escrito e pushado (2 commits) — depende de `db-infra` aplicado antes; `terraform apply` ainda não confirmado |
+| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Código escrito e pushado (3 commits) — apply em duas fases (VPC Link só depois do NLB do EKS existir); `terraform apply` ainda não confirmado |
+| CI/CD (workflow por repositório: `fmt`/`validate`/`plan`/`apply` nos 3 de infra, build/test/deploy na aplicação) | ❌ Não iniciado em nenhum dos 4 repositórios |
+| `scripts/refresh-aws-secrets.sh` (renovação de credenciais temporárias do lab via `gh secret set`) | ❌ Não iniciado |
+| Observabilidade (New Relic: APM, `nri-bundle`, dashboards, alertas) | ⏳ Não iniciada — depende da app rodando no EKS |
+
+**Próxima tarefa recomendada**: Etapa 4 — trocar a fábrica de repositórios em
+`src/main/factories/` (e `pagamento.routes.ts`/`relatorios.routes.ts`, que hoje
+instanciam Mongo diretamente) para as implementações Postgres, remover `mongoose`,
+adicionar logs `pino`, `SesNotificationService`, split de healthchecks e atualizar
+Swagger/`docker-compose`. Todos os agregados já têm repositório Postgres testado —
+nenhum bloqueio de código restante. Em paralelo, CI/CD e a confirmação do
+`terraform apply` dos 3 repositórios de infra podem avançar sem dependência entre si.
 
 ---
 

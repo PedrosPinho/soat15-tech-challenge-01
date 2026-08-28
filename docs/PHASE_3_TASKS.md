@@ -1,10 +1,10 @@
 # Tasks & Checklist — Fase 3 (Tech Challenge SOAT)
 
 **Base**: `docs/PHASE_3_PLAN.md` (Etapa 1 — Banco de dados gerenciado e migração relacional)
-**Status atual**: camada PostgreSQL implementada e testada para os agregados simples
-(Cliente, Veículo, Peça, ItemEstoque, CatalogoServico, Usuário). MongoDB continua
-em uso em `src/main/factories/` — a troca de fábrica e a migração de
-`OrdemServico`/`Servico`/`Pagamento` ficam para uma tarefa seguinte.
+**Status atual**: camada PostgreSQL implementada e testada para **todos** os
+agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de
+3 níveis). MongoDB continua em uso em `src/main/factories/` — a troca de fábrica
+(Etapa 4) é o próximo passo, agora destravado.
 
 ---
 
@@ -22,8 +22,8 @@ em uso em `src/main/factories/` — a troca de fábrica e a migração de
 - [x] `PostgresItemEstoqueRepository` — implementa `IItemEstoqueRepository`; **além da interface**, expõe `reservar`/`utilizar` como métodos atômicos (`UPDATE ... WHERE quantidade_disponivel >= $1`, sem SELECT prévio) prontos para substituir o fluxo read-then-write de `InventoryService` quando a fábrica for trocada — decisão registrada nos comentários do arquivo
 - [x] Testes de integração com Testcontainers PostgreSQL em `tests/infrastructure/database/postgres/repositories/` (um container real por spec file, mesma abordagem do `mongodb-memory-server` existente) — 45 testes, incluindo teste de concorrência (15 reservas simultâneas contra 10 unidades disponíveis, sem overselling)
 - [x] `npm run type-check`, `npm run test:unit` (242 testes) e a suíte nova de infraestrutura Postgres (45 testes) passando; suíte Mongo existente (74 testes) confirmada intacta
-- [ ] `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — deliberadamente fora do escopo desta tarefa, fica para a próxima
-- [ ] Troca da fábrica de repositórios em `src/main/factories/` para Postgres e remoção do Mongo — só depois que todos os agregados (incluindo `OrdemServico`) estiverem migrados
+- [x] `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — ver Etapa 1.3b abaixo
+- [ ] Troca da fábrica de repositórios em `src/main/factories/` para Postgres e remoção do Mongo — próxima tarefa (Etapa 4), agora destravada
 
 ### Observações / desvios documentados em relação a `docs/architecture/data-model.md`
 
@@ -32,6 +32,60 @@ em uso em `src/main/factories/` — a troca de fábrica e a migração de
 - `pecas`: `preco_compra`, `nivel_minimo`, `nivel_maximo`, `ativo` adicionados.
 - `itens_estoque`: `quantidade_maxima` e `criado_em` adicionados.
 - Em todos os casos, o motivo é o mesmo: o construtor `Entidade.create()` do domínio exige esses campos, e omiti-los causaria perda de dados na migração — o diagrama ER do documento é uma visão simplificada, não o contrato final de colunas.
+
+---
+
+## Etapa 1.3b — Camada de infraestrutura na aplicação (agregado `OrdemServico`)
+
+- [x] Migrations: `1735300006000_create-ordens-servico.js` (+ tabela auxiliar
+  `contadores_numero_os`, substituta atômica do `OSCounterModel` do Mongo —
+  `INSERT ... ON CONFLICT (data_chave) DO UPDATE ... RETURNING sequencia`,
+  preservando o formato `OS-YYYYMMDD-####` por dia, diferente da `SEQUENCE`
+  nativa global sugerida inicialmente em `docs/architecture/data-model.md`),
+  `1735300007000_create-servicos-os.js`, `1735300008000_create-servico-pecas.js`,
+  `1735300009000_create-pagamentos.js` (com o índice único parcial
+  `pagamentos_confirmado_unico_por_os`, substituindo a flag `temPagamento` como
+  fonte de verdade de "no máximo um pagamento CONFIRMADO por OS")
+- [x] `PostgresOrdemServicoRepository` — implementa `IOrdemServicoRepository`;
+  **primeiro repositório do projeto com transação real** (`BEGIN`/`COMMIT` via
+  `pool.connect()`), já que `save()`/`update()` gravam a raiz + `DELETE`+`INSERT`
+  transacional dos filhos (`servicos_os`, `servico_pecas`) — a entidade é imutável
+  e sempre chega inteira. `list()`/`findByClienteId()` carregam os filhos em lote
+  (`WHERE ... = ANY($1)`) para evitar N+1. `list()` traduz o `$addFields`/`$switch`
+  de peso por status do Mongo para `ORDER BY CASE status WHEN ... END` e o `$nin`
+  para `<> ALL(ARRAY[...])`
+- [x] `PostgresPagamentoRepository` — implementa `IPagamentoRepository`; `save()`/
+  `update()` traduzem a violação do índice único parcial em `ConflictError` (código
+  Postgres `23505`), em vez de deixar o erro cru do driver `pg` vazar
+- [x] Testes de integração com Testcontainers em
+  `tests/infrastructure/database/postgres/repositories/ordem-servico.repository.spec.ts`
+  e `pagamento.repository.spec.ts` — 20 testes novos, incluindo: rollback da
+  transação quando `numero_os` duplicado viola a UNIQUE (nenhum `servico_os` órfão
+  fica gravado), teste de concorrência de `nextSequence` (20 chamadas simultâneas
+  produzem 20 sequências distintas, sem colisão) e o índice único parcial de
+  pagamento confirmado
+- [x] `tests/setup/postgres-testcontainer.helper.ts` — `clearTestDatabase()`
+  atualizado com as 4 tabelas novas
+- [x] `npm run type-check` limpo; 242 testes de domínio + 65 testes de integração
+  Postgres (45 dos agregados simples + 20 novos) passando
+
+### Observações / desvios documentados (agregado `OrdemServico`)
+
+- `ordens_servico`: `data_inicio`, `data_conclusao`, `motivo_cancelamento` e
+  `tem_pagamento` adicionados (exigidos pelas transições do domínio); `cpf_cnpj`/
+  `placa` são snapshots históricos, como no documento Mongo.
+- `servicos_os`: `tempo_real_minutos` e `observacoes` adicionados (exigidos por
+  `Servico.concluir()`/`ServicoProps`); coluna `ordem` preserva a posição do array
+  original.
+- `servico_pecas`: `descricao` adicionada (snapshot opcional já exposto por
+  `PecaServico`); `UNIQUE (servico_os_id, peca_id)` reforça no banco a mesma regra
+  que `Servico.adicionarPeca()` já valida em memória.
+- `pagamentos`: `data_pagamento` e `observacoes` adicionados (exigidos por
+  `Pagamento.confirmar()`/`PagamentoProps`).
+- Não foi criado `pagamento.factory.ts`: `pagamento.routes.ts`/`relatorios.routes.ts`
+  continuam instanciando repositórios Mongo diretamente no módulo (inconsistência
+  pré-existente, fora do escopo desta tarefa) — a troca para Postgres na Etapa 4
+  precisará editar esses arquivos de rota além de `src/main/factories/`.
 
 ### Nota sobre lint
 
