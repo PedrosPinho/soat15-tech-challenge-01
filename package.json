@@ -19,7 +19,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist coverage",
-    "db:seed": "ts-node src/infrastructure/database/seeds/index.ts",
+    "db:seed": "node dist/infrastructure/database/seeds/index.js",
     "db:reset": "ts-node src/infrastructure/database/seeds/reset.ts",
     "db:migrate": "node-pg-migrate up -m src/infrastructure/database/postgres/migrations",
     "db:migrate:down": "node-pg-migrate down -m src/infrastructure/database/postgres/migrations",
