@@ -9,8 +9,13 @@ selecionável por env var, healthchecks `/health/live`+`/health/ready`,
 `docker-compose.yml` com `postgres:16`, e collection Postman versionada.
 **Etapa 2.3 concluída**: `authMiddleware` aceita token interno e token de
 cliente por CPF, com autorização por escopo nas rotas sensíveis.
-**Etapa 7 (CI/CD) escrita nos 4 repositórios** — código pronto, execução real
-ainda não confirmada (depende de sessão do Learner Lab).
+**Etapa 7 (CI/CD) escrita nos 4 repositórios e executada de verdade** —
+`db-infra`, `k8s-infra`, app principal e `auth-lambda` (fases 1 e 2)
+aplicados com sucesso contra a AWS real em `homolog` em 2026-09-08,
+com deploy do app no EKS e cadeia de autenticação ponta a ponta validada
+via `curl` (ver "Execução real" na Etapa 7 abaixo para os bugs achados e
+corrigidos nesse processo — nenhum estava previsto, todos só apareceram
+na primeira execução real).
 
 ---
 
@@ -263,17 +268,77 @@ existentes.
   testes, diagrama, seção CI/CD) — ainda tinha várias referências a
   MongoDB/kind/GHCR da Fase 2 que sobraram das Etapas 2.3/4.
 
+### Execução real (2026-09-08) — todos os 4 pipelines passaram em `homolog`
+
+Primeira execução de verdade contra a AWS real (Learner Lab), depois de
+`scripts/refresh-aws-secrets.sh` publicar as credenciais de sessão nos 4
+repositórios. Ordem: `db-infra` → `k8s-infra` → app principal (deploy) →
+`auth-lambda` (fase 1, depois fase 2). Todas as 4 pipelines terminaram
+verdes; validado end-to-end com `curl` direto no endpoint público do API
+Gateway: `POST /auth/token` com CPF não cadastrado → `404` (esperado,
+prova que a Lambda alcançou o RDS), `GET /api/health/live` sem token →
+`401` do Lambda Authorizer (prova a cadeia API Gateway → VPC Link → NLB →
+app no EKS).
+
+Nenhum desses bugs existia no código antes de rodar contra a AWS real —
+todos só apareceram na primeira execução de fato e foram corrigidos nesta
+sessão, um `git push` por vez, cada um confirmado pelo pipeline real antes
+do próximo:
+
+- `k8s-infra`/`auth-lambda` liam `terraform_remote_state.db_infra` sem
+  `workspace = "homolog"` — o `db-infra` aplica no workspace `homolog`
+  (branch `homolog` → `terraform workspace select homolog`), então o state
+  real fica em `env:/homolog/...`, não em `default`. Faltava o parâmetro
+  `workspace` no bloco `data "terraform_remote_state"` dos dois repos.
+- Node group do EKS falhava (`InvalidParameterException: Requested AMI for
+  this version 1.30 is not supported`) — `ami_type` default (`AL2_x86_64`)
+  não é mais aceito; precisa `ami_type = "AL2023_x86_64_STANDARD"` explícito.
+- `auth-lambda`: faltava o mesmo passo `terraform workspace select` que o
+  `db-infra` já tinha — sem isso, `terraform.workspace` ficava `default` e o
+  `jwt-secret` era gravado em `/soat15-tc/default/...`, não em
+  `/soat15-tc/homolog|prod/...` (o path que o deploy do app lê).
+- `auth-lambda`: o job `apply` nunca rodava `npm ci && npm run package` (nem
+  tinha `setup-node`) — `terraform apply` falhava com "no such file"
+  procurando `dist/token.zip`/`dist/authorizer.zip` (o job `build` empacota,
+  mas cada job do GitHub Actions roda num runner isolado).
+- `auth-lambda`: `$context.requestHeaderValue.x-correlation-id` no formato
+  de access log da API Gateway não existe na referência de variáveis do
+  API Gateway v2 (`CreateStage` 400) — campo removido (só afetava um log de
+  conveniência).
+- `auth-lambda`: o smoke test fazia `base64` do payload manualmente E usava
+  `--cli-binary-format raw-in-base64-out` (que espera entrada **crua**) —
+  resultado, a Lambda recebia a string base64 como corpo. Corrigido para
+  mandar o JSON cru; e o payload em si precisou virar um envelope
+  `APIGatewayProxyEventV2` completo (`body`/`headers`/`requestContext.
+  requestId`), já que o handler só roda atrás do API Gateway em produção.
+- App principal: `DATABASE_URL` montada sem URL-encode da senha do RDS —
+  `random_password` do `db-infra` permite `# % ? [ ]` (fora do que o RDS
+  proíbe: `/ @ " espaço`), e qualquer um desses quebra o parser de URL do
+  `pg`/`node-pg-migrate` sem escapar (`TypeError: Invalid URL`). Corrigido
+  com `jq -rn --arg v "$DB_PASSWORD" '$v|@uri'`.
+- App principal: RDS exige SSL (`no pg_hba.conf entry ... no encryption`);
+  `sslmode=require` sozinho não bastou — `pg` moderno trata `require` como
+  alias de `verify-full`, e a imagem não tem o bundle de CA da AWS RDS, daí
+  `SELF_SIGNED_CERT_IN_CHAIN`. Solução pragmática (tráfego já dentro da VPC
+  privada): `sslmode=no-verify` — ainda criptografa, só não valida a cadeia.
+- `k8s-infra`: NLB do Service da app ficava preso em `<pending>` —
+  `aws-load-balancer-controller` logava `no EC2 IMDS role found`. Causa:
+  launch template customizado dos nós sem `metadata_options`, que volta pro
+  default da API (`http_put_response_hop_limit = 1`); tráfego de um Pod até
+  o IMDS (169.254.169.254) precisa de 2 hops. Sem OIDC/IRSA disponível no
+  Learner Lab, o controller depende do IMDS do node pra pegar a `LabRole` —
+  corrigido com `http_put_response_hop_limit = 2` explícito.
+- `auth-lambda` fase 2: a versão do controller instalada (v3.5.0) tageia o
+  NLB com `service.k8s.aws/stack` (formato `<namespace>/<service>`), não
+  mais com a tag legada `kubernetes.io/service-name` que o `data "aws_lb"`
+  procurava — nunca teria dado match. Também o valor default assumia
+  namespace `oficina` (devia ser `oficina-homolog`/`oficina-prod`); agora o
+  pipeline exporta `TF_VAR_eks_service_tag_value` calculado a partir do
+  workspace. E a porta do listener assumida (`80`) não batia com a porta
+  real do Service (`3001`, de `k8s/service.yaml`).
+
 ### Observações / desvios
 
-- **Nenhum pipeline foi executado de verdade** — só validado localmente:
-  YAML sintaticamente válido (`yaml.safe_load`), manifestos `k8s/` aplicados
-  com sucesso contra um cluster kind descartável (`kind create cluster` +
-  `kubectl apply`, depois destruído), `terraform fmt -check` limpo nos 3
-  repos. `terraform validate`/`tflint` **não** puderam ser confirmados neste
-  ambiente — `terraform init` falha com erro de checksum ao baixar os
-  providers (`hashicorp/aws`, `hashicorp/random`), aparentemente uma
-  limitação de rede do sandbox, não um problema do código HCL (o mesmo HCL já
-  existia e foi revisado manualmente linha a linha nas sessões anteriores).
 - **Endpoint do RDS**: não tem parâmetro SSM próprio (só a senha). O job
   `deploy` da aplicação resolve via `aws rds describe-db-instances` pelo
   `db-instance-identifier` (`soat15-tc-${TF_ENV}-db`, mesma convenção de nome
