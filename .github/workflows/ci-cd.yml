@@ -210,6 +210,15 @@ jobs:
             k8s/job-migrate.yaml | kubectl apply -f -
           kubectl wait --for=condition=complete job/oficina-migrate -n "$NAMESPACE" --timeout=120s
 
+      - name: Job de seed (usuário admin + cliente de teste, idempotente)
+        run: |
+          kubectl delete job oficina-seed -n "$NAMESPACE" --ignore-not-found
+          sed \
+            -e "s/namespace: oficina$/namespace: $NAMESPACE/" \
+            -e "s|image: oficina-api:local|image: ${{ needs.docker-build-push.outputs.image }}|" \
+            k8s/job-seed.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/oficina-seed -n "$NAMESPACE" --timeout=120s
+
       - name: Deployment + Service + HPA
         run: |
           sed \
