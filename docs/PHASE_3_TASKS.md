@@ -393,3 +393,68 @@ a cada deploy.
   parte. Validado via `curl`: login com credencial válida → `200` + JWT
   `scope: interno`; esse token em `GET /api/clientes` → `200` (lista o
   cliente semeado); senha errada → `401`.
+
+### Etapa 5 — Observabilidade (New Relic): APM + infra do cluster instrumentados
+
+Implementado o que não depende só de esperar dados chegarem (ver RFC-004):
+
+- `newrelic` como dependência da aplicação; agente carregado como o primeiro
+  `require` de `src/index.ts` (antes de qualquer outro módulo, para
+  instrumentar `http`/`pg` corretamente). Configurado 100% por env var
+  (`NEW_RELIC_NO_CONFIG_FILE=true`, sem `newrelic.js`) — `NEW_RELIC_APP_NAME`
+  por ambiente e `NEW_RELIC_LICENSE_KEY` (do GitHub Secret, hoje vazio) vêm
+  do Secret que o pipeline já monta; o agente detecta a licença ausente e
+  fica desabilitado sem lançar erro, então isso já está mesclado em
+  `homolog` mesmo sem conta New Relic ainda existir.
+- `notificar-mudanca-status.helper.ts` (chamado pelos 7 use-cases de
+  transição de status) ganhou o parâmetro `statusAnterior` e emite
+  `newrelic.recordCustomEvent('OrdemServicoStatusChanged', {numeroOS,
+  statusAnterior, statusNovo})` — base do dashboard de "tempo médio por
+  status". O `catch` já usava `logger.error` estruturado (não precisou de
+  ajuste, ao contrário do que o `PHASE_3_PLAN.md` supunha).
+- `nri-bundle` via Helm em `soat15-tech-challenge-k8s-infra/newrelic.tf` —
+  agente de infraestrutura do cluster (CPU/memória de pods/nós,
+  `kube-state-metrics`, eventos, forwarder de logs). Gated por
+  `var.enable_new_relic` (default `false`, mesmo padrão de
+  `enable_vpc_link_integration` do `auth-lambda`): sem license key válida o
+  pod entraria em `CrashLoopBackOff`. O pipeline (`terraform.yml`) liga a
+  flag sozinho quando o secret `NEW_RELIC_LICENSE_KEY` existir no repositório
+  `k8s-infra`.
+- Validado localmente: `npm run type-check` limpo; 532 testes unitários
+  (`tests/application`, `tests/domain`, `tests/presentation`) passando,
+  incluindo o novo teste do evento customizado; mock manual em
+  `tests/__mocks__/newrelic.js` evita que a suíte carregue o agente de
+  verdade. `tests/integration/health.spec.ts` (que importa `src/index.ts`)
+  trava neste sandbox de desenvolvimento mesmo com o `require('newrelic')`
+  desligado manualmente para teste — confirmado que não é causado por esta
+  mudança (limitação de rede pré-existente do ambiente, mesma categoria do
+  `docker compose build` que já não completava aqui); a suíte completa
+  sempre rodou de verdade no job `test` do CI (GitHub-hosted runner), que é
+  quem valida isso de fato.
+
+**Pendências para ligar de vez:**
+1. **Precisa da license key do New Relic** (conta free tier, criar em
+   newrelic.com) como GitHub Secret `NEW_RELIC_LICENSE_KEY` em **dois**
+   repositórios: `soat15-tech-challenge-01` (liga o APM) e
+   `soat15-tech-challenge-k8s-infra` (liga o `nri-bundle`). Sem isso os dois
+   ficam desabilitados de propósito, sem quebrar nada.
+2. **Achado (não implementado, limitação de arquitetura do Learner Lab)**:
+   instrumentação das Lambdas (`auth-lambda`) via layer do New Relic, listada
+   no `PHASE_3_PLAN.md`, não foi feita. Motivo: as duas Lambdas rodam nas
+   subnets privadas do `db-infra` **sem NAT Gateway** (decisão de orçamento
+   documentada em `db-infra`), ou seja, sem rota de saída para a internet — o
+   layer/extensão do New Relic para Lambda precisa alcançar o coletor da New
+   Relic via HTTPS, o que travaria (ou daria timeout) exatamente como
+   aconteceria com qualquer outro destino externo. A alternativa sem agente
+   (integração AWS/CloudWatch nativa da New Relic, que só precisa de uma IAM
+   role de leitura) também esbarra no Learner Lab bloquear criação de IAM
+   role própria (mesma restrição do ADR-006). Sem resolver isso (NAT Gateway
+   pago, ou aceitar só os logs/métricas nativos do CloudWatch sem New Relic),
+   as duas Lambdas ficam de fora do APM — cobertas só indiretamente pelos
+   logs de erro que a própria aplicação principal já grava quando a chamada a
+   `POST /auth/token` falha.
+3. Dashboards e alertas em si (as 4 telas exigidas + condições NRQL) ainda
+   não foram criados — dependem de dados reais chegando primeiro (item 1) e
+   de decidir se serão feitos manualmente na UI da New Relic ou como código
+   (Terraform provider `newrelic`, que exigiria mais uma credencial: um User
+   API Key + Account ID, além da license key).
