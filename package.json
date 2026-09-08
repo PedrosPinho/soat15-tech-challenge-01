@@ -49,6 +49,7 @@
     "express-rate-limit": "^8.4.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "newrelic": "^13.20.0",
     "node-pg-migrate": "^9.0.0",
     "nodemailer": "^9.0.3",
     "pg": "^8.23.0",

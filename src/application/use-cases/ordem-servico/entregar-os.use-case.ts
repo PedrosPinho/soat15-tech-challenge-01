@@ -17,11 +17,13 @@ export class EntregarOSUseCase {
     const os = await this.osRepo.findById(id);
     if (!os) throw new NotFoundError(`Ordem de serviço ${id} não encontrada`);
 
+    const statusAnterior = os.status;
     const atualizada = os.entregar();
     await this.osRepo.update(atualizada);
     notificarMudancaStatusOS(
       { clienteRepo: this.clienteRepo, notificationService: this.notificationService },
       atualizada,
+      statusAnterior,
     );
     return OrdemServicoMapper.toDto(atualizada);
   }
