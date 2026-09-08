@@ -1,0 +1,24 @@
+# Job de seed, aplicado pelo CI/CD logo após o de migration. Idempotente
+# (verifica existência por e-mail/CPF antes de inserir — ver
+# src/infrastructure/database/seeds/index.ts), por isso pode rodar a cada
+# deploy sem duplicar dados.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-seed
+  namespace: oficina
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: oficina-api:local
+          command: ["npm", "run", "db:seed"]
+          envFrom:
+            - configMapRef:
+                name: oficina-api-config
+            - secretRef:
+                name: oficina-api-secret
