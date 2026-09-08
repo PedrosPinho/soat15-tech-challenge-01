@@ -2,7 +2,7 @@
 
 **Última Atualização**: 2026-09-08
 **Testes**: 533 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e fluxo de cliente (CPF → JWT → consulta das próprias OS) validado ponta a ponta via `curl` contra o endpoint público do API Gateway
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway
 
 ---
 
@@ -21,14 +21,14 @@ Lab) em `homolog` e terminaram verdes — `db-infra` (VPC + RDS), `k8s-infra`
 (EKS + node group + AWS LB Controller + metrics-server), app principal
 (build/test/push ECR/deploy no EKS, migrations rodadas) e `auth-lambda`
 (fase 1: Lambdas + SSM `jwt-secret`; fase 2: VPC Link ligado ao NLB do app).
-Cadeia de autenticação de cliente (CPF) validada ponta a ponta via `curl`
-direto no endpoint público do API Gateway, com `db:seed` já implementado e
-rodando no pipeline (ver "`db:seed` implementado..." em
-[`PHASE_3_TASKS.md`](PHASE_3_TASKS.md)). Achado pendente: o login interno
-(`POST /api/auth/login`, e-mail/senha) não é alcançável pelo endpoint público
-hoje — só `POST /auth/token` é rota pública no API Gateway, então não há
-como emitir um token `interno` (e testar rotas `requireInternalScope`) sem
-passar pela borda.
+Cadeia de autenticação de cliente (CPF) e de login interno (e-mail/senha)
+validadas ponta a ponta via `curl` direto no endpoint público do API
+Gateway, com `db:seed` já implementado e rodando no pipeline (ver
+"`db:seed` implementado..." em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md)). O
+achado de que `POST /api/auth/login` era inalcançável pelo endpoint público
+(só `POST /auth/token` era rota pública) foi corrigido com uma rota exata
+sem autorizador em `auth-lambda/terraform/api_gateway.tf` — ver "Achado
+corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 
 | Item | Status |
 |---|---|
@@ -39,7 +39,8 @@ passar pela borda.
 | Etapa 4 — fábrica trocada para Postgres, Mongo removido, logs `pino`+correlationId, `SesNotificationService` por env var, healthchecks `/live`+`/ready`, `docker-compose` com `postgres:16`, collection Postman — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 2.3 — `authMiddleware` com token interno + token de cliente por CPF, `requireInternalScope` nas rotas de gestão, `/buscar` fechado por CPF próprio — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 7 — CI/CD nos 4 repositórios executado de verdade em `homolog`, todos verdes — ver "Execução real" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para a lista de bugs achados/corrigidos no processo | ✅ **Execução real confirmada** (2026-09-08) |
-| `db:seed` (usuário admin + cliente de teste) + fluxo de cliente (CPF→JWT→`/buscar`) validado via `curl` contra a AWS real — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluído (2026-09-08); login interno via API Gateway ainda não é possível (achado pendente, ver acima) |
+| `db:seed` (usuário admin + cliente de teste) + fluxo de cliente (CPF→JWT→`/buscar`) validado via `curl` contra a AWS real — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluído (2026-09-08) |
+| Login interno (`POST /api/auth/login`) exposto publicamente no API Gateway (rota exata sem autorizador, mesma integração HTTP_PROXY/VPC Link) — validado via `curl`: login→JWT `interno`, esse token em `GET /api/clientes`→`200`, senha errada→`401` | ✅ Concluído (2026-09-08) |
 | Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ `terraform apply` confirmado em `homolog` (RDS `available`) |
 | Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ `terraform apply` confirmado — cluster `ACTIVE`, node group com `ami_type=AL2023` e `metadata_options` (hop limit 2, exigido pelo LB Controller sem IRSA) |
 | `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
