@@ -188,8 +188,11 @@ jobs:
             --query 'DBInstances[0].Endpoint.Address' --output text)
           DB_PASSWORD=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/db/password" --with-decryption --query 'Parameter.Value' --output text)
           JWT_SECRET=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/jwt-secret" --with-decryption --query 'Parameter.Value' --output text)
+          # A senha do RDS permite caracteres especiais (#, %, ?, [, ], etc. — ver
+          # override_special em db-infra/rds.tf) que quebram a URL sem escapar.
+          DB_PASSWORD_URLENC=$(jq -rn --arg v "$DB_PASSWORD" '$v|@uri')
           kubectl create secret generic oficina-api-secret -n "$NAMESPACE" \
-            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD}@${DB_ENDPOINT}:5432/oficina" \
+            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=WEBHOOK_SECRET="${{ secrets.WEBHOOK_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
