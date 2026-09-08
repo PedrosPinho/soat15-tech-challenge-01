@@ -357,3 +357,36 @@ do próximo:
   fixados nos `variables.tf` de cada repositório (`project_name = soat15-tc`,
   conta `442534931336`, `us-east-1`) — se algum desses defaults mudar, os
   workflows (nomes de cluster/repo ECR/identifiers) precisam acompanhar.
+
+### `db:seed` implementado e fluxo de cliente validado fim a fim (2026-09-08)
+
+`npm run db:seed` era só uma entrada quebrada no `package.json` desde a Fase 2
+(apontava pra um arquivo que nunca existiu) — sem isso não havia CPF/usuário
+cadastrado pra testar a aplicação de verdade. Implementado
+`src/infrastructure/database/seeds/index.ts` (idempotente: usuário admin
+`admin@oficina.com`/`senha123` + cliente de teste CPF `52998224725`) e um Job
+de seed no pipeline (`k8s/job-seed.yaml`), rodando logo depois do de migration
+a cada deploy.
+
+- Primeira tentativa falhou (`exit code 127`, "command not found"): o script
+  original rodava via `ts-node`, mas a imagem de produção é buildada com
+  `npm ci --omit=dev` (sem `ts-node`/`typescript`, só `dist/` compilado — ver
+  `Dockerfile`). Corrigido para `node dist/infrastructure/database/seeds/
+  index.js`, mesmo padrão do `CMD` da imagem. Validado localmente contra um
+  Postgres real (migrations + seed + idempotência) antes do segundo push.
+- Com o cliente semeado, validado fim a fim via `curl` no endpoint público:
+  `POST /auth/token` com CPF cadastrado → `200` + JWT; `GET
+  /api/ordens-servico/buscar?cpfCnpj=<próprio>` com esse token → `200`
+  (lista vazia, correto); mesmo token com CPF de terceiro na query → `403`
+  ("Cliente só pode consultar as próprias ordens de serviço") — prova que
+  `restrictBuscaToOwnCpf` funciona de ponta a ponta contra a AWS real.
+- **Achado (não corrigido, decisão de arquitetura pendente)**: `POST
+  /api/auth/login` (login interno e-mail/senha) é inalcançável pelo endpoint
+  público — a única rota pública do API Gateway é `POST /auth/token`; tudo
+  sob `/api/*` (incluindo `/api/auth/login`) passa pelo Lambda Authorizer,
+  que exige um token que só existe depois de logar. Ou seja, hoje não há como
+  emitir um token de escopo `interno` (e portanto testar rotas
+  `requireInternalScope`, como `POST /api/clientes`) através do API Gateway —
+  só localmente, sem passar pela borda. Precisa de uma rota pública dedicada
+  (ex.: `POST /auth/login` na Lambda, ou uma exceção na integração do
+  `auth-lambda`) antes de ser demonstrável.
