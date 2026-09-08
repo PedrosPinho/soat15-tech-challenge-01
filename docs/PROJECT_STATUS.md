@@ -1,7 +1,7 @@
 # Status do Projeto — Auto Repair Shop Management System
 
 **Última Atualização**: 2026-09-08
-**Testes**: 533 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
+**Testes**: 532 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
 **Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; instrumentação de Observabilidade (APM + `nri-bundle`) já mesclada, à espera só da license key do New Relic
 
 ---

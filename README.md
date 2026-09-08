@@ -3,12 +3,21 @@
 Sistema de gestão para oficinas mecânicas desenvolvido com **Domain-Driven Design (DDD)** e arquitetura em camadas, como Tech Challenge da Pós-Tech SOAT FIAP.
 
 **Fase 1** entregou a aplicação (API REST completa, DDD em camadas, testes, Swagger).
-**Fase 2** evolui essa base para produção: reforço de Clean Architecture, testes de
-integração/E2E com Mongo real, containerização, Kubernetes com autoscaling,
-provisionamento via Terraform e um pipeline de CI/CD completo. Ver
-[`docs/PHASE_2_PLAN.md`](docs/PHASE_2_PLAN.md) e [`docs/PHASE_2_TASKS.md`](docs/PHASE_2_TASKS.md)
-para o planejamento e o checklist detalhado da Fase 2 (arquivos locais, fora do
-controle de versão — ver `.gitignore`).
+**Fase 2** evoluiu essa base para produção: Clean Architecture, testes de
+integração/E2E com Postgres real, containerização, Kubernetes com autoscaling.
+**Fase 3** (atual) migrou tudo para a nuvem de verdade: autenticação por CPF via
+Function Serverless + API Gateway, infraestrutura em 4 repositórios provisionada
+por Terraform, deploy automático num EKS real (AWS Academy Learner Lab) e
+observabilidade com New Relic. Ver [`docs/PHASE_3_PLAN.md`](docs/PHASE_3_PLAN.md)
+e [`docs/PHASE_3_TASKS.md`](docs/PHASE_3_TASKS.md) para o planejamento e o
+checklist detalhado, e [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) para o
+status atual.
+
+## 🚀 Deploy ao vivo
+
+- **API pública** (API Gateway, autenticação por CPF): `https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com`
+- Ordem de deploy e demais links: [`soat15-tech-challenge-db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra) → [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) → esta aplicação (EKS) → [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda)
+- A infraestrutura roda por sessão do AWS Academy Learner Lab (orçamento limitado) — se o endpoint acima não responder, é porque a infra foi destruída ao fim de uma sessão de trabalho; ver [`PHASE_3_EXECUTION_GUIDE.md`](docs/PHASE_3_EXECUTION_GUIDE.md) para reaplicar.
 
 ---
 
@@ -52,6 +61,8 @@ qualidade de código da Fase 1.
 | CI/CD | GitHub Actions (`.github/workflows/ci-cd.yml`) — build/test/push ECR/deploy EKS |
 | Qualidade | SonarQube + SonarScanner |
 | Segurança | JWT, bcrypt, Helmet, rate limiting |
+| Observabilidade | New Relic (APM na app + `nri-bundle` no cluster) — ver seção [Observabilidade](#observabilidade) |
+| Autenticação de cliente | CPF via Function Serverless + API Gateway — [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) |
 
 ---
 
@@ -180,12 +191,30 @@ Endpoints marcados como protegidos exigem token JWT no header:
 Authorization: Bearer <token>
 ```
 
-**Obter token:**
+Dois tipos de token coexistem (RFC-003, `authMiddleware`):
+
+- **Interno** (`scope: interno`) — e-mail/senha, para uso da equipe da oficina.
+- **Cliente** (`scope: cliente`) — CPF, emitido por uma Lambda externa
+  ([`auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda)),
+  só pode consultar as próprias ordens de serviço (`/buscar`).
+
+**Login interno:**
 
 ```bash
 POST /api/auth/login
 { "email": "admin@oficina.com", "senha": "senha123" }
 ```
+
+**Token de cliente por CPF** (via `auth-lambda`, não por esta API diretamente):
+
+```bash
+curl -X POST https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com/auth/token \
+  -H "Content-Type: application/json" -d '{"cpf":"52998224725"}'
+```
+
+Rodando local/`homolog` sem nenhum cliente/usuário cadastrado ainda? `npm run
+db:seed` (depois de `npm run build`) cria o usuário admin acima e um cliente de
+teste com o CPF acima — ver [Scripts](#scripts).
 
 ### Endpoints
 
@@ -267,7 +296,7 @@ npm run test:integration  # só tests/integration (E2E via supertest)
 ```
 
 **Cobertura atual**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-(threshold mínimo: 80%, configurado em `jest.config.js`) — 533 testes de domínio/
+(threshold mínimo: 80%, configurado em `jest.config.js`) — 532 testes de domínio/
 aplicação/apresentação + 65 de integração PostgreSQL + 9 E2E (Testcontainers).
 
 Inclui testes de integração reais contra PostgreSQL (via Testcontainers, precisa de
@@ -297,6 +326,30 @@ SONAR_TOKEN=seu-token-aqui
 
 ---
 
+## Observabilidade
+
+Agente APM do New Relic (`newrelic`) carregado como o primeiro `require` de
+`src/index.ts`, configurado 100% por env var (`NEW_RELIC_NO_CONFIG_FILE=true`,
+sem `newrelic.js`) — `NEW_RELIC_APP_NAME`/`NEW_RELIC_LICENSE_KEY` vêm do
+Secret que o pipeline monta por ambiente. Sem a license key (ainda não
+configurada — ver abaixo), o agente detecta a licença ausente e fica
+desabilitado sem lançar erro, então isso já roda em `homolog` mesmo sem conta
+New Relic.
+
+Toda transição de status de uma OS emite um evento customizado
+`OrdemServicoStatusChanged` (`numeroOS`, `statusAnterior`, `statusNovo`) —
+base do dashboard de tempo médio por status. Infraestrutura do cluster
+(CPU/memória de pods/nós, eventos, logs) via `nri-bundle` em
+[`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra),
+mesmo padrão de "gated até existir a credencial".
+
+**Para ligar de vez**: criar conta New Relic (free tier) e publicar a license
+key como GitHub Secret `NEW_RELIC_LICENSE_KEY` neste repositório e em
+`k8s-infra`. Detalhes e pendências (instrumentação de Lambda, dashboards) em
+[`docs/PHASE_3_TASKS.md`](docs/PHASE_3_TASKS.md) — seção "Etapa 5".
+
+---
+
 ## CI/CD
 
 Pipeline em `.github/workflows/ci-cd.yml`, com 4 jobs a cada push/PR nas branches
@@ -312,10 +365,12 @@ no histórico do Git):
 3. **docker-build-push** — só em push (não em PR): builda a imagem e publica no ECR
    (`soat15-tc-oficina-api:<sha>`).
 4. **deploy** — só em push: `aws eks update-kubeconfig`, monta o Secret a partir do
-   SSM Parameter Store (endpoint/senha do RDS, `JWT_SECRET`), roda o `Job` de
-   migration, aplica `configmap`/`deployment`/`service`/`hpa` de `k8s/` (namespace
-   `oficina-prod` em `main`, `oficina-homolog` em `homolog` — mesmo cluster,
-   namespaces separados), espera o rollout e faz um smoke test em `/health/ready`.
+   SSM Parameter Store (endpoint/senha do RDS, `JWT_SECRET`) e do GitHub Secret
+   (`NEW_RELIC_LICENSE_KEY`), roda o `Job` de migration e o `Job` de seed
+   (usuário admin + cliente de teste, idempotente), aplica
+   `configmap`/`deployment`/`service`/`hpa` de `k8s/` (namespace `oficina-prod`
+   em `main`, `oficina-homolog` em `homolog` — mesmo cluster, namespaces
+   separados), espera o rollout e faz um smoke test em `/health/ready`.
 
 ### Secrets do GitHub
 
@@ -325,6 +380,8 @@ no histórico do Git):
   início de cada sessão de trabalho, nos 4 repositórios de uma vez.
 - `WEBHOOK_SECRET` — não é compartilhado com nenhuma Lambda, então não tem parâmetro
   SSM; é um secret próprio deste repositório.
+- `NEW_RELIC_LICENSE_KEY` — opcional; sem ele o agente APM fica desabilitado sem
+  quebrar o deploy (ver [Observabilidade](#observabilidade)).
 
 Se a primeira execução do dia falhar com `ExpiredToken`/`UnrecognizedClientException`,
 rode o script de refresh de novo e reexecute — não é instabilidade da pipeline.
@@ -343,6 +400,7 @@ npm run start           # inicia versão compilada (produção)
 npm run type-check      # verificação de tipos TypeScript
 npm run db:migrate      # aplica migrations do Postgres (node-pg-migrate)
 npm run db:migrate:down # desfaz a última migration
+npm run db:seed         # usuário admin + cliente de teste (precisa de "npm run build" antes — roda a partir de dist/)
 npm run docker:up       # sobe todos os serviços Docker
 npm run docker:down     # para todos os serviços Docker
 npm run docker:logs     # logs dos serviços em tempo real
