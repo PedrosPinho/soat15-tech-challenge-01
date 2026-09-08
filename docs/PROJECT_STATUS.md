@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-08-28
+**Última Atualização**: 2026-09-08
 **Testes**: 533 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) em andamento** — fundação AWS/GitHub pronta, Terraform dos 3 repositórios satélite escrito, aplicação principal 100% em PostgreSQL (MongoDB removido), Etapas 1, 2.3 e 4 concluídas, CI/CD dos 4 repositórios escrito (execução real ainda não confirmada)
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; cadeia de autenticação ponta a ponta validada via `curl` (`POST /auth/token` e `GET /api/health/live` através do API Gateway)
 
 ---
 
@@ -16,11 +16,13 @@ banco gerenciado via Terraform, aplicação no Kubernetes), observabilidade com
 New Relic (dashboards, alertas, logs estruturados com correlação) e documentação
 arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
 
-**Status**: fundação de nuvem pronta, infraestrutura como código escrita nos 3
-repositórios satélite, aplicação principal 100% migrada para Postgres (Mongo
-removido do código e das dependências), CI/CD escrito nos 4 repositórios.
-**Todo o código da Fase 3 que não depende de sessão do Learner Lab está
-pronto** — o que resta é execução (aplicar, secretar, observar).
+**Status**: os 4 pipelines já rodaram de verdade contra a AWS real (Learner
+Lab) em `homolog` e terminaram verdes — `db-infra` (VPC + RDS), `k8s-infra`
+(EKS + node group + AWS LB Controller + metrics-server), app principal
+(build/test/push ECR/deploy no EKS, migrations rodadas) e `auth-lambda`
+(fase 1: Lambdas + SSM `jwt-secret`; fase 2: VPC Link ligado ao NLB do app).
+Cadeia de autenticação validada ponta a ponta via `curl` direto no endpoint
+público do API Gateway.
 
 | Item | Status |
 |---|---|
@@ -30,23 +32,19 @@ pronto** — o que resta é execução (aplicar, secretar, observar).
 | Etapa 1 — camada PostgreSQL para todos os agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 4 — fábrica trocada para Postgres, Mongo removido, logs `pino`+correlationId, `SesNotificationService` por env var, healthchecks `/live`+`/ready`, `docker-compose` com `postgres:16`, collection Postman — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
 | Etapa 2.3 — `authMiddleware` com token interno + token de cliente por CPF, `requireInternalScope` nas rotas de gestão, `/buscar` fechado por CPF próprio — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
-| Etapa 7 — CI/CD nos 4 repositórios (`fmt`/`validate`/`plan`/`apply` nos 3 de infra; build/test/push ECR/deploy EKS na aplicação) + `scripts/refresh-aws-secrets.sh` — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Código escrito e commitado — **execução real ainda não confirmada** |
-| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ Código escrito e pushado — `terraform apply` ainda não confirmado |
-| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ Código escrito e pushado — depende de `db-infra` aplicado antes; `terraform apply` ainda não confirmado |
-| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Código escrito e pushado — apply em duas fases (VPC Link só depois do NLB do EKS existir); `terraform apply` ainda não confirmado |
-| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ⏳ Precisa confirmação explícita (não verificado nesta sessão, sem `gh` CLI aqui) |
-| Observabilidade (New Relic: APM, `nri-bundle`, dashboards, alertas) | ⏳ Não iniciada — depende da app rodando no EKS |
+| Etapa 7 — CI/CD nos 4 repositórios executado de verdade em `homolog`, todos verdes — ver "Execução real" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para a lista de bugs achados/corrigidos no processo | ✅ **Execução real confirmada** (2026-09-08) |
+| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ `terraform apply` confirmado em `homolog` (RDS `available`) |
+| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ `terraform apply` confirmado — cluster `ACTIVE`, node group com `ami_type=AL2023` e `metadata_options` (hop limit 2, exigido pelo LB Controller sem IRSA) |
+| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
+| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ⏳ Precisa confirmação explícita (não verificado nesta sessão) |
+| Observabilidade (New Relic: APM, `nri-bundle`, dashboards, alertas) | ⏳ Não iniciada — app já roda no EKS, desbloqueado para começar |
 
-**Próxima tarefa recomendada**: esta é a primeira vez, desde o início da Fase 3,
-que **não há mais nenhum item de código puro pendente** — tudo que resta
-depende de você ter uma sessão ativa do Learner Lab: (1) rodar
-`scripts/refresh-aws-secrets.sh` para publicar as credenciais nos 4 repos, (2)
-fazer merge/push em `homolog` para disparar os 4 pipelines pela primeira vez e
-ver se passam de verdade contra a AWS real, (3) a partir do resultado, ajustar
-o que quebrar (nomes de recurso, permissões da `LabRole`, etc. — esperado na
-primeira execução real de qualquer pipeline). Observabilidade (New Relic) é o
-próximo passo de código depois disso, mas só faz sentido com a app já rodando
-no EKS.
+**Próxima tarefa recomendada**: com a app rodando de verdade no EKS e a
+autenticação via CPF funcionando ponta a ponta, o próximo passo de código é
+Observabilidade (New Relic: APM na app, `nri-bundle` no cluster, dashboards e
+alertas). Itens administrativos pendentes: confirmar proteção de branches e
+colaborador `soat-architecture` nos 4 repos; considerar merge de `homolog`
+para `main` (ambiente `prod`) quando o time decidir promover.
 
 ---
 
