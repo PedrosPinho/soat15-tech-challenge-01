@@ -195,6 +195,8 @@ jobs:
             --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina?sslmode=no-verify" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=WEBHOOK_SECRET="${{ secrets.WEBHOOK_SECRET }}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
+            --from-literal=NEW_RELIC_APP_NAME="oficina-api-${TF_ENV}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: ConfigMap

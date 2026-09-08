@@ -1,3 +1,13 @@
+// Precisa ser o primeiro require do processo -- o agente instrumenta módulos
+// (http, pg, etc.) ao serem carregados, então qualquer import acima dele
+// escaparia da instrumentação. Sem NEW_RELIC_LICENSE_KEY configurada (ver
+// docs/PHASE_3_PLAN.md, Etapa 5), o agente detecta a licença ausente e fica
+// desabilitado sem lançar erro -- seguro mesmo antes da conta New Relic
+// existir, inclusive em teste de integração (`tests/integration/health.spec.ts`
+// importa este arquivo).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('newrelic');
+
 import express, { Application } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
