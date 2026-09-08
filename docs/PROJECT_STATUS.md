@@ -46,8 +46,10 @@ corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 | `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
 | Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ⏳ Precisa confirmação explícita (não verificado nesta sessão) |
 | Observabilidade (New Relic: APM na app + `nri-bundle` no cluster) — código pronto e mesclado, gated por license key — ver "Etapa 5" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | 🟡 Implementado, falta a license key (GitHub Secret) para ligar de verdade |
+| `k8s-infra` travado (`system:anonymous` em qualquer apply) — causa raiz era só `cluster_version` desatualizado (1.30 vs. 1.31 real); corrigido, `terraform apply` voltou a rodar limpo | ✅ Resolvido (2026-09-08) — ver "Achado e correção" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para o quase-incidente (tentativa de `access_config` chegou a iniciar um `Destroying` real do cluster, revertida a tempo) |
 | Instrumentação das Lambdas (`auth-lambda`) via layer New Relic | ❌ Não implementada — Lambdas sem NAT Gateway (sem saída à internet) + Learner Lab bloqueia IAM role própria para a integração CloudWatch nativa; achado documentado em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
 | Dashboards (4 exigidos) e alertas NRQL | ⏳ Não iniciado — depende da license key acima para ter dados de verdade antes de montar |
+| 2 nós órfãos `NotReady` no cluster (instâncias já substituídas, nunca removidas do Kubernetes) — cosmético, node group `ACTIVE`, app respondendo normalmente | ⏳ Pendente limpeza (`kubectl delete node`), precisa de acesso `kubectl` real (não funciona neste sandbox) |
 
 **Próxima tarefa recomendada**: com a app rodando de verdade no EKS e a
 autenticação (CPF e interna) funcionando ponta a ponta, o código de
