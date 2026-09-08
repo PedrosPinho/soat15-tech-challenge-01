@@ -458,3 +458,48 @@ Implementado o que não depende só de esperar dados chegarem (ver RFC-004):
    de decidir se serão feitos manualmente na UI da New Relic ou como código
    (Terraform provider `newrelic`, que exigiria mais uma credencial: um User
    API Key + Account ID, além da license key).
+
+### Achado e correção: `k8s-infra` não conseguia mais aplicar nada (2026-09-08)
+
+Ao tentar ligar o `nri-bundle` (mesmo com `enable_new_relic=false`), qualquer
+`terraform apply` em `k8s-infra` passou a falhar com `secrets is forbidden:
+User "system:anonymous" cannot list resource "secrets" in the namespace
+"kube-system"` nos dois `helm_release` já existentes (`metrics_server`,
+`aws_load_balancer_controller`) — nada relacionado ao New Relic em si.
+
+- **Causa raiz real**: `variables.tf` tinha `cluster_version = "1.30"`, mas o
+  cluster real já estava rodando `1.31` (upgrade aconteceu fora deste
+  Terraform, provavelmente forçado pela AWS). Esse diff pendente deixava
+  `aws_eks_cluster.this` com atributos computados "known after apply" durante
+  o `plan`, e os providers `kubernetes`/`helm` deste repositório (configurados
+  a partir desses mesmos atributos) não conseguiam se autenticar nesse
+  meio-tempo — daí o erro de "anônimo". **Corrigido só ajustando
+  `cluster_version` para `"1.31"`** em `variables.tf` — depois disso,
+  `terraform apply` voltou a rodar limpo (`No changes. Apply complete!`).
+- **Quase-incidente durante o diagnóstico**: antes de achar a causa real acima,
+  tentei uma hipótese errada (achar que era falta de permissão RBAC de
+  verdade) e adicionei `access_config { authentication_mode =
+  "API_AND_CONFIG_MAP" }` ao `aws_eks_cluster.this` existente. Nesta versão do
+  provider AWS, isso é tratado como **replace**, não update in-place — o
+  `terraform apply` chegou a rodar `aws_eks_cluster.this: Destroying...` de
+  verdade. Só não completou porque a própria AWS bloqueou
+  (`ResourceInUseException: Cluster has nodegroups attached`). Cluster e node
+  group confirmados `ACTIVE` logo depois via `aws eks describe-cluster`/
+  `describe-nodegroup` — nada foi perdido, mas a mudança foi revertida
+  imediatamente (não usar `access_config` neste repositório sem antes
+  confirmar com `-target` isolado e portas de segurança extras).
+- **Lição**: qualquer mudança futura em `aws_eks_cluster.this` (mesmo
+  aparentemente inofensiva) deve ser testada com cautela — atributos que
+  parecem "só computados" podem forçar replace dependendo da versão do
+  provider. Preferir sempre conferir o plano completo (não só o resumo) antes
+  de um `apply -auto-approve` num cluster compartilhado e já em uso.
+- **Achado à parte, não corrigido**: o smoke test do pipeline
+  (`kubectl wait --for=condition=Ready nodes --all`) falha porque 2 dos 4 nós
+  listados pelo Kubernetes estão `NotReady,SchedulingDisabled` há bastante
+  tempo (instâncias já substituídas, nunca removidas da lista de nós do
+  cluster). `aws eks describe-nodegroup` mostra o node group `ACTIVE`, sem
+  `health.issues`, com `desiredSize=2` batendo com os 2 nós `Ready` reais — ou
+  seja, é sujeira de nós órfãos, não perda de capacidade. App confirmada
+  respondendo normalmente (`POST /auth/token` → `200`) apesar disso. Limpar
+  esses 2 objetos `Node` órfãos (`kubectl delete node <nome>`) fica pendente
+  para quando houver acesso `kubectl` de verdade (não funciona neste sandbox).
