@@ -380,13 +380,16 @@ a cada deploy.
   (lista vazia, correto); mesmo token com CPF de terceiro na query → `403`
   ("Cliente só pode consultar as próprias ordens de serviço") — prova que
   `restrictBuscaToOwnCpf` funciona de ponta a ponta contra a AWS real.
-- **Achado (não corrigido, decisão de arquitetura pendente)**: `POST
-  /api/auth/login` (login interno e-mail/senha) é inalcançável pelo endpoint
-  público — a única rota pública do API Gateway é `POST /auth/token`; tudo
-  sob `/api/*` (incluindo `/api/auth/login`) passa pelo Lambda Authorizer,
-  que exige um token que só existe depois de logar. Ou seja, hoje não há como
-  emitir um token de escopo `interno` (e portanto testar rotas
-  `requireInternalScope`, como `POST /api/clientes`) através do API Gateway —
-  só localmente, sem passar pela borda. Precisa de uma rota pública dedicada
-  (ex.: `POST /auth/login` na Lambda, ou uma exceção na integração do
-  `auth-lambda`) antes de ser demonstrável.
+- **Achado corrigido**: `POST /api/auth/login` (login interno e-mail/senha)
+  era inalcançável pelo endpoint público — a única rota pública do API
+  Gateway era `POST /auth/token`; tudo sob `/api/*` (incluindo
+  `/api/auth/login`) passava pelo Lambda Authorizer, que exige um token que
+  só existe depois de logar. Corrigido em `soat15-tech-challenge-auth-lambda/
+  terraform/api_gateway.tf` com uma rota exata `POST /api/auth/login` (sem
+  autorizador) usando a mesma integração `HTTP_PROXY`/VPC Link da rota
+  protegida — rotas exatas têm prioridade sobre o catch-all `ANY
+  /api/{proxy+}`, então só esse path fica público, sem duplicar a lógica de
+  login (que já existe e é testada na aplicação principal) numa Lambda à
+  parte. Validado via `curl`: login com credencial válida → `200` + JWT
+  `scope: interno`; esse token em `GET /api/clientes` → `200` (lista o
+  cliente semeado); senha errada → `401`.
