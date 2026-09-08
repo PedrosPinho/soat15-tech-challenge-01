@@ -192,7 +192,7 @@ jobs:
           # override_special em db-infra/rds.tf) que quebram a URL sem escapar.
           DB_PASSWORD_URLENC=$(jq -rn --arg v "$DB_PASSWORD" '$v|@uri')
           kubectl create secret generic oficina-api-secret -n "$NAMESPACE" \
-            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina" \
+            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina?sslmode=require" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=WEBHOOK_SECRET="${{ secrets.WEBHOOK_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
