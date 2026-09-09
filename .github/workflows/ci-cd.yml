@@ -239,6 +239,11 @@ jobs:
           sleep 5
           curl --fail --retry 5 --retry-delay 3 --retry-connrefused http://localhost:3001/health/ready
 
+      - name: Debug temporário — logs do New Relic
+        run: |
+          kubectl exec -n "$NAMESPACE" deploy/oficina-api -- env | grep NEW_RELIC || echo "sem env NEW_RELIC no container"
+          kubectl logs -l app=oficina-api -n "$NAMESPACE" --tail=300 | grep -i "newrelic\|new relic" || echo "nenhuma linha com newrelic nos logs"
+
       - name: Estado do cluster (debug em caso de falha)
         if: failure()
         run: |
