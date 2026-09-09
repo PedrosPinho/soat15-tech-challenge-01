@@ -147,6 +147,11 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'homolog' }}
+    # Em `main` este job falha de propósito no passo "Secret" (describe-db-instances
+    # de soat15-tc-prod-db, que não existe -- db-infra/auth-lambda não implantam
+    # prod de verdade, ver ADR-007). continue-on-error marca isso como falha
+    # esperada/permitida em vez de um X vermelho de pipeline quebrado.
+    continue-on-error: ${{ github.ref_name == 'main' }}
     steps:
       - uses: actions/checkout@v4
 
