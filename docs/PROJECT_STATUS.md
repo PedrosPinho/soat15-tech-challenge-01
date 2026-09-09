@@ -2,7 +2,7 @@
 
 **Última Atualização**: 2026-09-09
 **Testes**: 532 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`, incluindo Observabilidade completa** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; APM + `nri-bundle` conectados de verdade ao New Relic, e os 4 dashboards + 6 alertas NRQL + Synthetics monitor aplicados com sucesso (12 recursos criados). **Todo o código/infraestrutura da Fase 3 está pronto** — o que resta é só entrega/administrativo: branch protection, colaborador `soat-architecture` em 3 dos 4 repos, diagramas de arquitetura em 3 READMEs, vídeo e PDF (ver tabela abaixo)
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`, incluindo Observabilidade completa** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; APM + `nri-bundle` conectados de verdade ao New Relic, e os 4 dashboards + 6 alertas NRQL + Synthetics monitor aplicados com sucesso (12 recursos criados). **Toda a Fase 3 está pronta, incluindo os itens administrativos** (branch protection nos 4 repos, `soat-architecture` como colaborador em todos, `main` promovida a partir de `homolog` nos 4, diagrama de arquitetura em todo README) — só restam os dois entregáveis finais que dependem do usuário: vídeo de demonstração e PDF do Portal do Aluno
 
 ---
 
@@ -44,30 +44,24 @@ corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 | Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ `terraform apply` confirmado em `homolog` (RDS `available`) |
 | Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ `terraform apply` confirmado — cluster `ACTIVE`, node group com `ami_type=AL2023` e `metadata_options` (hop limit 2, exigido pelo LB Controller sem IRSA) |
 | `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
-| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ❌ Confirmado que falta nos dois: nenhum dos 4 repos tem proteção de branch (`main`/`homolog`), e `soat-architecture` só está adicionado em `soat15-tech-challenge-01` — ver checagem via `gh api` em 2026-09-09 |
+| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ✅ Feito (2026-09-09) — `main`/`homolog` protegidas nos 4 repos (PR obrigatório, sem push direto, `enforce_admins`), `soat-architecture` convidado (write) em `db-infra`/`k8s-infra`/`auth-lambda` |
 | Observabilidade (New Relic: APM na app + `nri-bundle` no cluster) — ver "Etapa 5" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Confirmado conectando de verdade (2026-09-09) — logs do agente mostram `Reporting to: https://one.newrelic.com/...` |
 | `k8s-infra` travado (`system:anonymous` em qualquer apply) — causa raiz era só `cluster_version` desatualizado (1.30 vs. 1.31 real); corrigido, `terraform apply` voltou a rodar limpo | ✅ Resolvido (2026-09-08) — ver "Achado e correção" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para o quase-incidente (tentativa de `access_config` chegou a iniciar um `Destroying` real do cluster, revertida a tempo) |
 | Instrumentação das Lambdas (`auth-lambda`) via layer New Relic | ❌ Não implementada — Lambdas sem NAT Gateway (sem saída à internet) + Learner Lab bloqueia IAM role própria para a integração CloudWatch nativa; achado documentado em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
 | Dashboards (4 exigidos) e alertas NRQL (6 exigidos) | ✅ Aplicados de verdade (2026-09-09) — `terraform apply` criou os 12 recursos (`Apply complete! Resources: 12 added`), incluindo o Synthetics monitor de healthcheck |
-| Branch `main` (produção) do app nunca teve um push/deploy de verdade; `db-infra` e `auth-lambda` **nem têm** branch `main` criada ainda (só `homolog`) | 📝 Decisão documentada formalmente em [`ADR-007`](architecture/adrs/ADR-007-producao-nao-implantada-de-verdade.md) — aceito não exercer produção de verdade, dado o cluster/RDS compartilhado entre ambientes (orçamento do Learner Lab) |
-| Diagrama de arquitetura específico no README de cada repositório | 🟡 Só `soat15-tech-challenge-01` tem um diagrama Mermaid no README; `db-infra`, `k8s-infra` e `auth-lambda` ainda não têm o diagrama próprio exigido |
+| Branch `main` em todos os 4 repos, com PR de `homolog` | ✅ Feito (2026-09-09) — `main` criada em `db-infra`/`auth-lambda` (a partir do commit inicial) e promovida via PR nos 4; apply/deploy de prod deliberadamente neutralizado (plan-only em `db-infra`/`auth-lambda`, `continue-on-error` no app) — ver [`ADR-007`](architecture/adrs/ADR-007-producao-nao-implantada-de-verdade.md) |
+| Diagrama de arquitetura específico no README de cada repositório | ✅ Feito (2026-09-09) — os 4 repositórios têm um diagrama Mermaid próprio no README |
 | Vídeo de demonstração (≤15min) | ❌ Não iniciado |
 | PDF único para o Portal do Aluno (links dos 4 repos, vídeo, docs, confirmação do colaborador) | ❌ Não iniciado — depende dos itens de colaborador/branch protection acima estarem resolvidos primeiro |
 | 2 nós órfãos `NotReady` no cluster (instâncias já substituídas, nunca removidas do Kubernetes) — cosmético, node group `ACTIVE`, app respondendo normalmente | ⏳ Pendente limpeza (`kubectl delete node`), precisa de acesso `kubectl` real (não funciona neste sandbox) |
 
-**Próxima tarefa recomendada**: com Observabilidade completa (APM,
-`nri-bundle` e os 12 recursos de dashboards/alertas todos aplicados e
-confirmados), os itens que restam para fechar a Fase 3 são só
-administrativos/de entrega, nenhum de código:
-1. Proteger `main`/`homolog` nos 4 repos (branch protection + PR obrigatório) e
-   adicionar `soat-architecture` como colaborador em `db-infra`, `k8s-infra` e
-   `auth-lambda` (só falta nesses três).
-2. ~~Decidir sobre produção~~ — decidido e documentado em `ADR-007`: aceitar
-   não exercer produção de verdade, dado o cluster/RDS compartilhado.
-3. Adicionar um diagrama Mermaid da arquitetura específica no README de
-   `db-infra`, `k8s-infra` e `auth-lambda` (só `soat15-tech-challenge-01` tem).
-4. Gravar o vídeo de demonstração (≤15min).
-5. Montar o PDF único para o Portal do Aluno.
+**Próxima tarefa recomendada**: com Observabilidade completa e todos os itens
+administrativos de repositório resolvidos (branch protection, colaborador,
+`main` em todos os 4 repos, diagramas de README), só restam os dois
+entregáveis finais, que dependem do usuário e não de código:
+1. Gravar o vídeo de demonstração (≤15min).
+2. Montar o PDF único para o Portal do Aluno (links dos 4 repos, vídeo,
+   documentações, confirmação de `soat-architecture` como colaborador).
 
 ---
 
