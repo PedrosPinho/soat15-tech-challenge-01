@@ -1,8 +1,8 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-09-08
+**Última Atualização**: 2026-09-09
 **Testes**: 532 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; instrumentação de Observabilidade (APM + `nri-bundle`) já mesclada, à espera só da license key do New Relic
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; Observabilidade com APM + `nri-bundle` confirmados conectando de verdade ao New Relic, e os 4 dashboards + 6 alertas NRQL escritos como Terraform, à espera das credenciais novas (User API Key + Account ID) para aplicar
 
 ---
 
@@ -45,20 +45,21 @@ corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 | Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ `terraform apply` confirmado — cluster `ACTIVE`, node group com `ami_type=AL2023` e `metadata_options` (hop limit 2, exigido pelo LB Controller sem IRSA) |
 | `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
 | Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ⏳ Precisa confirmação explícita (não verificado nesta sessão) |
-| Observabilidade (New Relic: APM na app + `nri-bundle` no cluster) — código pronto e mesclado, gated por license key — ver "Etapa 5" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | 🟡 Implementado, falta a license key (GitHub Secret) para ligar de verdade |
+| Observabilidade (New Relic: APM na app + `nri-bundle` no cluster) — ver "Etapa 5" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Confirmado conectando de verdade (2026-09-09) — logs do agente mostram `Reporting to: https://one.newrelic.com/...` |
 | `k8s-infra` travado (`system:anonymous` em qualquer apply) — causa raiz era só `cluster_version` desatualizado (1.30 vs. 1.31 real); corrigido, `terraform apply` voltou a rodar limpo | ✅ Resolvido (2026-09-08) — ver "Achado e correção" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para o quase-incidente (tentativa de `access_config` chegou a iniciar um `Destroying` real do cluster, revertida a tempo) |
 | Instrumentação das Lambdas (`auth-lambda`) via layer New Relic | ❌ Não implementada — Lambdas sem NAT Gateway (sem saída à internet) + Learner Lab bloqueia IAM role própria para a integração CloudWatch nativa; achado documentado em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
-| Dashboards (4 exigidos) e alertas NRQL | ⏳ Não iniciado — depende da license key acima para ter dados de verdade antes de montar |
+| Dashboards (4 exigidos) e alertas NRQL (6 exigidos) | 🟡 Escritos como Terraform (`newrelic_dashboards.tf`/`newrelic_alerts.tf` em `k8s-infra`, gated por `var.enable_new_relic_dashboards`) — falta criar o User API Key + pegar o Account ID, configurar os secrets novos e aplicar; ver "Etapa 5 — Dashboards e alertas" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
 | 2 nós órfãos `NotReady` no cluster (instâncias já substituídas, nunca removidas do Kubernetes) — cosmético, node group `ACTIVE`, app respondendo normalmente | ⏳ Pendente limpeza (`kubectl delete node`), precisa de acesso `kubectl` real (não funciona neste sandbox) |
 
-**Próxima tarefa recomendada**: com a app rodando de verdade no EKS e a
-autenticação (CPF e interna) funcionando ponta a ponta, o código de
-Observabilidade (APM + `nri-bundle`) já está pronto e mesclado em
-`homolog` — só falta o usuário criar a conta New Relic (free tier) e passar a
-license key como GitHub Secret `NEW_RELIC_LICENSE_KEY` em
-`soat15-tech-challenge-01` e em `soat15-tech-challenge-k8s-infra` para os
-dois se ligarem sozinhos no próximo deploy. Depois disso: montar os 4
-dashboards exigidos e os alertas NRQL. Itens administrativos pendentes:
+**Próxima tarefa recomendada**: Observabilidade tem o APM e o `nri-bundle`
+confirmados funcionando, e os 4 dashboards + 6 alertas já escritos como
+Terraform em `k8s-infra`. Falta: (1) criar um User API Key na conta New
+Relic (Perfil → API keys) e pegar o Account ID; (2) configurar
+`NEW_RELIC_API_KEY`/`NEW_RELIC_ACCOUNT_ID` (e opcionalmente
+`ALERT_NOTIFICATION_EMAIL`) como GitHub Secrets em `k8s-infra`; (3) rodar o
+pipeline e confirmar na UI que os 4 painéis populam; (4) provocar um erro de
+propósito para validar pelo menos um alerta disparando (item da seção
+"Verificação" do `PHASE_3_PLAN.md`). Itens administrativos pendentes:
 confirmar proteção de branches e colaborador `soat-architecture` nos 4
 repos; considerar merge de `homolog` para `main` (ambiente `prod`) quando o
 time decidir promover.
