@@ -230,6 +230,12 @@ jobs:
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/service.yaml | kubectl apply -f -
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/hpa.yaml | kubectl apply -f -
 
+      - name: Forçar rollout
+        # Secret/ConfigMap podem ter mudado (ex.: rotação de NEW_RELIC_LICENSE_KEY)
+        # sem a imagem mudar -- Secrets do Kubernetes não reiniciam pods sozinhos,
+        # então sem isso os pods antigos continuariam com as env vars antigas.
+        run: kubectl rollout restart deployment/oficina-api -n "$NAMESPACE"
+
       - name: Aguardar rollout
         run: kubectl rollout status deployment/oficina-api -n "$NAMESPACE" --timeout=180s
 
@@ -241,7 +247,7 @@ jobs:
 
       - name: Debug temporário — logs do New Relic
         run: |
-          kubectl exec -n "$NAMESPACE" deploy/oficina-api -- env | grep NEW_RELIC || echo "sem env NEW_RELIC no container"
+          kubectl exec -n "$NAMESPACE" deploy/oficina-api -- sh -c 'echo "tamanho da license key: ${#NEW_RELIC_LICENSE_KEY}"'
           kubectl logs -l app=oficina-api -n "$NAMESPACE" --tail=300 | grep -i "newrelic\|new relic" || echo "nenhuma linha com newrelic nos logs"
 
       - name: Estado do cluster (debug em caso de falha)
