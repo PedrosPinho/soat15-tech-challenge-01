@@ -432,12 +432,21 @@ Implementado o que não depende só de esperar dados chegarem (ver RFC-004):
   sempre rodou de verdade no job `test` do CI (GitHub-hosted runner), que é
   quem valida isso de fato.
 
+**Atualização (2026-09-09): license key configurada e validada.** `NEW_RELIC_LICENSE_KEY`
+setada nos dois repositórios e confirmada funcionando: o agente APM conecta
+de verdade (`"Reporting to: https://one.newrelic.com/..."` nos logs dos pods)
+e o `nri-bundle` reporta infraestrutura. Dois problemas apareceram e foram
+corrigidos no caminho: (a) a primeira tentativa usou o **Key ID** em vez do
+valor da license key (erro `"...appears to be invalid... (status code 401)"`
+— são duas coisas diferentes na mesma tela de API keys); (b) depois de
+corrigir o secret, os pods já rodando não pegaram o valor novo sozinhos
+(Secret do Kubernetes não reinicia pod em uso) — corrigido com um passo
+permanente `kubectl rollout restart deployment/oficina-api` logo após aplicar
+Deployment/Service/HPA em `ci-cd.yml`, útil para qualquer rotação futura de
+secret.
+
 **Pendências para ligar de vez:**
-1. **Precisa da license key do New Relic** (conta free tier, criar em
-   newrelic.com) como GitHub Secret `NEW_RELIC_LICENSE_KEY` em **dois**
-   repositórios: `soat15-tech-challenge-01` (liga o APM) e
-   `soat15-tech-challenge-k8s-infra` (liga o `nri-bundle`). Sem isso os dois
-   ficam desabilitados de propósito, sem quebrar nada.
+1. ~~Precisa da license key do New Relic~~ — feito, ver acima.
 2. **Achado (não implementado, limitação de arquitetura do Learner Lab)**:
    instrumentação das Lambdas (`auth-lambda`) via layer do New Relic, listada
    no `PHASE_3_PLAN.md`, não foi feita. Motivo: as duas Lambdas rodam nas
@@ -453,11 +462,67 @@ Implementado o que não depende só de esperar dados chegarem (ver RFC-004):
    as duas Lambdas ficam de fora do APM — cobertas só indiretamente pelos
    logs de erro que a própria aplicação principal já grava quando a chamada a
    `POST /auth/token` falha.
-3. Dashboards e alertas em si (as 4 telas exigidas + condições NRQL) ainda
-   não foram criados — dependem de dados reais chegando primeiro (item 1) e
-   de decidir se serão feitos manualmente na UI da New Relic ou como código
-   (Terraform provider `newrelic`, que exigiria mais uma credencial: um User
-   API Key + Account ID, além da license key).
+3. ~~Dashboards e alertas em si~~ — implementados como código, ver seção
+   abaixo. Falta aplicar de verdade (precisa das credenciais novas) e
+   confirmar na UI que os dados aparecem nos painéis.
+
+### Etapa 5 — Dashboards e alertas do New Relic como código (2026-09-09)
+
+Decisão: Terraform (`provider newrelic/newrelic`) em vez de criação manual na
+UI, consistente com o resto do projeto sendo todo IaC. Tudo em
+`soat15-tech-challenge-k8s-infra`, gated por `var.enable_new_relic_dashboards`
+(default `false`) — precisa de credenciais **diferentes** da license key de
+ingestão: um User API Key (`NEW_RELIC_API_KEY`, tipo `NRAK...`) e o Account ID
+numérico (`NEW_RELIC_ACCOUNT_ID`), ambos como GitHub Secrets novos só em
+`k8s-infra`. `ALERT_NOTIFICATION_EMAIL` é opcional (sem ele os alertas ficam
+registrados sem notificar ninguém).
+
+- `newrelic_dashboards.tf` — os 4 dashboards exigidos:
+  1. **Volume diário de OS abertas** — `count(*)` de `OrdemServicoStatusChanged`
+     filtrado por `statusNovo = 'RECEBIDA'`, por dia.
+  2. **Tempo médio por status** — widget `funnel()` sobre o mesmo evento
+     customizado, com os passos Recebida → Diagnóstico → Execução →
+     Finalização, facetado por `numeroOS`. Escolha deliberada: o evento não
+     carrega uma duração explícita (a entidade `OrdemServico` não tem um
+     campo de "entrou no status em"), então em vez de mudar o domínio só
+     para isso, o `funnel()` do próprio NRQL calcula o tempo entre passos a
+     partir do `timestamp` de cada evento — é o uso nativo dessa função.
+  3. **Erros e falhas nas integrações** — `TransactionError` da API
+     (cobre falhas de RDS/lógica de negócio que viram exceção) + contagem de
+     `Log` casando com a mensagem `"Falha ao notificar cliente"` (falha de
+     SES). Um painel markdown documenta explicitamente que a Lambda de auth
+     **não** aparece aqui (sem instrumentação, ver item 2 da lista de
+     pendências acima) em vez de fingir que o dashboard cobre as três
+     integrações por igual.
+  4. **Latência p50/p95/p99 + CPU/memória do cluster** — `percentile(duration,
+     50, 95, 99)` do agente APM; `K8sContainerSample` (nri-bundle) para
+     CPU/memória por pod.
+- `newrelic_alerts.tf` — política única (`newrelic_alert_policy.oficina`) com
+  as 6 condições exigidas: erro 5xx (`percentage` de `httpResponseCode LIKE
+  '5%'`), p95 degradado, falha no processamento de OS (`TransactionError`
+  filtrado por rota `ordens-servico`), `CrashLoopBackOff`
+  (`K8sContainerSample` com `reason = 'CrashLoopBackOff'`), CPU sustentada
+  acima do alvo do HPA, e healthcheck/uptime via um `newrelic_synthetics_monitor`
+  batendo em `/health/ready` pelo endpoint público.
+  - **Rota nova**: `GET /health/ready` público (sem autorizador) adicionado em
+    `auth-lambda/terraform/api_gateway.tf` — o Synthetics monitor roda de
+    fora da VPC, então precisa de um jeito de checar o healthcheck sem JWT e
+    sem estar sob `/api/` (prefixo já protegido pelo catch-all).
+  - Notificação por e-mail (`newrelic_notification_destination` +
+    `newrelic_notification_channel` + `newrelic_workflow`) só existe se
+    `alert_notification_email` estiver preenchido.
+- **Não validado ainda contra a API real** (`terraform validate`/`plan`) —
+  o proxy TLS deste ambiente de desenvolvimento corrompe o download dos
+  providers (mesma limitação já documentada para `aws`/`kubernetes`/`helm`);
+  `terraform fmt -check` passa limpo. A validação de verdade acontece no job
+  `fmt-validate` do pipeline. Atributos como `cpuUsedCores`/`memoryUsedBytes`
+  (convenção padrão do `nri-kubernetes`) precisam ser conferidos contra dados
+  reais assim que o `nri-bundle` estiver reportando de fato.
+- **Falta**: criar o User API Key na conta New Relic, pegar o Account ID,
+  configurar os 3 secrets novos em `k8s-infra` e rodar o pipeline; depois
+  confirmar visualmente na UI que os 4 dashboards populam e provocar um erro
+  de propósito para testar pelo menos um alerta (item da seção "Verificação"
+  do `PHASE_3_PLAN.md`).
 
 ### Achado e correção: `k8s-infra` não conseguia mais aplicar nada (2026-09-08)
 
