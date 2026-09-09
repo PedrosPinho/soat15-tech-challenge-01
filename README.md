@@ -3,12 +3,21 @@
 Sistema de gestão para oficinas mecânicas desenvolvido com **Domain-Driven Design (DDD)** e arquitetura em camadas, como Tech Challenge da Pós-Tech SOAT FIAP.
 
 **Fase 1** entregou a aplicação (API REST completa, DDD em camadas, testes, Swagger).
-**Fase 2** evolui essa base para produção: reforço de Clean Architecture, testes de
-integração/E2E com Mongo real, containerização, Kubernetes com autoscaling,
-provisionamento via Terraform e um pipeline de CI/CD completo. Ver
-[`docs/PHASE_2_PLAN.md`](docs/PHASE_2_PLAN.md) e [`docs/PHASE_2_TASKS.md`](docs/PHASE_2_TASKS.md)
-para o planejamento e o checklist detalhado da Fase 2 (arquivos locais, fora do
-controle de versão — ver `.gitignore`).
+**Fase 2** evoluiu essa base para produção: Clean Architecture, testes de
+integração/E2E com Postgres real, containerização, Kubernetes com autoscaling.
+**Fase 3** (atual) migrou tudo para a nuvem de verdade: autenticação por CPF via
+Function Serverless + API Gateway, infraestrutura em 4 repositórios provisionada
+por Terraform, deploy automático num EKS real (AWS Academy Learner Lab) e
+observabilidade com New Relic. Ver [`docs/PHASE_3_PLAN.md`](docs/PHASE_3_PLAN.md)
+e [`docs/PHASE_3_TASKS.md`](docs/PHASE_3_TASKS.md) para o planejamento e o
+checklist detalhado, e [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) para o
+status atual.
+
+## 🚀 Deploy ao vivo
+
+- **API pública** (API Gateway, autenticação por CPF): `https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com`
+- Ordem de deploy e demais links: [`soat15-tech-challenge-db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra) → [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) → esta aplicação (EKS) → [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda)
+- A infraestrutura roda por sessão do AWS Academy Learner Lab (orçamento limitado) — se o endpoint acima não responder, é porque a infra foi destruída ao fim de uma sessão de trabalho; ver [`PHASE_3_EXECUTION_GUIDE.md`](docs/PHASE_3_EXECUTION_GUIDE.md) para reaplicar.
 
 ---
 
@@ -41,16 +50,19 @@ qualidade de código da Fase 1.
 | Runtime | Node.js 20+ |
 | Linguagem | TypeScript 5+ (strict) |
 | Framework | Express.js 5 |
-| Banco de dados | MongoDB 7 + Mongoose |
-| E-mail | Nodemailer (SMTP) + Mailhog (dev/local) |
-| Testes | Jest + ts-jest + Supertest + `mongodb-memory-server` |
-| Documentação | Swagger UI / OpenAPI 3.0 |
+| Banco de dados | PostgreSQL 16 (`pg` + `node-pg-migrate`, sem ORM) |
+| Notificação | Amazon SES (prod) ou Nodemailer/Mailhog (dev/local), por trás da mesma port |
+| Logs | `pino` (JSON) + correlationId via `AsyncLocalStorage` |
+| Testes | Jest + ts-jest + Supertest + Testcontainers (Postgres real) |
+| Documentação | Swagger UI / OpenAPI 3.0 + collection Postman |
 | Container | Docker + Docker Compose |
-| Orquestração | Kubernetes (manifests em `k8s/`, cluster local via `kind`) |
-| Infraestrutura como código | Terraform (`infra/`) |
-| CI/CD | GitHub Actions (`.github/workflows/ci-cd.yml`) |
+| Orquestração | Kubernetes — EKS real via [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) (manifests em `k8s/`); `kind` local só para testar manifesto sem AWS |
+| Infraestrutura como código | Terraform em 3 repositórios satélite — [`db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra), [`k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra), [`auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) |
+| CI/CD | GitHub Actions (`.github/workflows/ci-cd.yml`) — build/test/push ECR/deploy EKS |
 | Qualidade | SonarQube + SonarScanner |
 | Segurança | JWT, bcrypt, Helmet, rate limiting |
+| Observabilidade | New Relic (APM na app + `nri-bundle` no cluster) — ver seção [Observabilidade](#observabilidade) |
+| Autenticação de cliente | CPF via Function Serverless + API Gateway — [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) |
 
 ---
 
@@ -60,7 +72,7 @@ qualidade de código da Fase 1.
 src/
 ├── domain/           # Entidades, value objects, regras de negócio, interfaces de repo e de serviços (ports)
 ├── application/      # Use cases, DTOs, mappers
-├── infrastructure/   # MongoDB schemas/repos, Nodemailer, serviços de segurança
+├── infrastructure/   # Repositórios Postgres, notificações (SES/Nodemailer), logger, segurança
 ├── presentation/     # Controllers, routes, middlewares, validators
 ├── main/              # Composition root (factories que fazem o wiring de dependências)
 └── shared/            # Erros de domínio
@@ -68,7 +80,8 @@ src/
 
 **Princípios aplicados**: Aggregate Roots, Value Objects (CPF/CNPJ, Placa, Endereço),
 Repository Pattern, Ports & Adapters para integrações externas (`INotificationService`
-→ `NodemailerNotificationService`), composition root isolando a montagem de
+→ `SesNotificationService`/`NodemailerNotificationService`, selecionável por env var),
+composition root isolando a montagem de
 dependências da camada de rotas, imutabilidade em todas as entidades de domínio, TDD.
 
 ### Fluxo de infraestrutura (Fase 2)
@@ -76,31 +89,31 @@ dependências da camada de rotas, imutabilidade em todas as entidades de domíni
 ```mermaid
 flowchart LR
     subgraph Local["Desenvolvimento local"]
-        Dev([Desenvolvedor]) -->|docker compose up| Compose[App + MongoDB + Mailhog]
+        Dev([Desenvolvedor]) -->|docker compose up| Compose[App + Postgres + Mailhog]
     end
 
     subgraph Pipeline["CI/CD — GitHub Actions"]
         direction LR
-        Build[build] --> Test[test] --> DockerBuild[docker-build] --> CIDeploy[deploy]
+        Build[build] --> Test[test] --> DockerBuild[docker-build-push] --> CIDeploy[deploy]
     end
 
-    Dev -->|git push| GH[(GitHub)]
+    Dev -->|git push main/homolog| GH[(GitHub)]
     GH --> Pipeline
-    DockerBuild -->|push imagem| GHCR[(GHCR)]
-    CIDeploy -->|kind efêmero no runner| K8s
+    DockerBuild -->|push imagem| ECR[(Amazon ECR)]
+    CIDeploy -->|apply k8s/ + rollout| K8s
 
-    Dev -->|terraform apply| TF[Terraform / infra]
-    TF -->|kind create cluster + kubectl apply -f k8s/| K8s
-
-    subgraph K8s["Cluster kind — namespace oficina"]
-        Svc[Service :3001] --> API[Deployment oficina-api]
+    subgraph K8s["EKS — soat15-tech-challenge-k8s-infra (namespace oficina-prod/homolog)"]
+        Svc[Service LoadBalancer :3001] --> API[Deployment oficina-api]
         HPA -.escala 2–6.-> API
-        API --> Mongo[(MongoDB StatefulSet + PVC)]
-        API --> Mail[Mailhog]
+        API --> RDS[(RDS PostgreSQL — soat15-tech-challenge-db-infra)]
     end
 
-    Cliente([Cliente HTTP]) -->|kubectl port-forward| Svc
+    APIGW[API Gateway + Lambdas de CPF — soat15-tech-challenge-auth-lambda] -->|VPC Link/NLB| Svc
+    Cliente([Cliente HTTP]) --> APIGW
 ```
+
+Diagrama completo dos 4 repositórios em
+[`docs/architecture/component-diagram.md`](docs/architecture/component-diagram.md).
 
 Detalhes de cada etapa: [`k8s/README.md`](k8s/README.md) (manifestos Kubernetes) e
 [`infra/README.md`](infra/README.md) (Terraform).
@@ -118,7 +131,7 @@ Detalhes de cada etapa: [`k8s/README.md`](k8s/README.md) (manifestos Kubernetes)
 
 ```bash
 cp .env.example .env
-# edite .env — defina MONGO_PASSWORD, JWT_SECRET, WEBHOOK_SECRET e SONAR_TOKEN
+# edite .env — defina POSTGRES_PASSWORD, JWT_SECRET, WEBHOOK_SECRET e SONAR_TOKEN
 ```
 
 ### 2. Subir os serviços
@@ -127,15 +140,17 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Aguarde ~15 s para o MongoDB inicializar. A API ficará disponível em
-`http://localhost:3001`, e o Mailhog (captura os e-mails enviados pela API) em
+O serviço `app` roda `npm run db:migrate` antes de subir (ver `docker-compose.yml`).
+A API ficará disponível em `http://localhost:3001`, e o Mailhog (captura os e-mails
+enviados quando `NOTIFICATION_PROVIDER=smtp`, o default local) em
 `http://localhost:8025`.
 
 ### 3. Desenvolvimento local (sem Docker para a API)
 
 ```bash
 npm install
-docker compose up -d mongodb mailhog   # apenas as dependências
+docker compose up -d postgres mailhog   # apenas as dependências
+npm run db:migrate
 npm run dev
 ```
 
@@ -143,7 +158,15 @@ npm run dev
 
 ## Kubernetes e Terraform
 
-Para rodar em um cluster **kind** local (com autoscaling via HPA):
+**Deploy real (EKS)**: cluster provisionado por
+[`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra)
+(depende de [`db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra)
+aplicado antes); os manifestos deste repositório (`k8s/`) são aplicados
+automaticamente pelo CI/CD (`.github/workflows/ci-cd.yml`) a cada push em
+`main`/`homolog` — ver a seção [CI/CD](#cicd) abaixo.
+
+**Uso local sem AWS**: `infra/` provisiona um cluster **kind** efêmero (herança da
+Fase 2, útil para testar mudança de manifesto sem depender de sessão do Learner Lab):
 
 ```bash
 cd infra
@@ -152,14 +175,9 @@ terraform init
 terraform apply
 ```
 
-Isso cria o cluster, builda e carrega a imagem da API, e aplica todos os manifestos de
-`k8s/` (namespace, ConfigMap/Secret, MongoDB, Mailhog, Deployment, Service, HPA).
 Passo a passo detalhado, incluindo como instalar o `metrics-server` (necessário para o
 HPA funcionar em `kind`) e como gerar carga para observar o autoscaling:
 [`infra/README.md`](infra/README.md) e [`k8s/README.md`](k8s/README.md).
-
-Para aplicar os manifestos manualmente (sem Terraform), veja o passo a passo em
-[`k8s/README.md`](k8s/README.md).
 
 ---
 
@@ -173,18 +191,37 @@ Endpoints marcados como protegidos exigem token JWT no header:
 Authorization: Bearer <token>
 ```
 
-**Obter token:**
+Dois tipos de token coexistem (RFC-003, `authMiddleware`):
+
+- **Interno** (`scope: interno`) — e-mail/senha, para uso da equipe da oficina.
+- **Cliente** (`scope: cliente`) — CPF, emitido por uma Lambda externa
+  ([`auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda)),
+  só pode consultar as próprias ordens de serviço (`/buscar`).
+
+**Login interno:**
 
 ```bash
 POST /api/auth/login
 { "email": "admin@oficina.com", "senha": "senha123" }
 ```
 
+**Token de cliente por CPF** (via `auth-lambda`, não por esta API diretamente):
+
+```bash
+curl -X POST https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com/auth/token \
+  -H "Content-Type: application/json" -d '{"cpf":"52998224725"}'
+```
+
+Rodando local/`homolog` sem nenhum cliente/usuário cadastrado ainda? `npm run
+db:seed` (depois de `npm run build`) cria o usuário admin acima e um cliente de
+teste com o CPF acima — ver [Scripts](#scripts).
+
 ### Endpoints
 
 | Método | Rota | Auth | Descrição |
 |--------|------|:---:|-----------|
-| `GET` | `/health` | — | Health check (200 se MongoDB conectado, 503 caso contrário) |
+| `GET` | `/health/live` | — | Processo vivo (nunca toca o banco) |
+| `GET` | `/health/ready` | — | Postgres alcançável (200/503) — alias em `GET /health` |
 | `POST` | `/api/auth/login` | — | Login |
 | `POST` | `/api/clientes` | JWT | Criar cliente |
 | `GET` | `/api/clientes` | JWT | Listar clientes |
@@ -208,7 +245,7 @@ POST /api/auth/login
 | `POST` | `/api/ordens-servico` | JWT | Criar OS (a partir de cpfCnpj + placa; aceita itens do catálogo de serviços) |
 | `GET` | `/api/ordens-servico` | JWT | Listar OS (filtros: status, clienteId, veiculoId) — ordenada por status (execução primeiro) e esconde `FINALIZADA`/`ENTREGUE` por padrão |
 | `GET` | `/api/ordens-servico/:id` | JWT | Buscar OS por id |
-| `GET` | `/api/ordens-servico/buscar?cpfCnpj=` | — | Consulta pública de OS pelo CPF/CNPJ do cliente |
+| `GET` | `/api/ordens-servico/buscar?cpfCnpj=` | JWT (cliente ou interno)¹ | Consulta de OS pelo CPF/CNPJ do cliente |
 | `PATCH` | `/api/ordens-servico/:id/iniciar` | JWT | `RECEBIDA → EM_DIAGNOSTICO` |
 | `PATCH` | `/api/ordens-servico/:id/aguardar-aprovacao` | JWT | `EM_DIAGNOSTICO → AGUARDANDO_APROVACAO` |
 | `PATCH` | `/api/ordens-servico/:id/aprovar` | JWT | `AGUARDANDO_APROVACAO → EM_EXECUCAO` (uso interno) |
@@ -220,6 +257,12 @@ POST /api/auth/login
 | `GET` | `/api/pagamentos` | JWT | Listar pagamentos |
 | `GET` | `/api/pagamentos/:id` | JWT | Buscar pagamento |
 | `GET` | `/api/relatorios/dashboard` | JWT | Dashboard com métricas |
+
+Todo `JWT` na tabela acima é token de **usuário interno** (`scope: interno`, emitido
+por `POST /api/auth/login`) exceto onde indicado — rotas de gestão rejeitam token de
+cliente com `403`. ¹ `/buscar` aceita os dois escopos: `interno` consulta qualquer
+CPF/CNPJ, `cliente` (emitido pela Lambda de CPF em `auth-lambda`) só consulta o
+próprio.
 
 O webhook de aprovação de orçamento usa um segredo compartilhado em vez de JWT de
 usuário — envie o header `x-webhook-secret` com o valor configurado em `WEBHOOK_SECRET`.
@@ -236,8 +279,9 @@ Com a API rodando, acesse:
 - **OpenAPI JSON**: http://localhost:3001/api/docs.json
 
 Para importar no Postman/Insomnia: **Import → Link** apontando para
-`http://localhost:3001/api/docs.json` — não há uma collection `.json` separada
-versionada no repositório, o Swagger já serve como fonte única.
+`http://localhost:3001/api/docs.json`, ou importar a collection versionada em
+[`docs/postman/oficina-api.postman_collection.json`](docs/postman/oficina-api.postman_collection.json)
+(login preenche `{{token}}` automaticamente via test script).
 
 ---
 
@@ -252,11 +296,12 @@ npm run test:integration  # só tests/integration (E2E via supertest)
 ```
 
 **Cobertura atual**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-(threshold mínimo: 80%, configurado em `jest.config.js`) — 606 testes.
+(threshold mínimo: 80%, configurado em `jest.config.js`) — 532 testes de domínio/
+aplicação/apresentação + 65 de integração PostgreSQL + 9 E2E (Testcontainers).
 
-Inclui testes de integração reais contra MongoDB (via `mongodb-memory-server`, sem
-depender de Docker) e testes E2E ponta a ponta do ciclo de vida da OS e da
-listagem/ordenação via HTTP (`tests/integration/`).
+Inclui testes de integração reais contra PostgreSQL (via Testcontainers, precisa de
+Docker) e testes E2E ponta a ponta do ciclo de vida da OS, listagem/ordenação e
+escopos de autorização via HTTP (`tests/integration/`).
 
 ---
 
@@ -281,43 +326,68 @@ SONAR_TOKEN=seu-token-aqui
 
 ---
 
+## Observabilidade
+
+Agente APM do New Relic (`newrelic`) carregado como o primeiro `require` de
+`src/index.ts`, configurado 100% por env var (`NEW_RELIC_NO_CONFIG_FILE=true`,
+sem `newrelic.js`) — `NEW_RELIC_APP_NAME`/`NEW_RELIC_LICENSE_KEY` vêm do
+Secret que o pipeline monta por ambiente. Sem a license key (ainda não
+configurada — ver abaixo), o agente detecta a licença ausente e fica
+desabilitado sem lançar erro, então isso já roda em `homolog` mesmo sem conta
+New Relic.
+
+Toda transição de status de uma OS emite um evento customizado
+`OrdemServicoStatusChanged` (`numeroOS`, `statusAnterior`, `statusNovo`) —
+base do dashboard de tempo médio por status. Infraestrutura do cluster
+(CPU/memória de pods/nós, eventos, logs) via `nri-bundle` em
+[`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra),
+mesmo padrão de "gated até existir a credencial".
+
+**Para ligar de vez**: criar conta New Relic (free tier) e publicar a license
+key como GitHub Secret `NEW_RELIC_LICENSE_KEY` neste repositório e em
+`k8s-infra`. Detalhes e pendências (instrumentação de Lambda, dashboards) em
+[`docs/PHASE_3_TASKS.md`](docs/PHASE_3_TASKS.md) — seção "Etapa 5".
+
+---
+
 ## CI/CD
 
-Pipeline em `.github/workflows/ci-cd.yml`, com 4 jobs sequenciais a cada push/PR na
-branch `main` (e em tags `v*`):
+Pipeline em `.github/workflows/ci-cd.yml`, com 4 jobs a cada push/PR nas branches
+`main`/`homolog` (Fase 3 — publica no ECR e implanta no EKS real de
+`soat15-tech-challenge-k8s-infra`; a versão anterior, com kind efêmero e GHCR, fica
+no histórico do Git):
 
-1. **build** — `npm ci` + `npm run build` (compila TypeScript).
-2. **test** — `npm run test:coverage` contra um MongoDB real (service container), com
-   os thresholds do `jest.config.js` (mínimo 80%) como gate; publica o relatório de
-   cobertura como artefato do workflow e um resumo no sumário da execução.
-3. **docker-build** — builda a imagem e publica em `ghcr.io/<owner>/<repo>` (tags
-   `latest` e `<sha>`). Só publica em push para `main`/tag; em PRs só builda, para
-   validar o `Dockerfile` sem exigir permissão de escrita no registry.
-4. **deploy** — só roda em push para `main` ou tag `v*`. Sobe um cluster **kind
-   efêmero dentro do próprio runner**, carrega a imagem recém-buildada e aplica todos
-   os manifestos de `k8s/`, espera o rollout e faz um smoke test em `/health`. Ver a
-   justificativa dessa escolha (em vez de um cluster remoto persistente) nos
-   comentários do próprio workflow e em `infra/README.md`.
+1. **build** — `npm ci` + `npm run type-check` + `npm run build`.
+2. **test** — `npm run test:coverage` contra Postgres (service container para
+   `health.spec.ts`; Testcontainers para os testes de repositório e o E2E), com os
+   thresholds do `jest.config.js` (mínimo 80%) como gate; publica o relatório de
+   cobertura como artefato do workflow.
+3. **docker-build-push** — só em push (não em PR): builda a imagem e publica no ECR
+   (`soat15-tc-oficina-api:<sha>`).
+4. **deploy** — só em push: `aws eks update-kubeconfig`, monta o Secret a partir do
+   SSM Parameter Store (endpoint/senha do RDS, `JWT_SECRET`) e do GitHub Secret
+   (`NEW_RELIC_LICENSE_KEY`), roda o `Job` de migration e o `Job` de seed
+   (usuário admin + cliente de teste, idempotente), aplica
+   `configmap`/`deployment`/`service`/`hpa` de `k8s/` (namespace `oficina-prod`
+   em `main`, `oficina-homolog` em `homolog` — mesmo cluster, namespaces
+   separados), espera o rollout e faz um smoke test em `/health/ready`.
 
 ### Secrets do GitHub
 
-Com o design atual (kind efêmero por execução), **nenhum secret adicional é
-necessário** — o job `docker-build` usa o `GITHUB_TOKEN` automático do Actions
-(permissão `packages: write`) para publicar no GHCR, e o job `deploy` usa valores de
-demonstração descartáveis (o cluster não sobrevive além do job).
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` — credenciais
+  temporárias da sessão do AWS Academy Learner Lab (sem OIDC, IAM bloqueado).
+  Renovadas por [`scripts/refresh-aws-secrets.sh`](scripts/refresh-aws-secrets.sh) no
+  início de cada sessão de trabalho, nos 4 repositórios de uma vez.
+- `WEBHOOK_SECRET` — não é compartilhado com nenhuma Lambda, então não tem parâmetro
+  SSM; é um secret próprio deste repositório.
+- `NEW_RELIC_LICENSE_KEY` — opcional; sem ele o agente APM fica desabilitado sem
+  quebrar o deploy (ver [Observabilidade](#observabilidade)).
 
-Se este pipeline for apontado para um cluster remoto persistente no futuro, os secrets
-a configurar em **Settings → Secrets and variables → Actions** seriam:
+Se a primeira execução do dia falhar com `ExpiredToken`/`UnrecognizedClientException`,
+rode o script de refresh de novo e reexecute — não é instabilidade da pipeline.
 
-| Secret | Uso |
-|---|---|
-| `KUBE_CONFIG` | Kubeconfig (base64) do cluster de destino, para `kubectl config use-context` no job `deploy` em vez de criar um kind efêmero |
-| `MONGO_ROOT_PASSWORD` | Senha root do MongoDB do cluster de destino |
-| `JWT_SECRET` | Segredo de assinatura dos JWTs da API |
-| `WEBHOOK_SECRET` | Segredo do header `x-webhook-secret` do endpoint de aprovação de orçamento |
-| `SMTP_USER` / `SMTP_PASS` | Credenciais de um provedor SMTP real (SES/SendGrid), no lugar do Mailhog local |
-
-Nenhum valor real desses secrets está neste repositório.
+Nenhum valor real de secret está neste repositório — `JWT_SECRET`/senha do RDS vêm do
+SSM Parameter Store em tempo de deploy (ver `db-infra`/`auth-lambda`).
 
 ---
 
@@ -327,9 +397,10 @@ Nenhum valor real desses secrets está neste repositório.
 npm run dev             # servidor em modo desenvolvimento (hot reload)
 npm run build           # compila TypeScript
 npm run start           # inicia versão compilada (produção)
-npm run lint            # ESLint 
-npm run lint:fix        # ESLint com auto-fix
 npm run type-check      # verificação de tipos TypeScript
+npm run db:migrate      # aplica migrations do Postgres (node-pg-migrate)
+npm run db:migrate:down # desfaz a última migration
+npm run db:seed         # usuário admin + cliente de teste (precisa de "npm run build" antes — roda a partir de dist/)
 npm run docker:up       # sobe todos os serviços Docker
 npm run docker:down     # para todos os serviços Docker
 npm run docker:logs     # logs dos serviços em tempo real

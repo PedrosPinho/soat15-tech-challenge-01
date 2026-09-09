@@ -17,11 +17,13 @@ export class IniciarOSUseCase {
     const os = await this.osRepo.findById(id);
     if (!os) throw new NotFoundError(`Ordem de serviço ${id} não encontrada`);
 
+    const statusAnterior = os.status;
     const iniciada = os.iniciar();
     await this.osRepo.update(iniciada);
     notificarMudancaStatusOS(
       { clienteRepo: this.clienteRepo, notificationService: this.notificationService },
       iniciada,
+      statusAnterior,
     );
     return OrdemServicoMapper.toDto(iniciada);
   }

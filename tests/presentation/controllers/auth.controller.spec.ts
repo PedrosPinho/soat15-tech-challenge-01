@@ -1,17 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthController } from '@presentation/controllers/auth.controller';
 import { LoginUseCase } from '@application/use-cases/auth/login.use-case';
-import { MongoUserRepository } from '@infrastructure/database/mongodb/repositories/user.repository.impl';
+import { PostgresUserRepository } from '@infrastructure/database/postgres/repositories/user.repository.impl';
 import { HashService } from '@infrastructure/security/hash.service';
 import { JwtService } from '@infrastructure/security/jwt.service';
 
 jest.mock('@application/use-cases/auth/login.use-case');
-jest.mock('@infrastructure/database/mongodb/repositories/user.repository.impl');
+jest.mock('@infrastructure/database/postgres/repositories/user.repository.impl');
 jest.mock('@infrastructure/security/hash.service');
 jest.mock('@infrastructure/security/jwt.service');
 
 const MockLoginUseCase = LoginUseCase as jest.MockedClass<typeof LoginUseCase>;
-const MockMongoUserRepository = MongoUserRepository as jest.MockedClass<typeof MongoUserRepository>;
+const MockPostgresUserRepository = PostgresUserRepository as jest.MockedClass<typeof PostgresUserRepository>;
 const MockHashService = HashService as jest.MockedClass<typeof HashService>;
 const MockJwtService = JwtService as jest.MockedClass<typeof JwtService>;
 
@@ -25,7 +25,7 @@ const next = jest.fn() as NextFunction;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  MockMongoUserRepository.mockImplementation(() => ({} as any));
+  MockPostgresUserRepository.mockImplementation(() => ({} as any));
   MockHashService.fromEnv = jest.fn().mockReturnValue({} as any);
   MockJwtService.fromEnv = jest.fn().mockReturnValue({} as any);
 });

@@ -1,8 +1,67 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-07-07
-**Testes**: 606 passando | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Tech Challenge Fase 1 completa (histórico abaixo) → **Fase 2 (Evolução para Produção) em andamento**, Etapas 1–5 concluídas, Etapa 6 (documentação/entrega) em progresso
+**Última Atualização**: 2026-09-09
+**Testes**: 532 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
+**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`, incluindo Observabilidade completa** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; APM + `nri-bundle` conectados de verdade ao New Relic, e os 4 dashboards + 6 alertas NRQL + Synthetics monitor aplicados com sucesso (12 recursos criados). **Toda a Fase 3 está pronta, incluindo os itens administrativos** (branch protection nos 4 repos, `soat-architecture` como colaborador em todos, `main` promovida a partir de `homolog` nos 4, diagrama de arquitetura em todo README) — só restam os dois entregáveis finais que dependem do usuário: vídeo de demonstração e PDF do Portal do Aluno
+
+---
+
+## 🧭 Tech Challenge — Fase 3 (Cloud, Serverless e Observabilidade)
+
+Planejamento completo em [`docs/PHASE_3_PLAN.md`](PHASE_3_PLAN.md) (baseado em
+`docs/13SOAT - Fase 3 - Tech Challenge.pdf`). Resumo do escopo: autenticação via
+CPF com Function Serverless + API Gateway, segregação em 4 repositórios com
+CI/CD e deploy automático em nuvem (Lambda, infra K8s via Terraform, infra de
+banco gerenciado via Terraform, aplicação no Kubernetes), observabilidade com
+New Relic (dashboards, alertas, logs estruturados com correlação) e documentação
+arquitetural (RFCs, ADRs, diagramas de componentes/sequência/ER).
+
+**Status**: os 4 pipelines já rodaram de verdade contra a AWS real (Learner
+Lab) em `homolog` e terminaram verdes — `db-infra` (VPC + RDS), `k8s-infra`
+(EKS + node group + AWS LB Controller + metrics-server), app principal
+(build/test/push ECR/deploy no EKS, migrations rodadas) e `auth-lambda`
+(fase 1: Lambdas + SSM `jwt-secret`; fase 2: VPC Link ligado ao NLB do app).
+Cadeia de autenticação de cliente (CPF) e de login interno (e-mail/senha)
+validadas ponta a ponta via `curl` direto no endpoint público do API
+Gateway, com `db:seed` já implementado e rodando no pipeline (ver
+"`db:seed` implementado..." em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md)). O
+achado de que `POST /api/auth/login` era inalcançável pelo endpoint público
+(só `POST /auth/token` era rota pública) foi corrigido com uma rota exata
+sem autorizador em `auth-lambda/terraform/api_gateway.tf` — ver "Achado
+corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
+
+| Item | Status |
+|---|---|
+| Documentação arquitetural (`docs/architecture/`: componentes, sequências, ER, 4 RFCs, 6 ADRs) | ✅ Concluída |
+| Guia de execução para as etapas que dependem de conta ([`PHASE_3_EXECUTION_GUIDE.md`](PHASE_3_EXECUTION_GUIDE.md)) | ✅ Concluído |
+| Etapa 0 — Learner Lab validado, 4 repositórios GitHub criados (`main`+`homolog`), bootstrap do estado Terraform (S3 + DynamoDB lock), `soat-architecture` como colaborador | ✅ Concluída |
+| Etapa 1 — camada PostgreSQL para todos os agregados, incluindo `OrdemServico`/`Servico`/`Pagamento` (árvore transacional de 3 níveis) — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
+| Etapa 4 — fábrica trocada para Postgres, Mongo removido, logs `pino`+correlationId, `SesNotificationService` por env var, healthchecks `/live`+`/ready`, `docker-compose` com `postgres:16`, collection Postman — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
+| Etapa 2.3 — `authMiddleware` com token interno + token de cliente por CPF, `requireInternalScope` nas rotas de gestão, `/buscar` fechado por CPF próprio — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluída |
+| Etapa 7 — CI/CD nos 4 repositórios executado de verdade em `homolog`, todos verdes — ver "Execução real" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para a lista de bugs achados/corrigidos no processo | ✅ **Execução real confirmada** (2026-09-08) |
+| `db:seed` (usuário admin + cliente de teste) + fluxo de cliente (CPF→JWT→`/buscar`) validado via `curl` contra a AWS real — ver [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Concluído (2026-09-08) |
+| Login interno (`POST /api/auth/login`) exposto publicamente no API Gateway (rota exata sem autorizador, mesma integração HTTP_PROXY/VPC Link) — validado via `curl`: login→JWT `interno`, esse token em `GET /api/clientes`→`200`, senha errada→`401` | ✅ Concluído (2026-09-08) |
+| Terraform `soat15-tech-challenge-db-infra` (VPC, RDS PostgreSQL 16, SSM Parameter Store, security groups) | ✅ `terraform apply` confirmado em `homolog` (RDS `available`) |
+| Terraform `soat15-tech-challenge-k8s-infra` (EKS + node group, addons incl. `metrics-server`, AWS LB Controller, ECR) | ✅ `terraform apply` confirmado — cluster `ACTIVE`, node group com `ami_type=AL2023` e `metadata_options` (hop limit 2, exigido pelo LB Controller sem IRSA) |
+| `soat15-tech-challenge-auth-lambda` (Lambda de token + Lambda Authorizer + API Gateway HTTP API) | ✅ Fases 1 e 2 aplicadas — VPC Link ligado ao NLB interno do EKS (`service.k8s.aws/stack`, porta 3001) |
+| Proteção de branches + `soat-architecture` como colaborador nos 4 repos | ✅ Feito (2026-09-09) — `main`/`homolog` protegidas nos 4 repos (PR obrigatório, sem push direto, `enforce_admins`), `soat-architecture` convidado (write) em `db-infra`/`k8s-infra`/`auth-lambda` |
+| Observabilidade (New Relic: APM na app + `nri-bundle` no cluster) — ver "Etapa 5" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) | ✅ Confirmado conectando de verdade (2026-09-09) — logs do agente mostram `Reporting to: https://one.newrelic.com/...` |
+| `k8s-infra` travado (`system:anonymous` em qualquer apply) — causa raiz era só `cluster_version` desatualizado (1.30 vs. 1.31 real); corrigido, `terraform apply` voltou a rodar limpo | ✅ Resolvido (2026-09-08) — ver "Achado e correção" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para o quase-incidente (tentativa de `access_config` chegou a iniciar um `Destroying` real do cluster, revertida a tempo) |
+| Instrumentação das Lambdas (`auth-lambda`) via layer New Relic | ❌ Não implementada — Lambdas sem NAT Gateway (sem saída à internet) + Learner Lab bloqueia IAM role própria para a integração CloudWatch nativa; achado documentado em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
+| Dashboards (4 exigidos) e alertas NRQL (6 exigidos) | ✅ Aplicados de verdade (2026-09-09) — `terraform apply` criou os 12 recursos (`Apply complete! Resources: 12 added`), incluindo o Synthetics monitor de healthcheck |
+| Branch `main` em todos os 4 repos, com PR de `homolog` | ✅ Feito (2026-09-09) — `main` criada em `db-infra`/`auth-lambda` (a partir do commit inicial) e promovida via PR nos 4; apply/deploy de prod deliberadamente neutralizado (plan-only em `db-infra`/`auth-lambda`, `continue-on-error` no app) — ver [`ADR-007`](architecture/adrs/ADR-007-producao-nao-implantada-de-verdade.md) |
+| Diagrama de arquitetura específico no README de cada repositório | ✅ Feito (2026-09-09) — os 4 repositórios têm um diagrama Mermaid próprio no README |
+| Vídeo de demonstração (≤15min) | ❌ Não iniciado |
+| PDF único para o Portal do Aluno (links dos 4 repos, vídeo, docs, confirmação do colaborador) | ❌ Não iniciado — depende dos itens de colaborador/branch protection acima estarem resolvidos primeiro |
+| 2 nós órfãos `NotReady` no cluster (instâncias já substituídas, nunca removidas do Kubernetes) — cosmético, node group `ACTIVE`, app respondendo normalmente | ⏳ Pendente limpeza (`kubectl delete node`), precisa de acesso `kubectl` real (não funciona neste sandbox) |
+
+**Próxima tarefa recomendada**: com Observabilidade completa e todos os itens
+administrativos de repositório resolvidos (branch protection, colaborador,
+`main` em todos os 4 repos, diagramas de README), só restam os dois
+entregáveis finais, que dependem do usuário e não de código:
+1. Gravar o vídeo de demonstração (≤15min).
+2. Montar o PDF único para o Portal do Aluno (links dos 4 repos, vídeo,
+   documentações, confirmação de `soat-architecture` como colaborador).
 
 ---
 

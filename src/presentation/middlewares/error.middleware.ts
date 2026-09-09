@@ -5,7 +5,9 @@ import {
   ValidationError,
   ConflictError,
   UnauthorizedError,
+  ForbiddenError,
 } from '@shared/errors/domain.error';
+import { logger } from '@shared/logger';
 
 export class AppError extends Error {
   constructor(
@@ -29,6 +31,11 @@ export const errorHandler = (
     return;
   }
 
+  if (err instanceof ForbiddenError) {
+    res.status(403).json({ status: 'error', message: err.message });
+    return;
+  }
+
   if (err instanceof NotFoundError) {
     res.status(404).json({ status: 'error', message: err.message });
     return;
@@ -49,6 +56,6 @@ export const errorHandler = (
     return;
   }
 
-  console.error('Unexpected error:', err);
+  logger.error({ err }, 'Unexpected error');
   res.status(500).json({ status: 'error', message: 'Internal server error' });
 };

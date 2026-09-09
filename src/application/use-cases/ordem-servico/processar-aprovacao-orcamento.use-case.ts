@@ -20,6 +20,7 @@ export class ProcessarAprovacaoOrcamentoUseCase {
     const os = await this.osRepo.findById(id);
     if (!os) throw new NotFoundError(`Ordem de serviço ${id} não encontrada`);
 
+    const statusAnterior = os.status;
     const atualizada = dto.aprovado
       ? os.aprovar()
       : os.cancelar(dto.motivo ?? 'Orçamento recusado pelo cliente');
@@ -28,6 +29,7 @@ export class ProcessarAprovacaoOrcamentoUseCase {
     notificarMudancaStatusOS(
       { clienteRepo: this.clienteRepo, notificationService: this.notificationService },
       atualizada,
+      statusAnterior,
     );
     return OrdemServicoMapper.toDto(atualizada);
   }
