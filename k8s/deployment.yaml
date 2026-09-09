@@ -18,8 +18,10 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: oficina-api
-          # Construída localmente e carregada no kind (ver k8s/README.md), ou publicada
-          # no GHCR pelo pipeline de CI/CD (Etapa 5) e referenciada por tag/digest.
+          # Substituída em tempo de deploy pelo CI/CD (.github/workflows/ci-cd.yml,
+          # sed na tag do ECR = SHA do commit) — ver k8s/README.md para uso local
+          # com kind, onde a imagem é carregada manualmente em vez de puxada de um
+          # registry.
           image: oficina-api:local
           imagePullPolicy: IfNotPresent
           ports:
@@ -40,17 +42,19 @@ spec:
               ephemeral-storage: "512Mi"
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            # TCP em vez de /health de propósito: /health reflete o status do MongoDB
-            # (retorna 503 se desconectado) e reiniciar o pod não resolve um problema
-            # de banco — isso é papel da readinessProbe, que apenas tira o pod do
-            # Service até a conexão voltar.
-            tcpSocket:
+            # /health/live nunca toca o banco (só confirma que o processo está de
+            # pé) — de propósito distinto de /health/ready, que retorna 503 se o
+            # Postgres estiver inalcançável. Reiniciar o pod não resolve um
+            # problema de banco; isso é papel da readinessProbe, que apenas tira
+            # o pod do Service até a conexão voltar.
+            httpGet:
+              path: /health/live
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15

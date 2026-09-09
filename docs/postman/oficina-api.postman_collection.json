@@ -1,0 +1,269 @@
+{
+  "info": {
+    "name": "Oficina API — SOAT Tech Challenge",
+    "description": "Collection gerada a partir das rotas reais de src/presentation/routes/. Alternativa ao Import → Link do Swagger (http://localhost:3001/api/docs.json) para quem prefere uma collection versionada.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3001" },
+    { "key": "token", "value": "" },
+    { "key": "webhook_secret", "value": "change-this-in-production" },
+    { "key": "cliente_id", "value": "" },
+    { "key": "veiculo_id", "value": "" },
+    { "key": "os_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        { "name": "Live", "request": { "method": "GET", "url": "{{base_url}}/health/live", "auth": { "type": "noauth" } } },
+        { "name": "Ready", "request": { "method": "GET", "url": "{{base_url}}/health/ready", "auth": { "type": "noauth" } } }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set('token', pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@oficina.com\",\n  \"senha\": \"senha123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Clientes",
+      "item": [
+        {
+          "name": "Criar cliente",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('cliente_id', pm.response.json().id); }"] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/clientes",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cliente Exemplo\",\n  \"cpfCnpj\": \"52998224725\",\n  \"tipo\": \"PESSOA_FISICA\",\n  \"telefone\": \"11999999999\",\n  \"email\": \"cliente@exemplo.com\",\n  \"endereco\": {\n    \"logradouro\": \"Rua A\",\n    \"numero\": \"1\",\n    \"bairro\": \"Centro\",\n    \"cidade\": \"São Paulo\",\n    \"estado\": \"SP\",\n    \"cep\": \"01000000\"\n  }\n}"
+            }
+          }
+        },
+        { "name": "Listar clientes", "request": { "method": "GET", "url": "{{base_url}}/api/clientes" } },
+        { "name": "Buscar cliente por id", "request": { "method": "GET", "url": "{{base_url}}/api/clientes/{{cliente_id}}" } },
+        {
+          "name": "Atualizar cliente",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/clientes/{{cliente_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"telefone\": \"11988888888\",\n  \"email\": \"cliente@exemplo.com\"\n}" }
+          }
+        },
+        { "name": "Desativar cliente", "request": { "method": "DELETE", "url": "{{base_url}}/api/clientes/{{cliente_id}}" } }
+      ]
+    },
+    {
+      "name": "Veículos",
+      "item": [
+        {
+          "name": "Criar veículo",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('veiculo_id', pm.response.json().id); }"] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/veiculos",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clienteId\": \"{{cliente_id}}\",\n  \"placa\": \"ABC1234\",\n  \"marca\": \"Fiat\",\n  \"modelo\": \"Uno\",\n  \"ano\": 2020\n}"
+            }
+          }
+        },
+        { "name": "Buscar veículo por id", "request": { "method": "GET", "url": "{{base_url}}/api/veiculos/{{veiculo_id}}" } },
+        {
+          "name": "Atualizar veículo",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/veiculos/{{veiculo_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quilometragem\": 15000\n}" }
+          }
+        },
+        { "name": "Listar veículos do cliente", "request": { "method": "GET", "url": "{{base_url}}/api/clientes/{{cliente_id}}/veiculos" } }
+      ]
+    },
+    {
+      "name": "Peças",
+      "item": [
+        {
+          "name": "Criar peça",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/pecas",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"PC-001\",\n  \"descricao\": \"Filtro de óleo\",\n  \"categoria\": \"FILTROS\",\n  \"precoCompra\": 10,\n  \"precoVenda\": 25,\n  \"unidadeMedida\": \"UNIDADE\",\n  \"nivelMinimo\": 5,\n  \"nivelMaximo\": 50\n}"
+            }
+          }
+        },
+        { "name": "Listar peças", "request": { "method": "GET", "url": "{{base_url}}/api/pecas" } },
+        { "name": "Buscar peça por id", "request": { "method": "GET", "url": "{{base_url}}/api/pecas/:id" } },
+        {
+          "name": "Atualizar peça",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/pecas/:id",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"precoVenda\": 28\n}" }
+          }
+        },
+        { "name": "Desativar peça", "request": { "method": "DELETE", "url": "{{base_url}}/api/pecas/:id" } }
+      ]
+    },
+    {
+      "name": "Catálogo de Serviços",
+      "item": [
+        {
+          "name": "Criar serviço do catálogo",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/servicos",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descricao\": \"Troca de óleo\",\n  \"preco\": 80,\n  \"tempoEstimado\": 30\n}"
+            }
+          }
+        },
+        { "name": "Listar catálogo", "request": { "method": "GET", "url": "{{base_url}}/api/servicos" } },
+        { "name": "Buscar serviço por id", "request": { "method": "GET", "url": "{{base_url}}/api/servicos/:id" } },
+        {
+          "name": "Atualizar serviço",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/servicos/:id",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"preco\": 90\n}" }
+          }
+        },
+        { "name": "Remover serviço", "request": { "method": "DELETE", "url": "{{base_url}}/api/servicos/:id" } }
+      ]
+    },
+    {
+      "name": "Ordens de Serviço",
+      "item": [
+        {
+          "name": "Buscar as próprias OS por CPF/CNPJ",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/ordens-servico/buscar?cpfCnpj=52998224725"
+          }
+        },
+        {
+          "name": "Criar OS",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('os_id', pm.response.json().id); }"] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/ordens-servico",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpfCnpj\": \"52998224725\",\n  \"placa\": \"ABC1234\",\n  \"quilometragemEntrada\": 1000\n}"
+            }
+          }
+        },
+        { "name": "Listar OS", "request": { "method": "GET", "url": "{{base_url}}/api/ordens-servico" } },
+        { "name": "Buscar OS por id", "request": { "method": "GET", "url": "{{base_url}}/api/ordens-servico/{{os_id}}" } },
+        { "name": "Iniciar diagnóstico", "request": { "method": "PATCH", "url": "{{base_url}}/api/ordens-servico/{{os_id}}/iniciar" } },
+        { "name": "Aguardar aprovação", "request": { "method": "PATCH", "url": "{{base_url}}/api/ordens-servico/{{os_id}}/aguardar-aprovacao" } },
+        { "name": "Aprovar (uso interno)", "request": { "method": "PATCH", "url": "{{base_url}}/api/ordens-servico/{{os_id}}/aprovar" } },
+        { "name": "Concluir", "request": { "method": "PATCH", "url": "{{base_url}}/api/ordens-servico/{{os_id}}/concluir" } },
+        { "name": "Entregar", "request": { "method": "PATCH", "url": "{{base_url}}/api/ordens-servico/{{os_id}}/entregar" } },
+        {
+          "name": "Cancelar",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/ordens-servico/{{os_id}}/cancelar",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"motivo\": \"Cliente desistiu\"\n}" }
+          }
+        },
+        {
+          "name": "Webhook de aprovação de orçamento",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/ordens-servico/{{os_id}}/orcamento/webhook",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-webhook-secret", "value": "{{webhook_secret}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"aprovado\": true\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pagamentos",
+      "item": [
+        {
+          "name": "Registrar pagamento",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/pagamentos",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ordemServicoId\": \"{{os_id}}\",\n  \"valor\": 150,\n  \"formaPagamento\": \"PIX\"\n}"
+            }
+          }
+        },
+        { "name": "Listar pagamentos", "request": { "method": "GET", "url": "{{base_url}}/api/pagamentos" } },
+        { "name": "Buscar pagamento por id", "request": { "method": "GET", "url": "{{base_url}}/api/pagamentos/:id" } }
+      ]
+    },
+    {
+      "name": "Relatórios",
+      "item": [
+        { "name": "Dashboard", "request": { "method": "GET", "url": "{{base_url}}/api/relatorios/dashboard" } }
+      ]
+    }
+  ]
+}

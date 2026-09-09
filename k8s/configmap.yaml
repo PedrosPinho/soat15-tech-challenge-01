@@ -12,10 +12,19 @@ data:
   RATE_LIMIT_WINDOW_MS: "900000"
   RATE_LIMIT_MAX_REQUESTS: "100"
   LOG_LEVEL: "info"
-  LOG_FORMAT: "json"
   CORS_ORIGIN: "*"
-  MONGO_DB_NAME: "oficina"
-  SMTP_HOST: "mailhog"
-  SMTP_PORT: "1025"
-  SMTP_SECURE: "false"
-  SMTP_FROM: "no-reply@oficina.com"
+  # "ses" no EKS (ver ADR-005); "smtp" continua sendo o default do binário para
+  # não depender de configuração extra em ambientes que não populam esta ConfigMap
+  # (ex.: rodando fora do K8s). SES_FROM_EMAIL/AWS_REGION não são segredo — só o
+  # que autentica no SES é a LabRole herdada pelos nós via instance profile.
+  NOTIFICATION_PROVIDER: "ses"
+  AWS_REGION: "us-east-1"
+  SES_FROM_EMAIL: "no-reply@oficina.com"
+  # Configura o agente `newrelic` (ver src/index.ts) só por env var, sem
+  # newrelic.js — NEW_RELIC_LICENSE_KEY vem do Secret (vazia até existir uma
+  # conta New Relic, ver ci-cd.yml); sem ela o agente fica desabilitado sem
+  # erro. NEW_RELIC_APP_NAME é por ambiente, então é setado no Secret junto
+  # com a license key (o pipeline já calcula $TF_ENV ali).
+  NEW_RELIC_NO_CONFIG_FILE: "true"
+  NEW_RELIC_LOG: "stdout"
+  NEW_RELIC_DISTRIBUTED_TRACING_ENABLED: "true"

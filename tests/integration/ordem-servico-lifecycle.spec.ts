@@ -3,19 +3,24 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import type { Router } from 'express';
 import type { ErrorRequestHandler } from 'express';
+import { setPool } from '@infrastructure/database/postgres/pool';
 import {
-  connectTestDatabase,
-  disconnectTestDatabase,
+  startTestDatabase,
+  stopTestDatabase,
   clearTestDatabase,
-} from '../setup/mongo-memory.helper';
+} from '../setup/postgres-testcontainer.helper';
 
-jest.setTimeout(30000);
+jest.setTimeout(120000);
 
 process.env['WEBHOOK_SECRET'] = 'test-webhook-secret';
 process.env['JWT_SECRET'] = 'test-jwt-secret';
+const JWT_SECRET = process.env['JWT_SECRET'];
 
-const authToken = jwt.sign({ userId: 'e2e-user', email: 'e2e@test.com' }, process.env['JWT_SECRET']);
+const authToken = jwt.sign({ sub: 'e2e-user', email: 'e2e@test.com', scope: 'interno' }, JWT_SECRET);
 const authHeader = `Bearer ${authToken}`;
+
+const clienteTokenFor = (cpf: string): string =>
+  jwt.sign({ sub: `cliente-${cpf}`, cpf, scope: 'cliente' }, JWT_SECRET);
 
 jest.mock('nodemailer', () => ({
   createTransport: () => ({ sendMail: jest.fn().mockResolvedValue(undefined) }),
@@ -44,7 +49,8 @@ app.use('/api/ordens-servico', ordemServicoRouter);
 app.use(errorHandler);
 
 beforeAll(async () => {
-  await connectTestDatabase();
+  const pool = await startTestDatabase();
+  setPool(pool);
 });
 
 afterEach(async () => {
@@ -52,7 +58,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await disconnectTestDatabase();
+  await stopTestDatabase();
 });
 
 function computeCpfCheckDigit(digits: string, weightStart: number): number {
@@ -264,5 +270,58 @@ describe('Listagem/ordenação de OS (E2E)', () => {
       .query({ status: 'FINALIZADA' });
     expect(finalizadaRes.body.total).toBe(1);
     expect(finalizadaRes.body.ordens[0].status).toBe('FINALIZADA');
+  });
+});
+
+describe('Escopos de autorização (Etapa 2.3)', () => {
+  it('token de cliente não acessa rota de gestão (POST /api/clientes) — 403', async () => {
+    const res = await request(app)
+      .post('/api/clientes')
+      .set('Authorization', `Bearer ${clienteTokenFor('11144477735')}`)
+      .send({ nome: 'x' });
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /api/ordens-servico/buscar sem token — 401 (antes era público)', async () => {
+    const res = await request(app).get('/api/ordens-servico/buscar').query({ cpfCnpj: '52998224725' });
+    expect(res.status).toBe(401);
+  });
+
+  it('token de cliente consulta as próprias OS por CPF — 200', async () => {
+    const { cpfCnpj, placa } = await seedClienteEVeiculo('CLI0001');
+    await request(app)
+      .post('/api/ordens-servico')
+      .set('Authorization', authHeader)
+      .send({ cpfCnpj, placa, quilometragemEntrada: 1000 });
+
+    const res = await request(app)
+      .get('/api/ordens-servico/buscar')
+      .set('Authorization', `Bearer ${clienteTokenFor(cpfCnpj)}`)
+      .query({ cpfCnpj });
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+  });
+
+  it('token de cliente não consulta OS de outro CPF — 403', async () => {
+    const { cpfCnpj: donoCpf } = await seedClienteEVeiculo('CLI0002');
+
+    const res = await request(app)
+      .get('/api/ordens-servico/buscar')
+      .set('Authorization', `Bearer ${clienteTokenFor('11144477735')}`)
+      .query({ cpfCnpj: donoCpf });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('token interno consulta OS por qualquer CPF — 200', async () => {
+    const { cpfCnpj } = await seedClienteEVeiculo('CLI0003');
+
+    const res = await request(app)
+      .get('/api/ordens-servico/buscar')
+      .set('Authorization', authHeader)
+      .query({ cpfCnpj });
+
+    expect(res.status).toBe(200);
   });
 });

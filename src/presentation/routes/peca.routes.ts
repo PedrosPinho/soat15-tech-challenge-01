@@ -1,38 +1,44 @@
 import { Router } from 'express';
 import { PecaController } from '@presentation/controllers/peca.controller';
-import { authMiddleware } from '@presentation/middlewares/auth.middleware';
+import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import { validateCreatePeca, validateUpdatePeca } from '@presentation/validators/peca.validator';
-import { MongoPecaRepository } from '@infrastructure/database/mongodb/repositories/peca.repository.impl';
+import { PostgresPecaRepository } from '@infrastructure/database/postgres/repositories/peca.repository.impl';
 import { CreatePecaUseCase } from '@application/use-cases/peca/create-peca.use-case';
 import { GetPecaUseCase } from '@application/use-cases/peca/get-peca.use-case';
 import { UpdatePecaUseCase } from '@application/use-cases/peca/update-peca.use-case';
 import { ListPecasUseCase } from '@application/use-cases/peca/list-pecas.use-case';
 import { DeactivatePecaUseCase } from '@application/use-cases/peca/deactivate-peca.use-case';
 
-const repo = new MongoPecaRepository();
-
-const controller = new PecaController(
-  new CreatePecaUseCase(repo),
-  new GetPecaUseCase(repo),
-  new UpdatePecaUseCase(repo),
-  new ListPecasUseCase(repo),
-  new DeactivatePecaUseCase(repo),
-);
+// Construção adiada para o primeiro request — ver comentário em ordem-servico.routes.ts.
+let controller: PecaController | undefined;
+const getController = (): PecaController => {
+  if (!controller) {
+    const repo = new PostgresPecaRepository();
+    controller = new PecaController(
+      new CreatePecaUseCase(repo),
+      new GetPecaUseCase(repo),
+      new UpdatePecaUseCase(repo),
+      new ListPecasUseCase(repo),
+      new DeactivatePecaUseCase(repo),
+    );
+  }
+  return controller;
+};
 
 export const pecaRouter = Router();
 
-pecaRouter.post('/', authMiddleware, validateCreatePeca, (req, res, next) =>
-  controller.create(req, res, next),
+pecaRouter.post('/', authMiddleware, requireInternalScope, validateCreatePeca, (req, res, next) =>
+  getController().create(req, res, next),
 );
 
-pecaRouter.get('/', authMiddleware, (req, res, next) => controller.list(req, res, next));
+pecaRouter.get('/', authMiddleware, requireInternalScope, (req, res, next) => getController().list(req, res, next));
 
-pecaRouter.get('/:id', authMiddleware, (req, res, next) => controller.getById(req, res, next));
+pecaRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, next) => getController().getById(req, res, next));
 
-pecaRouter.put('/:id', authMiddleware, validateUpdatePeca, (req, res, next) =>
-  controller.update(req, res, next),
+pecaRouter.put('/:id', authMiddleware, requireInternalScope, validateUpdatePeca, (req, res, next) =>
+  getController().update(req, res, next),
 );
 
-pecaRouter.delete('/:id', authMiddleware, (req, res, next) =>
-  controller.deactivate(req, res, next),
+pecaRouter.delete('/:id', authMiddleware, requireInternalScope, (req, res, next) =>
+  getController().deactivate(req, res, next),
 );

@@ -22,11 +22,13 @@ export class CancelarOSUseCase {
     const os = await this.osRepo.findById(dto.id);
     if (!os) throw new NotFoundError(`Ordem de serviço ${dto.id} não encontrada`);
 
+    const statusAnterior = os.status;
     const cancelada = os.cancelar(dto.motivo);
     await this.osRepo.update(cancelada);
     notificarMudancaStatusOS(
       { clienteRepo: this.clienteRepo, notificationService: this.notificationService },
       cancelada,
+      statusAnterior,
     );
     return OrdemServicoMapper.toDto(cancelada);
   }
