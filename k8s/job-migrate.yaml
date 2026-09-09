@@ -1,0 +1,24 @@
+# Job de migration, aplicado pelo CI/CD antes do rollout do Deployment (ver
+# PHASE_3_PLAN.md, Etapa 1.2 — "nunca manualmente"). O pipeline apaga a execução
+# anterior (nome fixo, `kubectl delete --ignore-not-found`) e recria a cada deploy,
+# já que a spec de um Job é imutável depois de criado.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-migrate
+  namespace: oficina
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: oficina-api:local
+          command: ["npm", "run", "db:migrate"]
+          envFrom:
+            - configMapRef:
+                name: oficina-api-config
+            - secretRef:
+                name: oficina-api-secret

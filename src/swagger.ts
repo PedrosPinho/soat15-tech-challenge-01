@@ -32,6 +32,8 @@ export const swaggerSpec = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
+        description:
+          'Aceita dois tipos de token (RFC-003): `scope: interno` (emitido por `POST /api/auth/login`, e-mail/senha — acessa as rotas de gestão) e `scope: cliente` (emitido pela Lambda de CPF em `soat15-tech-challenge-auth-lambda` — só acessa `GET /api/ordens-servico/buscar` com o próprio CPF/CNPJ). Rotas de gestão exigem `scope: interno`; um token `cliente` válido recebe 403, não 401.',
       },
       webhookSecret: {
         type: 'apiKey',
@@ -338,26 +340,66 @@ export const swaggerSpec = {
   },
   security: [{ bearerAuth: [] }],
   paths: {
-    '/health': {
+    '/health/live': {
       get: {
         tags: ['Health'],
-        summary: 'Health check',
+        summary: 'Processo vivo (nunca toca o banco)',
         security: [],
         responses: {
           200: {
-            description: 'Aplicação em funcionamento',
+            description: 'Processo em execução',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
-                    status: { type: 'string', example: 'ok' },
+                    status: { type: 'string', example: 'UP' },
                     timestamp: { type: 'string', format: 'date-time' },
+                    uptime: { type: 'number' },
                   },
                 },
               },
             },
           },
+        },
+      },
+    },
+    '/health/ready': {
+      get: {
+        tags: ['Health'],
+        summary: 'Banco alcançável (usado pela readinessProbe)',
+        security: [],
+        responses: {
+          200: {
+            description: 'Postgres alcançável',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    status: { type: 'string', example: 'UP' },
+                    timestamp: { type: 'string', format: 'date-time' },
+                    database: { type: 'string', example: 'CONNECTED' },
+                  },
+                },
+              },
+            },
+          },
+          503: {
+            description: 'Postgres inalcançável',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+          },
+        },
+      },
+    },
+    '/health': {
+      get: {
+        tags: ['Health'],
+        summary: 'Alias de /health/ready (compatibilidade)',
+        security: [],
+        responses: {
+          200: { description: 'Postgres alcançável' },
+          503: { description: 'Postgres inalcançável' },
         },
       },
     },
@@ -693,9 +735,9 @@ export const swaggerSpec = {
     '/api/ordens-servico/buscar': {
       get: {
         tags: ['Ordens de Serviço'],
-        summary: 'Buscar ordens de serviço por CPF/CNPJ (público)',
-        description: 'Endpoint público — não requer autenticação.',
-        security: [],
+        summary: 'Buscar as próprias ordens de serviço por CPF/CNPJ',
+        description:
+          'Consulta de status das próprias OS (RFC-003/Etapa 2.3). Aceita token `scope: cliente` (emitido pela Lambda de CPF — só pode consultar o próprio CPF/CNPJ, 403 caso contrário) ou `scope: interno` (consulta qualquer CPF/CNPJ).',
         parameters: [
           { name: 'cpfCnpj', in: 'query', required: true, schema: { type: 'string', example: '52998224725' }, description: 'CPF (11 dígitos) ou CNPJ (14 dígitos) do cliente' },
           { $ref: '#/components/parameters/pageParam' },
@@ -707,6 +749,8 @@ export const swaggerSpec = {
             content: { 'application/json': { schema: { type: 'object', properties: { ordens: { type: 'array', items: { $ref: '#/components/schemas/OrdemServico' } }, total: { type: 'integer' }, page: { type: 'integer' }, limit: { type: 'integer' } } } } },
           },
           400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { description: 'Token de cliente consultando CPF/CNPJ que não é o próprio', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
           404: { $ref: '#/components/responses/NotFound' },
         },
       },
