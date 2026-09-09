@@ -49,7 +49,7 @@ corrigido" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md).
 | `k8s-infra` travado (`system:anonymous` em qualquer apply) — causa raiz era só `cluster_version` desatualizado (1.30 vs. 1.31 real); corrigido, `terraform apply` voltou a rodar limpo | ✅ Resolvido (2026-09-08) — ver "Achado e correção" em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) para o quase-incidente (tentativa de `access_config` chegou a iniciar um `Destroying` real do cluster, revertida a tempo) |
 | Instrumentação das Lambdas (`auth-lambda`) via layer New Relic | ❌ Não implementada — Lambdas sem NAT Gateway (sem saída à internet) + Learner Lab bloqueia IAM role própria para a integração CloudWatch nativa; achado documentado em [`PHASE_3_TASKS.md`](PHASE_3_TASKS.md) |
 | Dashboards (4 exigidos) e alertas NRQL (6 exigidos) | ✅ Aplicados de verdade (2026-09-09) — `terraform apply` criou os 12 recursos (`Apply complete! Resources: 12 added`), incluindo o Synthetics monitor de healthcheck |
-| Branch `main` (produção) do app nunca teve um push/deploy de verdade; `db-infra` e `auth-lambda` **nem têm** branch `main` criada ainda (só `homolog`) | ❌ Confirmado via `gh api .../branches` em 2026-09-09 — "deploy automático de homolog e produção" só está exercido de fato para `homolog` |
+| Branch `main` (produção) do app nunca teve um push/deploy de verdade; `db-infra` e `auth-lambda` **nem têm** branch `main` criada ainda (só `homolog`) | 📝 Decisão documentada formalmente em [`ADR-007`](architecture/adrs/ADR-007-producao-nao-implantada-de-verdade.md) — aceito não exercer produção de verdade, dado o cluster/RDS compartilhado entre ambientes (orçamento do Learner Lab) |
 | Diagrama de arquitetura específico no README de cada repositório | 🟡 Só `soat15-tech-challenge-01` tem um diagrama Mermaid no README; `db-infra`, `k8s-infra` e `auth-lambda` ainda não têm o diagrama próprio exigido |
 | Vídeo de demonstração (≤15min) | ❌ Não iniciado |
 | PDF único para o Portal do Aluno (links dos 4 repos, vídeo, docs, confirmação do colaborador) | ❌ Não iniciado — depende dos itens de colaborador/branch protection acima estarem resolvidos primeiro |
@@ -62,10 +62,8 @@ administrativos/de entrega, nenhum de código:
 1. Proteger `main`/`homolog` nos 4 repos (branch protection + PR obrigatório) e
    adicionar `soat-architecture` como colaborador em `db-infra`, `k8s-infra` e
    `auth-lambda` (só falta nesses três).
-2. Decidir se vale a pena criar a branch `main` em `db-infra`/`auth-lambda` e
-   fazer um push real de produção nos 4 (hoje só `homolog` foi exercido de
-   fato) — ou documentar essa decisão como aceita dada a limitação de
-   orçamento do Learner Lab (um único cluster/RDS para os dois ambientes).
+2. ~~Decidir sobre produção~~ — decidido e documentado em `ADR-007`: aceitar
+   não exercer produção de verdade, dado o cluster/RDS compartilhado.
 3. Adicionar um diagrama Mermaid da arquitetura específica no README de
    `db-infra`, `k8s-infra` e `auth-lambda` (só `soat15-tech-challenge-01` tem).
 4. Gravar o vídeo de demonstração (≤15min).
