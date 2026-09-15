@@ -23,7 +23,7 @@
    do bloco 5), um para `kubectl logs`.
 4. Exportar o endpoint uma vez, reaproveitado em todos os blocos:
    ```bash
-   export ENDPOINT=https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com
+   export ENDPOINT=https://s7qibinzdi.execute-api.us-east-1.amazonaws.com
    ```
 5. Ter o `jq` instalado (formata as respostas JSON na tela) — `brew install jq`
    ou `apt install jq`.
@@ -140,7 +140,7 @@ teste:**
 
 ```bash
 CLIENTE_ID=$(curl -s "$ENDPOINT/api/clientes" -H "Authorization: Bearer $TOKEN" \
-  | jq -r '.[] | select(.cpfCnpj=="52998224725") | .id')
+  | jq -r '.clientes[] | select(.cpfCnpj=="52998224725") | .id')
 echo "$CLIENTE_ID"
 ```
 
