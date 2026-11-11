@@ -6,6 +6,7 @@ const STATUS_LABEL: Record<StatusOS, string> = {
   RECEBIDA: 'Recebida',
   EM_DIAGNOSTICO: 'Em diagnóstico',
   AGUARDANDO_APROVACAO: 'Aguardando aprovação do orçamento',
+  AGUARDANDO_PAGAMENTO: 'Aguardando pagamento',
   EM_EXECUCAO: 'Em execução',
   FINALIZADA: 'Finalizada',
   ENTREGUE: 'Entregue',

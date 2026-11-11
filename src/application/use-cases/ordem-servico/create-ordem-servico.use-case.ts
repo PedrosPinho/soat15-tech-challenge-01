@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { OrdemServico } from '@domain/entities/ordem-servico.entity';
 import { Servico } from '@domain/entities/servico.entity';
 import { NumeroOS } from '@domain/value-objects/numero-os.vo';
@@ -6,6 +7,9 @@ import { IClienteRepository } from '@domain/repositories/cliente.repository';
 import { IVeiculoRepository } from '@domain/repositories/veiculo.repository';
 import { ICatalogoServicoRepository } from '@domain/repositories/catalogo-servico.repository';
 import { IPecaRepository } from '@domain/repositories/peca.repository';
+import { IUnitOfWork } from '@domain/services/unit-of-work';
+import { SagaOrchestrator } from '@application/saga/saga-orchestrator';
+import { requestContext } from '@shared/logger';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
 import {
   CreateOrdemServicoDto,
@@ -20,6 +24,8 @@ export class CreateOrdemServicoUseCase {
     private readonly veiculoRepo: IVeiculoRepository,
     private readonly catalogoRepo: ICatalogoServicoRepository,
     private readonly pecaRepo: IPecaRepository,
+    private readonly uow: IUnitOfWork,
+    private readonly saga: SagaOrchestrator,
   ) {}
 
   async execute(dto: CreateOrdemServicoDto): Promise<OrdemServicoResponseDto> {
@@ -73,7 +79,12 @@ export class CreateOrdemServicoUseCase {
       servicos,
     });
 
-    await this.osRepo.save(os);
+    // OS + saga + outbox (SolicitarDiagnostico) na mesma transação: ou tudo, ou nada.
+    const correlationId = requestContext.getStore()?.correlationId ?? randomUUID();
+    await this.uow.run(async () => {
+      await this.osRepo.save(os);
+      await this.saga.iniciar(os, correlationId, dto.observacoes);
+    });
     return OrdemServicoMapper.toDto(os);
   }
 }
