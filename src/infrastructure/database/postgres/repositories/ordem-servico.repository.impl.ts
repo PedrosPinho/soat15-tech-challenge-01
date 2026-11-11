@@ -6,7 +6,7 @@ import {
   ListOrdemServicoFilter,
   ListOrdemServicoResult,
 } from '@domain/repositories/ordem-servico.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import {
   OrdemServicoRow,
   ServicoOSRow,
@@ -16,10 +16,11 @@ import {
 
 const STATUS_ORDER_SQL = `CASE status
   WHEN 'EM_EXECUCAO' THEN 1
-  WHEN 'AGUARDANDO_APROVACAO' THEN 2
-  WHEN 'EM_DIAGNOSTICO' THEN 3
-  WHEN 'RECEBIDA' THEN 4
-  ELSE 5
+  WHEN 'AGUARDANDO_PAGAMENTO' THEN 2
+  WHEN 'AGUARDANDO_APROVACAO' THEN 3
+  WHEN 'EM_DIAGNOSTICO' THEN 4
+  WHEN 'RECEBIDA' THEN 5
+  ELSE 6
 END`;
 
 /**
@@ -33,7 +34,7 @@ END`;
  * para uma página inteira de OSes, evitando N+1 — ver `PHASE_3_PLAN.md`.
  */
 export class PostgresOrdemServicoRepository implements IOrdemServicoRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(os: OrdemServico): Promise<void> {
     const client = await this.pool.connect();
