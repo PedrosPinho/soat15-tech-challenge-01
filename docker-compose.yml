@@ -29,6 +29,26 @@ services:
     networks:
       - oficina-network
 
+  # LocalStack: SNS + SQS locais para a Saga. O script de init cria o tópico, as filas
+  # (com DLQ) e a assinatura com filter policy — espelha terraform/messaging.tf.
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: oficina-localstack
+    restart: unless-stopped
+    environment:
+      SERVICES: sns,sqs
+    ports:
+      - '4566:4566'
+    volumes:
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+    networks:
+      - oficina-network
+    healthcheck:
+      test: ['CMD-SHELL', 'awslocal sqs list-queues >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   app:
     build:
       context: .
@@ -45,7 +65,18 @@ services:
       JWT_SECRET: change-this-in-production
       JWT_EXPIRES_IN: 1d
       BCRYPT_ROUNDS: 10
-      WEBHOOK_SECRET: change-this-in-production
+      INTERNAL_API_TOKEN: change-this-in-production
+      # Saga / mensageria (Fase 4) via LocalStack; filas criadas por scripts/localstack-init.sh
+      MESSAGING_DRIVER: sqs
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/execution-commands
+      BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/billing-commands
+      SAGA_REPLIES_QUEUE_URL: http://localstack:4566/000000000000/os-saga-replies
+      EVENTS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:oficina-eventos
+      BILLING_SERVICE_URL: http://billing-service:3003
       NOTIFICATION_PROVIDER: smtp
       SMTP_HOST: mailhog
       SMTP_PORT: 1025
@@ -58,6 +89,8 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
+      localstack:
+        condition: service_healthy
     networks:
       - oficina-network
     volumes:
