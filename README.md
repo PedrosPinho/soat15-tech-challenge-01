@@ -29,11 +29,10 @@ Implementar um sistema integrado que permita à oficina:
 - Manter um **catálogo de peças** com controle de preços, margens e estoque
 - Manter um **catálogo de serviços** com preço e tempo estimado
 - Abrir, executar e encerrar **ordens de serviço** com controle de ciclo de vida
-  (`RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA → ENTREGUE`,
-  com `CANCELADA` a partir dos estados não finais)
+  (`RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → AGUARDANDO_PAGAMENTO → EM_EXECUCAO → FINALIZADA → ENTREGUE`,
+  com `CANCELADA` a partir dos estados não finais) — **orquestrado por uma Saga** (Fase 4)
 - Notificar o cliente por **e-mail** a cada mudança de status da OS
-- Receber a **aprovação/recusa de orçamento** do cliente via webhook externo
-- Registrar **pagamentos** em múltiplas formas
+- Orçamento, aprovação e **pagamento** (Mercado Pago) ficam no **Billing Service**; a execução do diagnóstico/reparo, no **Execution Service**
 - Consultar um **dashboard** com métricas de operação
 
 **Objetivos da Fase 2**: preparar essa aplicação para rodar de forma produtiva —
@@ -131,7 +130,7 @@ Detalhes de cada etapa: [`k8s/README.md`](k8s/README.md) (manifestos Kubernetes)
 
 ```bash
 cp .env.example .env
-# edite .env — defina POSTGRES_PASSWORD, JWT_SECRET, WEBHOOK_SECRET e SONAR_TOKEN
+# edite .env — defina POSTGRES_PASSWORD, JWT_SECRET, INTERNAL_API_TOKEN e SONAR_TOKEN
 ```
 
 ### 2. Subir os serviços
@@ -246,16 +245,10 @@ teste com o CPF acima — ver [Scripts](#scripts).
 | `GET` | `/api/ordens-servico` | JWT | Listar OS (filtros: status, clienteId, veiculoId) — ordenada por status (execução primeiro) e esconde `FINALIZADA`/`ENTREGUE` por padrão |
 | `GET` | `/api/ordens-servico/:id` | JWT | Buscar OS por id |
 | `GET` | `/api/ordens-servico/buscar?cpfCnpj=` | JWT (cliente ou interno)¹ | Consulta de OS pelo CPF/CNPJ do cliente |
-| `PATCH` | `/api/ordens-servico/:id/iniciar` | JWT | `RECEBIDA → EM_DIAGNOSTICO` |
-| `PATCH` | `/api/ordens-servico/:id/aguardar-aprovacao` | JWT | `EM_DIAGNOSTICO → AGUARDANDO_APROVACAO` |
-| `PATCH` | `/api/ordens-servico/:id/aprovar` | JWT | `AGUARDANDO_APROVACAO → EM_EXECUCAO` (uso interno) |
-| `POST` | `/api/ordens-servico/:id/orcamento/webhook` | secret | Aprovação/recusa do orçamento pelo cliente (notificação externa) — `{ aprovado, motivo? }`; aprova ou cancela a OS |
-| `PATCH` | `/api/ordens-servico/:id/concluir` | JWT | `EM_EXECUCAO → FINALIZADA` |
 | `PATCH` | `/api/ordens-servico/:id/entregar` | JWT | `FINALIZADA → ENTREGUE` |
-| `PATCH` | `/api/ordens-servico/:id/cancelar` | JWT | Cancela a OS (body: `{ motivo }`) |
-| `POST` | `/api/pagamentos` | JWT | Registrar pagamento |
-| `GET` | `/api/pagamentos` | JWT | Listar pagamentos |
-| `GET` | `/api/pagamentos/:id` | JWT | Buscar pagamento |
+| `GET` | `/api/ordens-servico/:id/historico` | JWT | Linha do tempo de status + passos da Saga (e link de pagamento enquanto `AGUARDANDO_PAGAMENTO`) |
+| `PATCH` | `/api/ordens-servico/:id/cancelar` | JWT | Dispara a **compensação** da Saga (`202`); a OS vira `CANCELADA` ao final (body: `{ motivo }`) |
+| `GET` | `/internal/clientes/by-cpf/:cpf` | `x-internal-token` | Uso da Lambda de auth (fora do API Gateway, fora de `/api`) |
 | `GET` | `/api/relatorios/dashboard` | JWT | Dashboard com métricas |
 
 Todo `JWT` na tabela acima é token de **usuário interno** (`scope: interno`, emitido
@@ -264,11 +257,12 @@ cliente com `403`. ¹ `/buscar` aceita os dois escopos: `interno` consulta qualq
 CPF/CNPJ, `cliente` (emitido pela Lambda de CPF em `auth-lambda`) só consulta o
 próprio.
 
-O webhook de aprovação de orçamento usa um segredo compartilhado em vez de JWT de
-usuário — envie o header `x-webhook-secret` com o valor configurado em `WEBHOOK_SECRET`.
+As transições `iniciar`/`aguardar-aprovacao`/`aprovar`/`concluir`, o webhook de orçamento e
+`/api/pagamentos` **deixaram de existir** no OS Service: o avanço do status é feito pelo
+orquestrador da Saga ao receber as respostas do Billing e do Execution. Só `entregar`
+(manual) e `cancelar` (dispara compensação) continuam na API.
 
-A cada transição de status da OS (`iniciar`, `aguardar-aprovacao`, `aprovar`/webhook,
-`concluir`, `entregar`, `cancelar`), a API dispara — de forma assíncrona, sem bloquear
+A cada transição de status da OS, a API dispara — de forma assíncrona, sem bloquear
 a resposta HTTP — um e-mail de atualização para o cliente (Mailhog em dev/local).
 
 ### Documentação interativa
@@ -412,24 +406,60 @@ npm run docker:logs     # logs dos serviços em tempo real
 
 ```
 1. POST /api/auth/login                          → obter token JWT
-2. POST /api/clientes                             → cadastrar cliente
-3. POST /api/veiculos                             → cadastrar veículo vinculado ao cliente
-4. POST /api/pecas                                 → cadastrar peças no catálogo
-5. POST /api/servicos                              → cadastrar serviços no catálogo
-6. POST /api/ordens-servico                        → abrir OS (RECEBIDA)
-7. PATCH /api/ordens-servico/:id/iniciar            → iniciar diagnóstico (EM_DIAGNOSTICO)
-8. PATCH /api/ordens-servico/:id/aguardar-aprovacao → orçamento pronto (AGUARDANDO_APROVACAO)
-9. POST /api/ordens-servico/:id/orcamento/webhook   → cliente aprova (EM_EXECUCAO) ou recusa (CANCELADA)
-10. PATCH /api/ordens-servico/:id/concluir          → serviço finalizado (FINALIZADA)
-11. PATCH /api/ordens-servico/:id/entregar          → veículo entregue (ENTREGUE)
-12. POST /api/pagamentos                            → registrar pagamento
-13. GET  /api/relatorios/dashboard                  → consultar métricas
+2. POST /api/clientes e /api/veiculos            → cadastrar cliente e veículo
+3. POST /api/pecas e /api/servicos               → cadastrar peças e serviços no catálogo
+4. POST /api/ordens-servico                      → abrir OS (RECEBIDA) — inicia a Saga
+5. PATCH /api/execucoes/:id/diagnostico/concluir → mecânico conclui (Execution Service)
+6. (Billing) POST /api/orcamentos/:id/aprovar    → cliente aprova o orçamento
+7. (Mercado Pago) cliente paga pelo link         → AGUARDANDO_PAGAMENTO → EM_EXECUCAO
+8. PATCH /api/execucoes/:id/reparo/concluir      → FINALIZADA (baixa do estoque)
+9. PATCH /api/ordens-servico/:id/entregar        → ENTREGUE
+10. GET  /api/ordens-servico/:id/historico       → status + passos da Saga a qualquer momento
+11. GET  /api/relatorios/dashboard               → métricas (receita vem do Billing)
 ```
 
-A cada passo 7–11, o cliente recebe um e-mail automático com a atualização de status.
+A cada mudança de status, o cliente recebe um e-mail automático.
 
 ---
 
+## Saga Pattern — por que orquestrada
+
+O fluxo *abrir OS → gerar orçamento → aguardar aprovação → pagar → executar* atravessa três
+serviços, cada um com seu banco. Não há transação distribuída: usamos uma **Saga orquestrada**,
+com o orquestrador **dentro do OS Service** (`src/application/saga/`).
+
+| | Orquestrada (escolhida) | Coreografada |
+|---|---|---|
+| Fluxo e compensações | num só lugar, declarativos (`ciclo-os.saga.ts`) | espalhados em 3 serviços |
+| "Em que passo está a OS X?" | `GET /:id/historico` (estado persistido em `saga_instancias`/`saga_passos_log`) | só reconstruindo eventos |
+| Teste | BDD/unitário do orquestrador com bus em memória | exige subir tudo |
+| Custo | orquestrador é um ponto crítico (mitigado: estado persistido, lock otimista, sweeper de timeout) | risco de ciclos de eventos |
+
+**Compensação em ordem inversa.** Se o reparo falha: `EstornarPagamento` → `CancelarOrcamento` →
+liberar reserva de estoque → `CancelarExecucao` → OS `CANCELADA`. Cada compensação é idempotente
+e retentável; se não convergir, a saga vai para `FALHA_COMPENSACAO` (alerta, intervenção manual).
+
+**Confiabilidade.** *Transactional outbox* (estado + mensagem na mesma transação), *inbox*
+idempotente por `messageId`, filas SQS com DLQ, lock otimista por `versao` e sweeper de
+timeouts (`SAGA_TIMEOUT_APROVACAO`, `SAGA_TIMEOUT_PAGAMENTO`). Contratos das mensagens em
+[`docs/architecture/contratos-mensagens.md`](docs/architecture/contratos-mensagens.md);
+decisões em `RFC-005` e `ADR-008` a `ADR-015`.
+
+### Variáveis de ambiente da Saga
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `MESSAGING_ENABLED` | `true` | `false` sobe só a API (sem Saga) |
+| `MESSAGING_DRIVER` | `sqs` | `memory` para dev/testes sem AWS |
+| `AWS_ENDPOINT_URL` | — | LocalStack local |
+| `EXECUTION_COMMANDS_QUEUE_URL`, `BILLING_COMMANDS_QUEUE_URL`, `SAGA_REPLIES_QUEUE_URL`, `EVENTS_TOPIC_ARN` | — | destinos (saída do Terraform) |
+| `SAGA_TIMEOUT_APROVACAO` / `SAGA_TIMEOUT_PAGAMENTO` | `3d` / `1h` | prazo de espera (`30s`, `5m`, `2h`) |
+| `SAGA_TIMEOUT_COMPENSACAO` / `SAGA_MAX_TENTATIVAS_COMPENSACAO` | `2m` / `3` | retry de compensação |
+| `SAGA_SWEEPER_INTERVAL_MS` / `OUTBOX_RELAY_INTERVAL_MS` | `15000` / `1000` | intervalo dos workers |
+| `INTERNAL_API_TOKEN` | — | protege `/internal/*` e a chamada ao Billing |
+| `BILLING_SERVICE_URL` | — | `receitaTotal` do dashboard (fallback `null` se fora) |
+
+---
 
 ## Licença
 
