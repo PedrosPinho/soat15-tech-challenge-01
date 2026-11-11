@@ -5,7 +5,7 @@
 // desabilitado sem lançar erro -- seguro mesmo antes da conta New Relic
 // existir, inclusive em teste de integração (`tests/integration/health.spec.ts`
 // importa este arquivo).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 require('newrelic');
 
 import express, { Application } from 'express';
