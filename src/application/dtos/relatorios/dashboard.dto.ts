@@ -7,7 +7,8 @@ export interface DashboardResponseDto {
     canceladas: number;
   };
   financeiro: {
-    receitaTotal: number;
+    /** `null` quando o Billing Service está indisponível. */
+    receitaTotal: number | null;
   };
   estoque: {
     itensAbaixoDoMinimo: number;
