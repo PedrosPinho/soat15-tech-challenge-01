@@ -5,11 +5,11 @@ import {
   ListPecasFilter,
   ListPecasResult,
 } from '@domain/repositories/peca.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { PecaRow, toDomainPeca } from '../mappers/peca.mapper';
 
 export class PostgresPecaRepository implements IPecaRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(peca: Peca): Promise<void> {
     await this.pool.query(
