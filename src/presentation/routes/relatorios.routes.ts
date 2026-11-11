@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { RelatoriosController } from '@presentation/controllers/relatorios.controller';
 import { authMiddleware, requireInternalScope } from '@presentation/middlewares/auth.middleware';
 import { PostgresOrdemServicoRepository } from '@infrastructure/database/postgres/repositories/ordem-servico.repository.impl';
-import { PostgresPagamentoRepository } from '@infrastructure/database/postgres/repositories/pagamento.repository.impl';
+import { HttpFinanceiroGateway } from '@infrastructure/http/http-financeiro.gateway';
 import { PostgresItemEstoqueRepository } from '@infrastructure/database/postgres/repositories/item-estoque.repository.impl';
 import { DashboardUseCase } from '@application/use-cases/relatorios/dashboard.use-case';
 
@@ -13,7 +13,7 @@ const getController = (): RelatoriosController => {
     controller = new RelatoriosController(
       new DashboardUseCase(
         new PostgresOrdemServicoRepository(),
-        new PostgresPagamentoRepository(),
+        new HttpFinanceiroGateway(),
         new PostgresItemEstoqueRepository(),
       ),
     );

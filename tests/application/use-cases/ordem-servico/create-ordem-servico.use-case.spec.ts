@@ -8,6 +8,8 @@ import { Cliente } from '@domain/entities/cliente.entity';
 import { Veiculo } from '@domain/entities/veiculo.entity';
 import { CatalogoServico } from '@domain/entities/catalogo-servico.entity';
 import { Peca } from '@domain/entities/peca.entity';
+import { IUnitOfWork } from '@domain/services/unit-of-work';
+import { SagaOrchestrator } from '@application/saga/saga-orchestrator';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
 
 const CLIENT_ID = 'cliente-uuid-1';
@@ -64,6 +66,9 @@ function makePeca(): Peca {
     nivelMaximo: 50,
   });
 }
+
+const uow: IUnitOfWork = { run: (work) => work() };
+const saga = { iniciar: jest.fn().mockResolvedValue(undefined) } as unknown as SagaOrchestrator;
 
 function makeOsRepo(overrides: Partial<IOrdemServicoRepository> = {}): IOrdemServicoRepository {
   return {
@@ -138,6 +143,8 @@ function makeUseCase(overrides: {
     makeVeiculoRepo(overrides.veiculoRepo),
     makeCatalogoRepo(overrides.catalogoRepo),
     makePecaRepo(overrides.pecaRepo),
+    uow,
+    saga,
   );
 }
 
@@ -167,7 +174,7 @@ describe('CreateOrdemServicoUseCase', () => {
 
   it('saves the OS and calls nextSequence once', async () => {
     const osRepo = makeOsRepo();
-    const useCase = new CreateOrdemServicoUseCase(osRepo, makeClienteRepo(), makeVeiculoRepo(), makeCatalogoRepo(), makePecaRepo());
+    const useCase = new CreateOrdemServicoUseCase(osRepo, makeClienteRepo(), makeVeiculoRepo(), makeCatalogoRepo(), makePecaRepo(), uow, saga);
     await useCase.execute(validDto);
 
     expect(osRepo.save).toHaveBeenCalledTimes(1);
@@ -266,12 +273,26 @@ describe('CreateOrdemServicoUseCase', () => {
         id: CATALOGO_ID, descricao: 'Revisão', preco: 200, tempoEstimado: 1.5,
       })),
     });
-    const useCase = new CreateOrdemServicoUseCase(makeOsRepo(), makeClienteRepo(), makeVeiculoRepo(), catalogoRepo, makePecaRepo());
+    const useCase = new CreateOrdemServicoUseCase(makeOsRepo(), makeClienteRepo(), makeVeiculoRepo(), catalogoRepo, makePecaRepo(), uow, saga);
     const result = await useCase.execute({
       ...validDto,
       catalogoServicos: [{ catalogoServicoId: CATALOGO_ID }],
     });
 
     expect(result.servicos[0]!.tempoEstimadoMinutos).toBe(90);
+  });
+
+  it('inicia a Saga na mesma transação em que a OS é salva', async () => {
+    const ordem: string[] = [];
+    const osRepo = { save: jest.fn(async () => { ordem.push('save'); }) };
+    (saga.iniciar as jest.Mock).mockImplementationOnce(async () => { ordem.push('saga'); });
+    const result = await makeUseCase({ osRepo }).execute(validDto);
+    expect(ordem).toEqual(['save', 'saga']);
+    expect(saga.iniciar).toHaveBeenLastCalledWith(expect.objectContaining({ id: result.id }), expect.any(String), undefined);
+  });
+
+  it('falha ao iniciar a Saga propaga o erro (a transação desfaz a OS)', async () => {
+    (saga.iniciar as jest.Mock).mockRejectedValueOnce(new Error('outbox indisponível'));
+    await expect(makeUseCase().execute(validDto)).rejects.toThrow('outbox indisponível');
   });
 });

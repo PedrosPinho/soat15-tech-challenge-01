@@ -3,7 +3,8 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import type { Router } from 'express';
 import type { ErrorRequestHandler } from 'express';
-import { setPool } from '@infrastructure/database/postgres/pool';
+import { getPool, setPool } from '@infrastructure/database/postgres/pool';
+import { createEnvelope } from '@shared/messaging/envelope';
 import {
   startTestDatabase,
   stopTestDatabase,
@@ -12,7 +13,6 @@ import {
 
 jest.setTimeout(120000);
 
-process.env['WEBHOOK_SECRET'] = 'test-webhook-secret';
 process.env['JWT_SECRET'] = 'test-jwt-secret';
 const JWT_SECRET = process.env['JWT_SECRET'];
 
@@ -39,7 +39,50 @@ const { veiculoRouter } = require('@presentation/routes/veiculo.routes') as {
 const { ordemServicoRouter } = require('@presentation/routes/ordem-servico.routes') as {
   ordemServicoRouter: Router;
 };
+const { getSagaRuntime } = require('@main/factories/saga.factory') as {
+  getSagaRuntime: () => { orchestrator: { handleReply(e: unknown): Promise<void> } };
+};
 /* eslint-enable @typescript-eslint/no-require-imports */
+
+/** Entrega ao orquestrador real (Postgres) uma resposta de participante. */
+const responder = (osId: string, type: string, payload: Record<string, unknown> = {}) =>
+  getSagaRuntime().orchestrator.handleReply(
+    createEnvelope({
+      type,
+      sagaId: 'e2e',
+      correlationId: 'e2e',
+      payload: { ordemServicoId: osId, ...payload },
+    }),
+  );
+
+const tiposNoOutbox = async (): Promise<string[]> => {
+  const { rows } = await getPool().query<{ tipo_mensagem: string }>(
+    'SELECT tipo_mensagem FROM outbox ORDER BY criado_em, id',
+  );
+  return rows.map((r) => r.tipo_mensagem);
+};
+
+const statusDe = async (osId: string): Promise<string> =>
+  (await request(app).get(`/api/ordens-servico/${osId}`).set('Authorization', authHeader)).body
+    .status as string;
+
+const ATE: Record<string, [string, Record<string, unknown>][]> = {
+  EM_DIAGNOSTICO: [['DiagnosticoIniciado', { execucaoId: 'ex-1' }]],
+  AGUARDANDO_APROVACAO: [
+    ['DiagnosticoIniciado', { execucaoId: 'ex-1' }],
+    ['DiagnosticoConcluido', { execucaoId: 'ex-1', servicos: [] }],
+    ['OrcamentoGerado', { orcamentoId: 'orc-1', valorTotal: 0, validadeAte: 'x' }],
+  ],
+  EM_EXECUCAO: [
+    ['DiagnosticoIniciado', { execucaoId: 'ex-1' }],
+    ['DiagnosticoConcluido', { execucaoId: 'ex-1', servicos: [] }],
+    ['OrcamentoGerado', { orcamentoId: 'orc-1', valorTotal: 0, validadeAte: 'x' }],
+    ['OrcamentoAprovado', { orcamentoId: 'orc-1', aprovadoEm: 'x' }],
+    ['PagamentoSolicitado', { orcamentoId: 'orc-1', pagamentoId: 'pg-1', initPoint: 'u', expiraEm: 'x' }],
+    ['PagamentoConfirmado', { orcamentoId: 'orc-1', pagamentoId: 'pg-1', mpPaymentId: '1', valor: 0, confirmadoEm: 'x' }],
+  ],
+};
+const FINALIZAR: [string, Record<string, unknown>][] = [['ReparoConcluido', { execucaoId: 'ex-1' }]];
 
 const app: Application = express();
 app.use(express.json());
@@ -118,41 +161,32 @@ async function seedClienteEVeiculo(placa: string): Promise<{ cpfCnpj: string; pl
 }
 
 describe('Ciclo completo de status da OS (E2E)', () => {
-  it('percorre RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA → ENTREGUE via webhook de aprovação', async () => {
-    const { cpfCnpj, placa } = await seedClienteEVeiculo('ABC1D23');
-
+  const abrirOS = async (placa: string, km = 50000): Promise<string> => {
+    const { cpfCnpj } = await seedClienteEVeiculo(placa);
     const createRes = await request(app)
       .post('/api/ordens-servico')
       .set('Authorization', authHeader)
-      .send({ cpfCnpj, placa, quilometragemEntrada: 50000 });
+      .send({ cpfCnpj, placa, quilometragemEntrada: km });
     expect(createRes.status).toBe(201);
     expect(createRes.body.status).toBe('RECEBIDA');
-    const osId = createRes.body.id as string;
+    return createRes.body.id as string;
+  };
 
-    const iniciarRes = await request(app)
-      .patch(`/api/ordens-servico/${osId}/iniciar`)
-      .set('Authorization', authHeader);
-    expect(iniciarRes.status).toBe(200);
-    expect(iniciarRes.body.status).toBe('EM_DIAGNOSTICO');
+  it('criar a OS grava a saga e o comando SolicitarDiagnostico no outbox, atomicamente', async () => {
+    await abrirOS('ABC1D23');
+    expect(await tiposNoOutbox()).toEqual(['SolicitarDiagnostico']);
+    const saga = await getPool().query("SELECT status, passo_atual FROM saga_instancias");
+    expect(saga.rows).toEqual([{ status: 'EM_ANDAMENTO', passo_atual: 'DIAGNOSTICO' }]);
+  });
 
-    const aguardarRes = await request(app)
-      .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
-      .set('Authorization', authHeader);
-    expect(aguardarRes.status).toBe(200);
-    expect(aguardarRes.body.status).toBe('AGUARDANDO_APROVACAO');
+  it('percorre RECEBIDA → … → FINALIZADA pelas respostas dos participantes e ENTREGUE manualmente', async () => {
+    const osId = await abrirOS('ABC1D23');
 
-    const webhookRes = await request(app)
-      .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
-      .set('x-webhook-secret', 'test-webhook-secret')
-      .send({ aprovado: true });
-    expect(webhookRes.status).toBe(200);
-    expect(webhookRes.body.status).toBe('EM_EXECUCAO');
-
-    const concluirRes = await request(app)
-      .patch(`/api/ordens-servico/${osId}/concluir`)
-      .set('Authorization', authHeader);
-    expect(concluirRes.status).toBe(200);
-    expect(concluirRes.body.status).toBe('FINALIZADA');
+    for (const [type, payload] of [...ATE['EM_EXECUCAO'], ...FINALIZAR]) {
+      // eslint-disable-next-line no-await-in-loop
+      await responder(osId, type, payload);
+    }
+    expect(await statusDe(osId)).toBe('FINALIZADA');
 
     const entregarRes = await request(app)
       .patch(`/api/ordens-servico/${osId}/entregar`)
@@ -160,100 +194,100 @@ describe('Ciclo completo de status da OS (E2E)', () => {
     expect(entregarRes.status).toBe(200);
     expect(entregarRes.body.status).toBe('ENTREGUE');
 
-    const finalGet = await request(app)
-      .get(`/api/ordens-servico/${osId}`)
+    const historico = await request(app)
+      .get(`/api/ordens-servico/${osId}/historico`)
       .set('Authorization', authHeader);
-    expect(finalGet.body.status).toBe('ENTREGUE');
+    expect(historico.status).toBe(200);
+    expect((historico.body.status as { para: string }[]).map((h) => h.para)).toEqual([
+      'RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_PAGAMENTO',
+      'EM_EXECUCAO', 'FINALIZADA',
+    ]);
+    expect(historico.body.saga.status).toBe('CONCLUIDA');
   });
 
-  it('cancela a OS via webhook quando o cliente recusa o orçamento', async () => {
-    const { cpfCnpj, placa } = await seedClienteEVeiculo('XYZ9K88');
-
-    const createRes = await request(app)
-      .post('/api/ordens-servico')
-      .set('Authorization', authHeader)
-      .send({ cpfCnpj, placa, quilometragemEntrada: 30000 });
-    const osId = createRes.body.id as string;
-
-    await request(app)
-      .patch(`/api/ordens-servico/${osId}/iniciar`)
-      .set('Authorization', authHeader);
-    await request(app)
-      .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
-      .set('Authorization', authHeader);
-
-    const webhookRes = await request(app)
-      .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
-      .set('x-webhook-secret', 'test-webhook-secret')
-      .send({ aprovado: false, motivo: 'Valor acima do esperado' });
-
-    expect(webhookRes.status).toBe(200);
-    expect(webhookRes.body.status).toBe('CANCELADA');
-    expect(webhookRes.body.motivoCancelamento).toBe('Valor acima do esperado');
+  it('a mesma resposta entregue 2x executa o handler 1x (inbox)', async () => {
+    const osId = await abrirOS('ABC1D23');
+    const envelope = createEnvelope({
+      type: 'DiagnosticoIniciado',
+      sagaId: 'e2e',
+      correlationId: 'e2e',
+      payload: { ordemServicoId: osId, execucaoId: 'ex-1' },
+    });
+    const { orchestrator } = getSagaRuntime();
+    await orchestrator.handleReply(envelope);
+    await orchestrator.handleReply(envelope);
+    const { rows } = await getPool().query('SELECT count(*)::int AS n FROM mensagens_processadas');
+    expect(rows[0].n).toBe(1);
   });
 
-  it('rejeita o webhook sem o secret correto', async () => {
-    const { cpfCnpj, placa } = await seedClienteEVeiculo('DEF4G56');
-    const createRes = await request(app)
-      .post('/api/ordens-servico')
-      .set('Authorization', authHeader)
-      .send({ cpfCnpj, placa, quilometragemEntrada: 10000 });
-    const osId = createRes.body.id as string;
+  it('recusa do orçamento compensa e cancela a OS', async () => {
+    const osId = await abrirOS('ABC1D23');
+    for (const [type, payload] of ATE['AGUARDANDO_APROVACAO']) {
+      // eslint-disable-next-line no-await-in-loop
+      await responder(osId, type, payload);
+    }
+    await responder(osId, 'OrcamentoRecusado', { orcamentoId: 'orc-1', motivo: 'Valor acima do esperado' });
+    await responder(osId, 'ExecucaoCancelada', { execucaoId: 'ex-1' });
 
+    const res = await request(app).get(`/api/ordens-servico/${osId}`).set('Authorization', authHeader);
+    expect(res.body.status).toBe('CANCELADA');
+    expect(res.body.motivoCancelamento).toBe('Valor acima do esperado');
+  });
+
+  it('PATCH /:id/cancelar responde 202 e dispara a compensação (não só troca o status)', async () => {
+    const osId = await abrirOS('ABC1D23');
     const res = await request(app)
-      .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
-      .send({ aprovado: true });
+      .patch(`/api/ordens-servico/${osId}/cancelar`)
+      .set('Authorization', authHeader)
+      .send({ motivo: 'Cliente desistiu do serviço' });
+    expect(res.status).toBe(202);
+    expect(res.body.status).toBe('RECEBIDA');
+    expect(await tiposNoOutbox()).toContain('CancelarExecucao');
+    await responder(osId, 'ExecucaoCancelada', {});
+    expect(await statusDe(osId)).toBe('CANCELADA');
+  });
 
-    expect(res.status).toBe(401);
+  it('as rotas manuais de transição foram removidas da API pública', async () => {
+    const osId = await abrirOS('ABC1D23');
+    for (const rota of ['iniciar', 'aguardar-aprovacao', 'aprovar', 'concluir']) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(app)
+        .patch(`/api/ordens-servico/${osId}/${rota}`)
+        .set('Authorization', authHeader);
+      expect(res.status).toBe(404);
+    }
   });
 });
 
 describe('Listagem/ordenação de OS (E2E)', () => {
   it('ordena por status e esconde FINALIZADA/ENTREGUE por padrão', async () => {
-    const statuses: { placa: string; transitions: number }[] = [
-      { placa: 'AAA1111', transitions: 0 }, // RECEBIDA
-      { placa: 'BBB2222', transitions: 1 }, // EM_DIAGNOSTICO
-      { placa: 'CCC3333', transitions: 2 }, // AGUARDANDO_APROVACAO
-      { placa: 'DDD4444', transitions: 3 }, // EM_EXECUCAO
-      { placa: 'EEE5555', transitions: 4 }, // FINALIZADA
-      { placa: 'FFF6666', transitions: 5 }, // ENTREGUE
+    const alvos: { placa: string; ate?: string; finalizar?: boolean; entregar?: boolean }[] = [
+      { placa: 'AAA1111' }, // RECEBIDA
+      { placa: 'BBB2222', ate: 'EM_DIAGNOSTICO' },
+      { placa: 'CCC3333', ate: 'AGUARDANDO_APROVACAO' },
+      { placa: 'DDD4444', ate: 'EM_EXECUCAO' },
+      { placa: 'EEE5555', ate: 'EM_EXECUCAO', finalizar: true }, // FINALIZADA
+      { placa: 'FFF6666', ate: 'EM_EXECUCAO', finalizar: true, entregar: true }, // ENTREGUE
     ];
 
-    for (const { placa, transitions } of statuses) {
-      const { cpfCnpj } = await seedClienteEVeiculo(placa);
+    for (const alvo of alvos) {
+      const { cpfCnpj } = await seedClienteEVeiculo(alvo.placa);
       const createRes = await request(app)
         .post('/api/ordens-servico')
         .set('Authorization', authHeader)
-        .send({ cpfCnpj, placa, quilometragemEntrada: 1000 });
+        .send({ cpfCnpj, placa: alvo.placa, quilometragemEntrada: 1000 });
       const osId = createRes.body.id as string;
 
-      const steps = [
-        () =>
-          request(app)
-            .patch(`/api/ordens-servico/${osId}/iniciar`)
-            .set('Authorization', authHeader),
-        () =>
-          request(app)
-            .patch(`/api/ordens-servico/${osId}/aguardar-aprovacao`)
-            .set('Authorization', authHeader),
-        () =>
-          request(app)
-            .post(`/api/ordens-servico/${osId}/orcamento/webhook`)
-            .set('x-webhook-secret', 'test-webhook-secret')
-            .send({ aprovado: true }),
-        () =>
-          request(app)
-            .patch(`/api/ordens-servico/${osId}/concluir`)
-            .set('Authorization', authHeader),
-        () =>
-          request(app)
-            .patch(`/api/ordens-servico/${osId}/entregar`)
-            .set('Authorization', authHeader),
-      ];
-
-      for (let i = 0; i < transitions; i += 1) {
+      const respostas = [...(alvo.ate ? ATE[alvo.ate] : []), ...(alvo.finalizar ? FINALIZAR : [])];
+      for (const [type, payload] of respostas) {
         // eslint-disable-next-line no-await-in-loop
-        await steps[i]();
+        await responder(osId, type, payload);
+      }
+      if (alvo.entregar) {
+        // eslint-disable-next-line no-await-in-loop
+        await request(app)
+          .patch(`/api/ordens-servico/${osId}/entregar`)
+          .set('Authorization', authHeader);
       }
     }
 

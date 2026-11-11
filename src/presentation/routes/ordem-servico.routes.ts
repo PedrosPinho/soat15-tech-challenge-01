@@ -4,11 +4,9 @@ import {
   authMiddleware,
   requireInternalScope,
 } from '@presentation/middlewares/auth.middleware';
-import { webhookAuthMiddleware } from '@presentation/middlewares/webhook-auth.middleware';
 import {
   validateCreateOrdemServico,
   validateCancelarOS,
-  validateAprovacaoWebhook,
 } from '@presentation/validators/ordem-servico.validator';
 import { makeOrdemServicoController } from '@main/factories/ordem-servico.factory';
 import { OrdemServicoController } from '@presentation/controllers/ordem-servico.controller';
@@ -68,23 +66,8 @@ ordemServicoRouter.get('/:id', authMiddleware, requireInternalScope, (req, res, 
   getController().getById(req, res, next),
 );
 
-ordemServicoRouter.patch('/:id/iniciar', authMiddleware, requireInternalScope, (req, res, next) =>
-  getController().iniciar(req, res, next),
-);
-
-ordemServicoRouter.patch(
-  '/:id/aguardar-aprovacao',
-  authMiddleware,
-  requireInternalScope,
-  (req, res, next) => getController().aguardarAprovacao(req, res, next),
-);
-
-ordemServicoRouter.patch('/:id/aprovar', authMiddleware, requireInternalScope, (req, res, next) =>
-  getController().aprovar(req, res, next),
-);
-
-ordemServicoRouter.patch('/:id/concluir', authMiddleware, requireInternalScope, (req, res, next) =>
-  getController().concluir(req, res, next),
+ordemServicoRouter.get('/:id/historico', authMiddleware, requireInternalScope, (req, res, next) =>
+  getController().historico(req, res, next),
 );
 
 ordemServicoRouter.patch('/:id/entregar', authMiddleware, requireInternalScope, (req, res, next) =>
@@ -97,11 +80,4 @@ ordemServicoRouter.patch(
   requireInternalScope,
   validateCancelarOS,
   (req, res, next) => getController().cancelar(req, res, next),
-);
-
-ordemServicoRouter.post(
-  '/:id/orcamento/webhook',
-  webhookAuthMiddleware,
-  validateAprovacaoWebhook,
-  (req, res, next) => getController().processarAprovacaoOrcamento(req, res, next),
 );

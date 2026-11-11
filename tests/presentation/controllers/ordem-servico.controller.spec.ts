@@ -12,20 +12,15 @@ const next = jest.fn() as NextFunction;
 const mockCreate = { execute: jest.fn() };
 const mockGet = { execute: jest.fn() };
 const mockList = { execute: jest.fn() };
-const mockIniciar = { execute: jest.fn() };
-const mockAguardarAprovacao = { execute: jest.fn() };
-const mockAprovar = { execute: jest.fn() };
-const mockConcluir = { execute: jest.fn() };
 const mockEntregar = { execute: jest.fn() };
 const mockCancelar = { execute: jest.fn() };
 const mockGetByCpfCnpj = { execute: jest.fn() };
-const mockProcessarAprovacaoOrcamento = { execute: jest.fn() };
+const mockHistorico = { execute: jest.fn() };
 
 const ctrl = new OrdemServicoController(
   mockCreate as any, mockGet as any, mockList as any,
-  mockIniciar as any, mockAguardarAprovacao as any, mockAprovar as any,
-  mockConcluir as any, mockEntregar as any, mockCancelar as any,
-  mockGetByCpfCnpj as any, mockProcessarAprovacaoOrcamento as any,
+  mockEntregar as any, mockCancelar as any,
+  mockGetByCpfCnpj as any, mockHistorico as any,
 );
 
 beforeEach(() => jest.clearAllMocks());
@@ -95,70 +90,6 @@ describe('OrdemServicoController', () => {
     });
   });
 
-  describe('iniciar', () => {
-    it('returns OS with EM_DIAGNOSTICO status', async () => {
-      mockIniciar.execute.mockResolvedValue({ ...osDto, status: 'EM_DIAGNOSTICO' });
-      const res = makeRes();
-      await ctrl.iniciar({ params: { id: 'os1' } } as unknown as Request, res, next);
-      expect(mockIniciar.execute).toHaveBeenCalledWith('os1');
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'EM_DIAGNOSTICO' }));
-    });
-
-    it('calls next(err) on failure', async () => {
-      mockIniciar.execute.mockRejectedValue(new Error('fail'));
-      await ctrl.iniciar({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
-
-  describe('aguardarAprovacao', () => {
-    it('returns OS with AGUARDANDO_APROVACAO status', async () => {
-      mockAguardarAprovacao.execute.mockResolvedValue({ ...osDto, status: 'AGUARDANDO_APROVACAO' });
-      const res = makeRes();
-      await ctrl.aguardarAprovacao({ params: { id: 'os1' } } as unknown as Request, res, next);
-      expect(mockAguardarAprovacao.execute).toHaveBeenCalledWith('os1');
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'AGUARDANDO_APROVACAO' }));
-    });
-
-    it('calls next(err) on failure', async () => {
-      mockAguardarAprovacao.execute.mockRejectedValue(new Error('fail'));
-      await ctrl.aguardarAprovacao({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
-
-  describe('aprovar', () => {
-    it('returns OS with EM_EXECUCAO status', async () => {
-      mockAprovar.execute.mockResolvedValue({ ...osDto, status: 'EM_EXECUCAO' });
-      const res = makeRes();
-      await ctrl.aprovar({ params: { id: 'os1' } } as unknown as Request, res, next);
-      expect(mockAprovar.execute).toHaveBeenCalledWith('os1');
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'EM_EXECUCAO' }));
-    });
-
-    it('calls next(err) on failure', async () => {
-      mockAprovar.execute.mockRejectedValue(new Error('fail'));
-      await ctrl.aprovar({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
-
-  describe('concluir', () => {
-    it('returns OS with FINALIZADA status', async () => {
-      mockConcluir.execute.mockResolvedValue({ ...osDto, status: 'FINALIZADA' });
-      const res = makeRes();
-      await ctrl.concluir({ params: { id: 'os1' } } as unknown as Request, res, next);
-      expect(mockConcluir.execute).toHaveBeenCalledWith('os1');
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'FINALIZADA' }));
-    });
-
-    it('calls next(err) on failure', async () => {
-      mockConcluir.execute.mockRejectedValue(new Error('fail'));
-      await ctrl.concluir({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
-    });
-  });
-
   describe('entregar', () => {
     it('returns OS with ENTREGUE status', async () => {
       mockEntregar.execute.mockResolvedValue({ ...osDto, status: 'ENTREGUE' });
@@ -202,12 +133,13 @@ describe('OrdemServicoController', () => {
   });
 
   describe('cancelar', () => {
-    it('returns canceled OS', async () => {
-      mockCancelar.execute.mockResolvedValue({ ...osDto, status: 'CANCELADA' });
+    it('returns 202 (compensação assíncrona) with the current OS', async () => {
+      mockCancelar.execute.mockResolvedValue({ ...osDto, status: 'AGUARDANDO_APROVACAO' });
       const res = makeRes();
       await ctrl.cancelar({ params: { id: 'os1' }, body: { motivo: 'teste' } } as unknown as Request, res, next);
       expect(mockCancelar.execute).toHaveBeenCalledWith({ id: 'os1', motivo: 'teste' });
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'CANCELADA' }));
+      expect(res.status).toHaveBeenCalledWith(202);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'AGUARDANDO_APROVACAO' }));
     });
 
     it('calls next(err) on failure', async () => {
@@ -217,43 +149,19 @@ describe('OrdemServicoController', () => {
     });
   });
 
-  describe('processarAprovacaoOrcamento', () => {
-    it('returns updated OS when approved', async () => {
-      mockProcessarAprovacaoOrcamento.execute.mockResolvedValue({ ...osDto, status: 'EM_EXECUCAO' });
+  describe('historico', () => {
+    it('returns the status history and saga steps', async () => {
+      const historico = { ordemServicoId: 'os1', status: [], saga: { passos: [] } };
+      mockHistorico.execute.mockResolvedValue(historico);
       const res = makeRes();
-      await ctrl.processarAprovacaoOrcamento(
-        { params: { id: 'os1' }, body: { aprovado: true } } as unknown as Request, res, next,
-      );
-      expect(mockProcessarAprovacaoOrcamento.execute).toHaveBeenCalledWith('os1', {
-        aprovado: true,
-        motivo: undefined,
-      });
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'EM_EXECUCAO' }));
-    });
-
-    it('returns updated OS when rejected with motivo', async () => {
-      mockProcessarAprovacaoOrcamento.execute.mockResolvedValue({ ...osDto, status: 'CANCELADA' });
-      const res = makeRes();
-      await ctrl.processarAprovacaoOrcamento(
-        {
-          params: { id: 'os1' },
-          body: { aprovado: false, motivo: 'Cliente recusou' },
-        } as unknown as Request,
-        res,
-        next,
-      );
-      expect(mockProcessarAprovacaoOrcamento.execute).toHaveBeenCalledWith('os1', {
-        aprovado: false,
-        motivo: 'Cliente recusou',
-      });
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 'CANCELADA' }));
+      await ctrl.historico({ params: { id: 'os1' } } as unknown as Request, res, next);
+      expect(mockHistorico.execute).toHaveBeenCalledWith('os1');
+      expect(res.json).toHaveBeenCalledWith(historico);
     });
 
     it('calls next(err) on failure', async () => {
-      mockProcessarAprovacaoOrcamento.execute.mockRejectedValue(new Error('fail'));
-      await ctrl.processarAprovacaoOrcamento(
-        { params: { id: 'x' }, body: { aprovado: true } } as unknown as Request, makeRes(), next,
-      );
+      mockHistorico.execute.mockRejectedValue(new Error('fail'));
+      await ctrl.historico({ params: { id: 'x' } } as unknown as Request, makeRes(), next);
       expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
