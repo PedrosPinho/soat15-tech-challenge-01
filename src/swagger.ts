@@ -3,7 +3,7 @@ export const swaggerSpec = {
   info: {
     title: 'Auto Repair Shop API',
     description:
-      'Sistema de gestão para oficinas mecânicas — clientes, veículos, ordens de serviço, estoque de peças e pagamentos.',
+      'Sistema de gestão para oficinas mecânicas — clientes, veículos, ordens de serviço, estoque de peças. Pagamentos pertencem ao Billing Service; o ciclo da OS é orquestrado por uma Saga (ver README).',
     version: '1.0.0',
     contact: {
       name: 'Tech Challenge SOAT FIAP',
@@ -22,7 +22,6 @@ export const swaggerSpec = {
     { name: 'Peças', description: 'Catálogo de peças e estoque' },
     { name: 'Serviços', description: 'Catálogo de serviços' },
     { name: 'Ordens de Serviço', description: 'Ciclo de vida das ordens de serviço' },
-    { name: 'Pagamentos', description: 'Registro e consulta de pagamentos' },
     { name: 'Relatórios', description: 'Dashboard e métricas' },
     { name: 'Health', description: 'Saúde da aplicação' },
   ],
@@ -34,12 +33,6 @@ export const swaggerSpec = {
         bearerFormat: 'JWT',
         description:
           'Aceita dois tipos de token (RFC-003): `scope: interno` (emitido por `POST /api/auth/login`, e-mail/senha — acessa as rotas de gestão) e `scope: cliente` (emitido pela Lambda de CPF em `soat15-tech-challenge-auth-lambda` — só acessa `GET /api/ordens-servico/buscar` com o próprio CPF/CNPJ). Rotas de gestão exigem `scope: interno`; um token `cliente` válido recebe 403, não 401.',
-      },
-      webhookSecret: {
-        type: 'apiKey',
-        in: 'header',
-        name: 'x-webhook-secret',
-        description: 'Segredo compartilhado configurado via env var WEBHOOK_SECRET.',
       },
     },
     schemas: {
@@ -204,7 +197,7 @@ export const swaggerSpec = {
           clienteId: { type: 'string', format: 'uuid' },
           veiculoId: { type: 'string', format: 'uuid' },
           quilometragemEntrada: { type: 'number', example: 52000 },
-          status: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] },
+          status: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_PAGAMENTO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] },
           dataAbertura: { type: 'string', format: 'date-time' },
           dataInicio: { type: 'string', format: 'date-time' },
           dataConclusao: { type: 'string', format: 'date-time' },
@@ -247,34 +240,6 @@ export const swaggerSpec = {
               },
             },
           },
-        },
-      },
-      Pagamento: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          ordemServicoId: { type: 'string', format: 'uuid' },
-          valor: { type: 'number', example: 335.8 },
-          formaPagamento: {
-            type: 'string',
-            enum: ['DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'TRANSFERENCIA'],
-          },
-          status: { type: 'string', enum: ['PENDENTE', 'CONFIRMADO', 'CANCELADO'] },
-          dataPagamento: { type: 'string', format: 'date-time' },
-          observacoes: { type: 'string' },
-        },
-      },
-      CreatePagamento: {
-        type: 'object',
-        required: ['ordemServicoId', 'valor', 'formaPagamento'],
-        properties: {
-          ordemServicoId: { type: 'string', format: 'uuid' },
-          valor: { type: 'number', example: 335.8 },
-          formaPagamento: {
-            type: 'string',
-            enum: ['DINHEIRO', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'PIX', 'TRANSFERENCIA'],
-          },
-          observacoes: { type: 'string' },
         },
       },
       Dashboard: {
@@ -776,7 +741,7 @@ export const swaggerSpec = {
         parameters: [
           { $ref: '#/components/parameters/pageParam' },
           { $ref: '#/components/parameters/limitParam' },
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['RECEBIDA', 'EM_DIAGNOSTICO', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_PAGAMENTO', 'EM_EXECUCAO', 'FINALIZADA', 'ENTREGUE', 'CANCELADA'] } },
           { name: 'clienteId', in: 'query', schema: { type: 'string', format: 'uuid' } },
           { name: 'veiculoId', in: 'query', schema: { type: 'string', format: 'uuid' } },
         ],
@@ -801,53 +766,65 @@ export const swaggerSpec = {
         },
       },
     },
-    '/api/ordens-servico/{id}/iniciar': {
-      patch: {
+    '/api/ordens-servico/{id}/historico': {
+      get: {
         tags: ['Ordens de Serviço'],
-        summary: 'Iniciar diagnóstico (RECEBIDA → EM_DIAGNOSTICO)',
+        summary: 'Histórico de status e passos da Saga',
+        description:
+          'Linha do tempo de status da OS e o log dos passos da Saga (diagnóstico, orçamento, pagamento, execução e compensações). Enquanto a OS aguarda pagamento, `saga.linkPagamento` traz o link do Checkout Pro.',
         parameters: [{ $ref: '#/components/parameters/idParam' }],
         responses: {
-          200: { description: 'OS em diagnóstico', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-    },
-    '/api/ordens-servico/{id}/aguardar-aprovacao': {
-      patch: {
-        tags: ['Ordens de Serviço'],
-        summary: 'Aguardar aprovação (EM_DIAGNOSTICO → AGUARDANDO_APROVACAO)',
-        parameters: [{ $ref: '#/components/parameters/idParam' }],
-        responses: {
-          200: { description: 'OS aguardando aprovação', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-    },
-    '/api/ordens-servico/{id}/aprovar': {
-      patch: {
-        tags: ['Ordens de Serviço'],
-        summary: 'Aprovar OS (AGUARDANDO_APROVACAO → EM_EXECUCAO)',
-        parameters: [{ $ref: '#/components/parameters/idParam' }],
-        responses: {
-          200: { description: 'OS aprovada e em execução', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-    },
-    '/api/ordens-servico/{id}/concluir': {
-      patch: {
-        tags: ['Ordens de Serviço'],
-        summary: 'Finalizar OS (EM_EXECUCAO → FINALIZADA)',
-        parameters: [{ $ref: '#/components/parameters/idParam' }],
-        responses: {
-          200: { description: 'OS finalizada', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
+          200: {
+            description: 'Histórico',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ordemServicoId: { type: 'string', format: 'uuid' },
+                    numeroOS: { type: 'string' },
+                    statusAtual: { type: 'string' },
+                    status: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          de: { type: 'string', nullable: true },
+                          para: { type: 'string' },
+                          motivo: { type: 'string', nullable: true },
+                          em: { type: 'string', format: 'date-time' },
+                        },
+                      },
+                    },
+                    saga: {
+                      type: 'object',
+                      nullable: true,
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        status: { type: 'string', enum: ['EM_ANDAMENTO', 'COMPENSANDO', 'CONCLUIDA', 'COMPENSADA', 'FALHA_COMPENSACAO'] },
+                        passoAtual: { type: 'string' },
+                        linkPagamento: { type: 'string', nullable: true },
+                        expiraEm: { type: 'string', format: 'date-time', nullable: true },
+                        passos: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              passo: { type: 'string' },
+                              acao: { type: 'string' },
+                              resultado: { type: 'string', enum: ['OK', 'FALHA', 'IGNORADO'] },
+                              detalhe: { type: 'string', nullable: true },
+                              em: { type: 'string', format: 'date-time' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/NotFound' },
         },
@@ -884,88 +861,8 @@ export const swaggerSpec = {
           },
         },
         responses: {
-          200: { description: 'OS cancelada', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
+          202: { description: 'Cancelamento aceito: a Saga executa as compensações (estorno, cancelamento do orçamento e da execução, liberação do estoque) e a OS vira CANCELADA ao final. Acompanhe em `GET /{id}/historico`.', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
           400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-    },
-    '/api/ordens-servico/{id}/orcamento/webhook': {
-      post: {
-        tags: ['Ordens de Serviço'],
-        summary: 'Webhook de aprovação/recusa de orçamento pelo cliente',
-        description:
-          'Endpoint para notificação externa (não usa JWT de usuário). Autenticado via header x-webhook-secret, comparado contra a env var WEBHOOK_SECRET. Aprova (AGUARDANDO_APROVACAO → EM_EXECUCAO) ou cancela a OS, dependendo de `aprovado`.',
-        security: [{ webhookSecret: [] }],
-        parameters: [{ $ref: '#/components/parameters/idParam' }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['aprovado'],
-                properties: {
-                  aprovado: { type: 'boolean', example: true },
-                  motivo: {
-                    type: 'string',
-                    example: 'Valor acima do esperado',
-                    description: 'Usado como motivo de cancelamento quando aprovado=false (opcional; tem um padrão)',
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'OS aprovada (EM_EXECUCAO) ou cancelada (CANCELADA)', content: { 'application/json': { schema: { $ref: '#/components/schemas/OrdemServico' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
-          401: { description: 'Header x-webhook-secret ausente ou inválido', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-    },
-    '/api/pagamentos': {
-      post: {
-        tags: ['Pagamentos'],
-        summary: 'Registrar pagamento',
-        requestBody: {
-          required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreatePagamento' } } },
-        },
-        responses: {
-          201: { description: 'Pagamento registrado', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pagamento' } } } },
-          400: { $ref: '#/components/responses/BadRequest' },
-          401: { $ref: '#/components/responses/Unauthorized' },
-          404: { $ref: '#/components/responses/NotFound' },
-        },
-      },
-      get: {
-        tags: ['Pagamentos'],
-        summary: 'Listar pagamentos',
-        parameters: [
-          { $ref: '#/components/parameters/pageParam' },
-          { $ref: '#/components/parameters/limitParam' },
-          { name: 'ordemServicoId', in: 'query', schema: { type: 'string', format: 'uuid' } },
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDENTE', 'CONFIRMADO', 'CANCELADO'] } },
-        ],
-        responses: {
-          200: {
-            description: 'Lista paginada',
-            content: { 'application/json': { schema: { type: 'object', properties: { pagamentos: { type: 'array', items: { $ref: '#/components/schemas/Pagamento' } }, total: { type: 'integer' }, page: { type: 'integer' }, limit: { type: 'integer' } } } } },
-          },
-          401: { $ref: '#/components/responses/Unauthorized' },
-        },
-      },
-    },
-    '/api/pagamentos/{id}': {
-      get: {
-        tags: ['Pagamentos'],
-        summary: 'Buscar pagamento por ID',
-        parameters: [{ $ref: '#/components/parameters/idParam' }],
-        responses: {
-          200: { description: 'Pagamento', content: { 'application/json': { schema: { $ref: '#/components/schemas/Pagamento' } } } },
           401: { $ref: '#/components/responses/Unauthorized' },
           404: { $ref: '#/components/responses/NotFound' },
         },

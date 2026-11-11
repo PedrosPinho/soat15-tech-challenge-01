@@ -43,9 +43,12 @@ kubectl apply -f k8s/namespace.yaml
 kubectl create secret generic oficina-api-secret -n oficina \
   --from-literal=DATABASE_URL="postgres://oficina:senha123@host.docker.internal:5432/oficina" \
   --from-literal=JWT_SECRET=change-this-in-production \
-  --from-literal=WEBHOOK_SECRET=change-this-in-production
+  --from-literal=INTERNAL_API_TOKEN=change-this-in-production
 
 kubectl apply -f k8s/configmap.yaml
+# Fase 4: o Deployment lê as URLs de fila/tópico deste ConfigMap (no EKS o CI o cria a partir
+# das saídas do Terraform). Em kind sem AWS/LocalStack, desligue a Saga:
+kubectl create configmap oficina-api-messaging -n oficina --from-literal=MESSAGING_ENABLED=false
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/hpa.yaml
@@ -64,7 +67,7 @@ curl http://localhost:3001/health
 
 **Nunca commite valores reais de secret neste repositório.** `secret.example.yaml` é só
 um template (valores `CHANGE_ME`) para documentar as chaves esperadas — `DATABASE_URL`,
-`JWT_SECRET`, `WEBHOOK_SECRET`. No EKS real, o CI/CD monta o Secret a partir do SSM
+`JWT_SECRET`, `INTERNAL_API_TOKEN`. No EKS real, o CI/CD monta o Secret a partir do SSM
 Parameter Store a cada deploy (nunca em arquivo). Localmente, use o comando imperativo
 acima ou copie o template para `k8s/secret.yaml` (já no `.gitignore`) e preencha valores
 reais.

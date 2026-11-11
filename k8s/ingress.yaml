@@ -1,0 +1,37 @@
+# Ingress do OS Service no ALB interno compartilhado (ADR-013). Todos os serviços
+# (OS, Billing, Execution) declaram um Ingress com o MESMO `group.name`: o AWS Load
+# Balancer Controller funde os grupos em UM ALB interno, que é o alvo único do VPC
+# Link do API Gateway. Cada serviço publica só os próprios paths.
+#
+# `oficina-ENV` é substituído pelo CI (`oficina-homolog` / `oficina-prod`).
+# O ALB é interno (scheme=internal): `/internal/*` só é alcançável de dentro da VPC
+# (ex.: Lambda de auth) e NÃO é exposto pelo API Gateway.
+#
+# Em kind (uso local) não há ALB Controller — use `kubectl port-forward` (ver README.md).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oficina-api
+  namespace: oficina
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: oficina-ENV
+    alb.ingress.kubernetes.io/group.order: "10"
+    alb.ingress.kubernetes.io/healthcheck-path: /health/live
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - { path: /api/ordens-servico, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/clientes, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/veiculos, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/pecas, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/servicos, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/relatorios, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/auth, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /api/docs, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /health, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }
+          - { path: /internal, pathType: Prefix, backend: { service: { name: oficina-api, port: { name: http } } } }

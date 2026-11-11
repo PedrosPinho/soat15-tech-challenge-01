@@ -30,6 +30,9 @@ spec:
           envFrom:
             - configMapRef:
                 name: oficina-api-config
+            # URLs de fila/tópico, criado pelo CI a partir das saídas do Terraform
+            - configMapRef:
+                name: oficina-api-messaging
             - secretRef:
                 name: oficina-api-secret
           resources:
