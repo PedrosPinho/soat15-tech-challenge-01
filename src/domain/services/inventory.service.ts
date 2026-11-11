@@ -6,24 +6,15 @@ export class InventoryService {
   constructor(private readonly repo: IItemEstoqueRepository) {}
 
   async reservarEstoque(pecaId: string, quantidade: number): Promise<ItemEstoque> {
-    const item = await this.findOrThrow(pecaId);
-    const updated = item.reservar(quantidade);
-    await this.repo.update(updated);
-    return updated;
+    return this.repo.reservar(pecaId, quantidade);
   }
 
   async utilizarEstoque(pecaId: string, quantidade: number): Promise<ItemEstoque> {
-    const item = await this.findOrThrow(pecaId);
-    const updated = item.utilizar(quantidade);
-    await this.repo.update(updated);
-    return updated;
+    return this.repo.utilizar(pecaId, quantidade);
   }
 
   async liberarReserva(pecaId: string, quantidade: number): Promise<ItemEstoque> {
-    const item = await this.findOrThrow(pecaId);
-    const updated = item.liberarReserva(quantidade);
-    await this.repo.update(updated);
-    return updated;
+    return this.repo.liberarReserva(pecaId, quantidade);
   }
 
   async adicionarEstoque(

@@ -41,7 +41,7 @@ export class InMemoryMessageBus implements IMessageBus {
     this.pending.delete(queue);
     for (const message of backlog) await handler(message);
     return {
-      stop: async () => {
+      stop: async (): Promise<void> => {
         this.handlers.set(
           queue,
           (this.handlers.get(queue) ?? []).filter((h) => h !== handler),

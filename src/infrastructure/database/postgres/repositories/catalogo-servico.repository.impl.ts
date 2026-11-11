@@ -5,11 +5,11 @@ import {
   ListCatalogoServicoFilter,
   ListCatalogoServicoResult,
 } from '@domain/repositories/catalogo-servico.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { CatalogoServicoRow, toDomainCatalogoServico } from '../mappers/catalogo-servico.mapper';
 
 export class PostgresCatalogoServicoRepository implements ICatalogoServicoRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(servico: CatalogoServico): Promise<void> {
     await this.pool.query(

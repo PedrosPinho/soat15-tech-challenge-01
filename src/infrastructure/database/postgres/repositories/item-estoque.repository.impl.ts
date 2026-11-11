@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { ItemEstoque } from '@domain/entities/item-estoque.entity';
 import { IItemEstoqueRepository } from '@domain/repositories/item-estoque.repository';
 import { NotFoundError, ValidationError } from '@shared/errors/domain.error';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { ItemEstoqueRow, toDomainItemEstoque } from '../mappers/item-estoque.mapper';
 
 /**
@@ -27,7 +27,7 @@ import { ItemEstoqueRow, toDomainItemEstoque } from '../mappers/item-estoque.map
  * desta tarefa, que não altera `src/main/factories/` nem `InventoryService`).
  */
 export class PostgresItemEstoqueRepository implements IItemEstoqueRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(item: ItemEstoque): Promise<void> {
     await this.pool.query(
@@ -124,6 +124,25 @@ export class PostgresItemEstoqueRepository implements IItemEstoqueRepository {
     if (rows[0]) return toDomainItemEstoque(rows[0]);
     await this.assertExists(pecaId);
     throw new ValidationError('Quantidade a utilizar excede o reservado');
+  }
+
+  /** Devolve `quantidade` unidades reservadas ao saldo disponível (compensação). */
+  async liberarReserva(pecaId: string, quantidade: number): Promise<ItemEstoque> {
+    if (quantidade <= 0) throw new ValidationError('Quantidade deve ser maior que zero');
+
+    const { rows } = await this.pool.query<ItemEstoqueRow>(
+      `UPDATE itens_estoque
+       SET quantidade_reservada = quantidade_reservada - $1,
+           quantidade_disponivel = quantidade_disponivel + $1,
+           atualizado_em = now()
+       WHERE peca_id = $2 AND quantidade_reservada >= $1
+       RETURNING *`,
+      [quantidade, pecaId],
+    );
+
+    if (rows[0]) return toDomainItemEstoque(rows[0]);
+    await this.assertExists(pecaId);
+    throw new ValidationError('Quantidade a liberar excede o reservado');
   }
 
   private async assertExists(pecaId: string): Promise<void> {

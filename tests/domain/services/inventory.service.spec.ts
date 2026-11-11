@@ -22,78 +22,37 @@ function makeRepo(item: ItemEstoque | null = makeItem()): IItemEstoqueRepository
     findByPecaId: jest.fn().mockResolvedValue(item),
     update: jest.fn(),
     list: jest.fn().mockResolvedValue([]),
+    reservar: jest.fn(),
+    utilizar: jest.fn(),
+    liberarReserva: jest.fn(),
   };
 }
 
 describe('InventoryService', () => {
-  describe('reservarEstoque', () => {
-    it('reserves stock and persists the updated item', async () => {
-      const item = makeItem({ quantidadeDisponivel: 20 });
-      const repo = makeRepo(item);
+  // reservar/utilizar/liberar delegam às operações atômicas do repositório
+  // (uma instrução condicional no banco) — sem read-modify-write em memória.
+  describe.each([
+    ['reservarEstoque', 'reservar'],
+    ['utilizarEstoque', 'utilizar'],
+    ['liberarReserva', 'liberarReserva'],
+  ] as const)('%s', (metodo, operacao) => {
+    it(`delega a ${operacao} atômica do repositório`, async () => {
+      const repo = makeRepo();
+      const esperado = makeItem();
+      (repo[operacao] as jest.Mock).mockResolvedValue(esperado);
       const service = new InventoryService(repo);
 
-      const result = await service.reservarEstoque('peca-1', 5);
+      const result = await service[metodo]('peca-1', 5);
 
-      expect(result.quantidadeDisponivel).toBe(15);
-      expect(result.quantidadeReservada).toBe(5);
-      expect(repo.update).toHaveBeenCalledWith(result);
+      expect(result).toBe(esperado);
+      expect(repo[operacao]).toHaveBeenCalledWith('peca-1', 5);
+      expect(repo.update).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundError when item not found', async () => {
-      const repo = makeRepo(null);
-      const service = new InventoryService(repo);
-
-      await expect(service.reservarEstoque('ghost', 1)).rejects.toThrow(NotFoundError);
-    });
-
-    it('propagates insufficient stock error from entity', async () => {
-      const item = makeItem({ quantidadeDisponivel: 3 });
-      const repo = makeRepo(item);
-      const service = new InventoryService(repo);
-
-      await expect(service.reservarEstoque('peca-1', 5)).rejects.toThrow('Estoque insuficiente');
-    });
-  });
-
-  describe('utilizarEstoque', () => {
-    it('utilizes reserved stock and persists', async () => {
-      const item = makeItem({ quantidadeDisponivel: 10, quantidadeReservada: 5 });
-      const repo = makeRepo(item);
-      const service = new InventoryService(repo);
-
-      const result = await service.utilizarEstoque('peca-1', 3);
-
-      expect(result.quantidadeReservada).toBe(2);
-      expect(result.quantidadeDisponivel).toBe(10);
-      expect(repo.update).toHaveBeenCalledWith(result);
-    });
-
-    it('throws NotFoundError when item not found', async () => {
-      const repo = makeRepo(null);
-      const service = new InventoryService(repo);
-
-      await expect(service.utilizarEstoque('ghost', 1)).rejects.toThrow(NotFoundError);
-    });
-  });
-
-  describe('liberarReserva', () => {
-    it('moves reserved qty back to available and persists', async () => {
-      const item = makeItem({ quantidadeDisponivel: 5, quantidadeReservada: 4 });
-      const repo = makeRepo(item);
-      const service = new InventoryService(repo);
-
-      const result = await service.liberarReserva('peca-1', 2);
-
-      expect(result.quantidadeDisponivel).toBe(7);
-      expect(result.quantidadeReservada).toBe(2);
-      expect(repo.update).toHaveBeenCalledWith(result);
-    });
-
-    it('throws NotFoundError when item not found', async () => {
-      const repo = makeRepo(null);
-      const service = new InventoryService(repo);
-
-      await expect(service.liberarReserva('ghost', 1)).rejects.toThrow(NotFoundError);
+    it('propaga NotFound/saldo insuficiente do repositório', async () => {
+      const repo = makeRepo();
+      (repo[operacao] as jest.Mock).mockRejectedValue(new NotFoundError('sem item'));
+      await expect(new InventoryService(repo)[metodo]('ghost', 1)).rejects.toThrow(NotFoundError);
     });
   });
 

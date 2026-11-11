@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 import { Veiculo } from '@domain/entities/veiculo.entity';
 import { IVeiculoRepository, ListVeiculosResult } from '@domain/repositories/veiculo.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { VeiculoRow, toDomainVeiculo } from '../mappers/veiculo.mapper';
 
 export class PostgresVeiculoRepository implements IVeiculoRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(veiculo: Veiculo): Promise<void> {
     await this.pool.query(

@@ -6,6 +6,7 @@ export type StatusOS =
   | 'RECEBIDA'
   | 'EM_DIAGNOSTICO'
   | 'AGUARDANDO_APROVACAO'
+  | 'AGUARDANDO_PAGAMENTO'
   | 'EM_EXECUCAO'
   | 'FINALIZADA'
   | 'ENTREGUE'
@@ -82,11 +83,23 @@ export class OrdemServico {
     return this.copy({ servicos: [...this.servicos, servico] });
   }
 
-  iniciar(): OrdemServico {
+  /**
+   * As transições abaixo são chamadas pelo orquestrador da Saga (ver
+   * `src/application/saga/`); não há mais endpoints manuais para elas.
+   */
+  iniciarDiagnostico(): OrdemServico {
     if (this.status !== 'RECEBIDA') {
       throw new ValidationError('OS deve estar RECEBIDA para iniciar o diagnóstico');
     }
     return this.copy({ status: 'EM_DIAGNOSTICO', dataInicio: new Date() });
+  }
+
+  /** Substitui os serviços pelo resultado (precificado) do diagnóstico. */
+  registrarDiagnostico(servicos: Servico[]): OrdemServico {
+    if (this.status !== 'EM_DIAGNOSTICO') {
+      throw new ValidationError('OS deve estar EM_DIAGNOSTICO para registrar o diagnóstico');
+    }
+    return this.copy({ servicos });
   }
 
   aguardarAprovacao(): OrdemServico {
@@ -96,11 +109,26 @@ export class OrdemServico {
     return this.copy({ status: 'AGUARDANDO_APROVACAO' });
   }
 
-  aprovar(): OrdemServico {
+  aguardarPagamento(): OrdemServico {
     if (this.status !== 'AGUARDANDO_APROVACAO') {
-      throw new ValidationError('OS deve estar AGUARDANDO_APROVACAO para ser aprovada');
+      throw new ValidationError('OS deve estar AGUARDANDO_APROVACAO para aguardar pagamento');
     }
-    return this.copy({ status: 'EM_EXECUCAO' });
+    return this.copy({ status: 'AGUARDANDO_PAGAMENTO' });
+  }
+
+  confirmarPagamento(): OrdemServico {
+    if (this.status !== 'AGUARDANDO_PAGAMENTO') {
+      throw new ValidationError('OS deve estar AGUARDANDO_PAGAMENTO para confirmar o pagamento');
+    }
+    return this.copy({ status: 'EM_EXECUCAO', temPagamento: true });
+  }
+
+  /** Compensação: desfaz o pagamento, destravando o `cancelar()`. */
+  estornarPagamento(): OrdemServico {
+    if (!this.temPagamento) {
+      throw new ValidationError('OS não possui pagamento a estornar');
+    }
+    return this.copy({ temPagamento: false });
   }
 
   concluir(): OrdemServico {
@@ -124,13 +152,6 @@ export class OrdemServico {
     if (this.status === 'CANCELADA') throw new ValidationError('OS já está cancelada');
     if (this.temPagamento) throw new ValidationError('OS com pagamento não pode ser cancelada');
     return this.copy({ status: 'CANCELADA', motivoCancelamento: motivo });
-  }
-
-  registrarPagamento(): OrdemServico {
-    if (this.status !== 'EM_EXECUCAO' && this.status !== 'FINALIZADA') {
-      throw new ValidationError('Pagamento só pode ser registrado em OS em execução ou finalizada');
-    }
-    return this.copy({ temPagamento: true });
   }
 
   private copy(

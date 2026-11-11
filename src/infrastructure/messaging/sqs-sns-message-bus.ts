@@ -24,7 +24,9 @@ export interface SqsSnsMessageBusConfig {
   pollErrorBackoffMs?: number;
 }
 
-const attributesOf = (message: Envelope) => ({
+const attributesOf = (
+  message: Envelope,
+): Record<string, { DataType: string; StringValue: string }> => ({
   type: { DataType: 'String', StringValue: message.type },
   sagaId: { DataType: 'String', StringValue: message.sagaId },
   correlationId: { DataType: 'String', StringValue: message.correlationId },
@@ -73,7 +75,7 @@ export class SqsSnsMessageBus implements IMessageBus {
   async subscribe(queue: string, handler: MessageHandler): Promise<Subscription> {
     const queueUrl = this.queueUrl(queue);
     let running = true;
-    const loop = (async () => {
+    const loop = (async (): Promise<void> => {
       while (running) {
         try {
           const { Messages } = await this.config.sqs.send(
@@ -96,7 +98,7 @@ export class SqsSnsMessageBus implements IMessageBus {
       }
     })();
     return {
-      stop: async () => {
+      stop: async (): Promise<void> => {
         running = false;
         await loop;
       },
