@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída** (2026-11-11) — contratos, RFC-005, ADR-008..015, esqueletos de Billing e Execution e `lint` corrigido. Etapa 0 (itens **[👤]**) a cargo do usuário; próxima etapa de código: Etapa 2 (OS Service).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapa 2 (OS Service) implementada** (2026-11-11) — itens que dependem de Docker/AWS ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; próxima: Etapa 3 (Execution Service).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -50,40 +50,56 @@ e "executado contra a AWS" são registrados separadamente.
 ## Etapa 2 — OS Service (refactor)
 
 ### 2a. Fundamentos de mensageria
-- [ ] **T2.1** Port `IMessageBus` (`send(queue, msg)`, `publish(topic, msg)`, `subscribe(queue, handler)`) em `src/domain/services/` + envelope tipado em `src/shared/messaging/`.
+- [x] **T2.1** Port `IMessageBus` (`send(queue, msg)`, `publish(topic, msg)`, `subscribe(queue, handler)`) em `src/domain/services/` + envelope tipado em `src/shared/messaging/`.
+  ✅ `IMessageBus` em `src/domain/services/message-bus.ts`; envelope/parse/validação em `src/shared/messaging/envelope.ts`; catálogo tipado em `messages.ts`.
 - [ ] **T2.2** `InMemoryMessageBus` (testes/BDD) e `SqsSnsMessageBus` (`@aws-sdk/client-sqs`, `@aws-sdk/client-sns`, long polling, `ChangeMessageVisibility` em erro, delete só após commit).
   ✔ Teste de integração com LocalStack: send → consume → delete; erro → mensagem volta para a fila.
+  ✅ `InMemoryMessageBus` e `SqsSnsMessageBus` (long polling, delete só após o handler, `ChangeMessageVisibility` com backoff, envelope inválido → visibilidade 0/DLQ) com testes unitários (clientes AWS simulados). 🔶 **Falta** o teste de integração com LocalStack (✔ do critério) — sem Docker no ambiente; `docker-compose.yml` já sobe o LocalStack e `scripts/localstack-init.sh` cria a topologia.
 - [ ] **T2.3** Migrations `outbox` e `mensagens_processadas`; `OutboxRepository` + relay (`FOR UPDATE SKIP LOCKED`, batch, backoff) iniciado no bootstrap.
   ✔ Teste: rollback da transação de negócio ⇒ nada publicado; 2 relays concorrentes não publicam a mesma linha duas vezes.
-- [ ] **T2.4** Consumidor de `os-saga-replies` com inbox (dedupe por `messageId` na mesma transação do handler).
+  ✅ Migration `outbox`/`mensagens_processadas`, `PostgresOutboxRepository` (`FOR UPDATE SKIP LOCKED`), `OutboxRelay` (backoff exponencial, `PeriodicTask`) iniciado em `src/index.ts`; `PostgresUnitOfWork` (transação por `AsyncLocalStorage`) testado com pool simulado. 🔶 Os testes contra PostgreSQL real (rollback ⇒ nada publicado; 2 relays sem duplicar) estão escritos em `tests/infrastructure/database/postgres/messaging.spec.ts`, **mas não foram executados** (sem Docker).
+- [x] **T2.4** Consumidor de `os-saga-replies` com inbox (dedupe por `messageId` na mesma transação do handler).
   ✔ Teste: a mesma mensagem entregue 2x executa o handler 1x.
-
+  ✅ `SagaOrchestrator.handleReply` registra o `messageId` no inbox na mesma transação; mesma mensagem 2x ⇒ handler 1x e rollback desfaz o inbox (testado com UoW com rollback real em memória). Consumidor: `startSagaReplyConsumer`.
 ### 2b. Domínio e dados
-- [ ] **T2.5** Remover `Pagamento` do OS: entidade, repo, use cases, rotas `/api/pagamentos`, Swagger, Postman, testes; migration de drop da tabela `pagamentos`.
-- [ ] **T2.6** `OrdemServico`: status `AGUARDANDO_PAGAMENTO`, `aguardarPagamento()`, `estornarPagamento()`, `confirmarPagamento()` (substitui `registrarPagamento()`), transições ajustadas ao fluxo da Saga; migration do enum `status_os`.
+- [x] **T2.5** Remover `Pagamento` do OS: entidade, repo, use cases, rotas `/api/pagamentos`, Swagger, Postman, testes; migration de drop da tabela `pagamentos`.
+  ✅ Removidos entidade/repo/use cases/rotas/validators/mapper/testes de `Pagamento`, o webhook de orçamento e o `webhook-auth`; Swagger e Postman atualizados; migration `drop-pagamentos`. (Migration não executada contra Postgres real — sem Docker.)
+- [x] **T2.6** `OrdemServico`: status `AGUARDANDO_PAGAMENTO`, `aguardarPagamento()`, `estornarPagamento()`, `confirmarPagamento()` (substitui `registrarPagamento()`), transições ajustadas ao fluxo da Saga; migration do enum `status_os`.
   ✔ Testes de domínio cobrindo todas as transições válidas e inválidas.
-- [ ] **T2.7** `os_status_historico` (migration + gravação a cada transição) e `GET /api/ordens-servico/:id/historico` (status + passos da Saga).
-- [ ] **T2.8** Religar `InventoryService` às operações atômicas de `PostgresItemEstoqueRepository` (`reservar`, `utilizar`, `liberarReserva`) — fecha o achado "integração órfã" da Fase 3.
+  ✅ `AGUARDANDO_PAGAMENTO`, `iniciarDiagnostico`/`registrarDiagnostico`/`aguardarPagamento`/`confirmarPagamento`/`estornarPagamento`; matriz completa de transições válidas/inválidas em `ordem-servico.entity.spec.ts` (81 testes). Migration do enum escrita.
+- [x] **T2.7** `os_status_historico` (migration + gravação a cada transição) e `GET /api/ordens-servico/:id/historico` (status + passos da Saga).
+  ✅ `os_status_historico` (migration + gravação a cada transição pelo orquestrador) e `GET /api/ordens-servico/:id/historico` (status + passos da Saga + link de pagamento).
+- [x] **T2.8** Religar `InventoryService` às operações atômicas de `PostgresItemEstoqueRepository` (`reservar`, `utilizar`, `liberarReserva`) — fecha o achado "integração órfã" da Fase 3.
   ✔ Teste de concorrência: duas reservas simultâneas do último item ⇒ uma falha.
-
+  ✅ `InventoryService` delega às operações atômicas (`reservar`/`utilizar`/`liberarReserva` — esta última nova) e é usado pelo orquestrador (reserva, baixa, compensação). Teste de concorrência no repositório (`item-estoque.repository.spec.ts`, não executado sem Docker); no orquestrador, reserva parcial é desfeita.
 ### 2c. Orquestrador
-- [ ] **T2.9** Migrations `saga_instancias` e `saga_passos_log`; `SagaRepository` com lock otimista (`versao`).
-- [ ] **T2.10** Definição declarativa dos passos da Saga "Ciclo da OS" (`src/application/saga/ciclo-os.saga.ts`) — passo, comando, eventos de sucesso/falha, compensação.
-- [ ] **T2.11** `SagaOrchestrator`: iniciar (na mesma transação do `CreateOrdemServico`), avançar por evento, compensar em ordem inversa, `FALHA_COMPENSACAO` após N tentativas, gravação em `saga_passos_log`.
-- [ ] **T2.12** Passo local "precificar + reservar" ao receber `DiagnosticoConcluido` (preço do catálogo/peças do próprio OS → itens do `GerarOrcamento`).
-- [ ] **T2.13** Passo local "finalizar" ao receber `ReparoConcluido` (baixa do estoque reservado, `FINALIZADA`, saga `CONCLUIDA`).
-- [ ] **T2.14** Sweeper de timeout (`SAGA_TIMEOUT_APROVACAO`, `SAGA_TIMEOUT_PAGAMENTO`, intervalo por env var).
-- [ ] **T2.15** `PATCH /:id/cancelar` passa a disparar a compensação; remover `iniciar`/`aguardar-aprovacao`/`aprovar`/`concluir` e o webhook de orçamento da API pública (Swagger/Postman/testes de integração atualizados).
+- [x] **T2.9** Migrations `saga_instancias` e `saga_passos_log`; `SagaRepository` com lock otimista (`versao`).
+  ✅ Migrations `saga_instancias`/`saga_passos_log`; `PostgresSagaRepository` com `WHERE versao = $n` + `FOR UPDATE`; colisão ⇒ `SagaConcurrencyError` (lock otimista testado no fake e o SQL com pool simulado).
+- [x] **T2.10** Definição declarativa dos passos da Saga "Ciclo da OS" (`src/application/saga/ciclo-os.saga.ts`) — passo, comando, eventos de sucesso/falha, compensação.
+  ✅ `src/application/saga/ciclo-os.saga.ts` (passos, comandos, sucesso/falha, compensações, passos a pular na falha).
+- [x] **T2.11** `SagaOrchestrator`: iniciar (na mesma transação do `CreateOrdemServico`), avançar por evento, compensar em ordem inversa, `FALHA_COMPENSACAO` após N tentativas, gravação em `saga_passos_log`.
+  ✅ `SagaOrchestrator`: iniciar na transação do `CreateOrdemServico`, avançar por evento, compensar em ordem inversa, retry/`FALHA_COMPENSACAO`, pagamento tardio (estorno), `saga_passos_log`.
+- [x] **T2.12** Passo local "precificar + reservar" ao receber `DiagnosticoConcluido` (preço do catálogo/peças do próprio OS → itens do `GerarOrcamento`).
+  ✅ Precificação por catálogo/peças do próprio OS + reserva atômica ao receber `DiagnosticoConcluido`.
+- [x] **T2.13** Passo local "finalizar" ao receber `ReparoConcluido` (baixa do estoque reservado, `FINALIZADA`, saga `CONCLUIDA`).
+  ✅ Baixa definitiva do estoque, OS `FINALIZADA`, saga `CONCLUIDA` ao receber `ReparoConcluido`.
+- [x] **T2.14** Sweeper de timeout (`SAGA_TIMEOUT_APROVACAO`, `SAGA_TIMEOUT_PAGAMENTO`, intervalo por env var).
+  ✅ `processarExpiradas` + `createSagaTimeoutSweeper`; `SAGA_TIMEOUT_APROVACAO`/`PAGAMENTO`/`COMPENSACAO` por env (`30s`, `5m`, `2h`).
+- [x] **T2.15** `PATCH /:id/cancelar` passa a disparar a compensação; remover `iniciar`/`aguardar-aprovacao`/`aprovar`/`concluir` e o webhook de orçamento da API pública (Swagger/Postman/testes de integração atualizados).
   ✔ Testes do orquestrador com `InMemoryMessageBus` para cada falha da tabela de passos do plano.
-
+  ✅ `PATCH /:id/cancelar` ⇒ 202 + compensação; rotas manuais e webhook removidos. ✔ 37 testes do orquestrador cobrem cada falha da tabela de passos (+ idempotência, ordem, lock otimista).
 ### 2d. Integrações síncronas e infra do serviço
-- [ ] **T2.16** `GET /internal/clientes/by-cpf/:cpf` protegido por `x-internal-token` (middleware novo); rotas `/internal/*` montadas fora do prefixo `/api`.
-- [ ] **T2.17** `DashboardUseCase` lê `receitaTotal` do Billing (`GET /internal/financeiro/resumo`, timeout 2s, fallback `null` + log de warning).
+- [x] **T2.16** `GET /internal/clientes/by-cpf/:cpf` protegido por `x-internal-token` (middleware novo); rotas `/internal/*` montadas fora do prefixo `/api`.
+  ✅ `GET /internal/clientes/by-cpf/:cpf` (`internalTokenMiddleware`, comparação em tempo constante) montado em `/internal`, fora de `/api`.
+- [x] **T2.17** `DashboardUseCase` lê `receitaTotal` do Billing (`GET /internal/financeiro/resumo`, timeout 2s, fallback `null` + log de warning).
+  ✅ `HttpFinanceiroGateway` (timeout 2 s, fallback `null` + warning); `receitaTotal: number | null`.
 - [ ] **T2.18** Conexão como `os_service` no database `oficina_os` (`DATABASE_URL` montada no deploy com o role novo).
+  🔶 O app só consome `DATABASE_URL`; a criação do role `os_service`/database `oficina_os` e a montagem da URL no deploy dependem do `db-infra` (Etapa 6). O CI ainda usa `oficina`/`oficina` até lá.
 - [ ] **T2.19** `terraform/` próprio: backend S3 (key própria), ECR `soat15-tc-os-service`, SNS `oficina-eventos`, SQS `os-saga-replies` + DLQ + assinatura com filter policy, outputs (ARNs/URLs) consumidos pelos outros serviços via `terraform_remote_state`.
   ✔ `terraform validate` + `tflint` limpos; `apply` em `homolog` confirmado.
-- [ ] **T2.20** `k8s/ingress.yaml` (group `oficina-<env>`, paths `/api/ordens-servico`, `/api/clientes`, `/api/veiculos`, `/api/pecas`, `/api/servicos`, `/api/relatorios`, `/api/auth`, `/health`, `/internal`); `service.yaml` volta para `ClusterIP`; ConfigMap com URLs de fila/tópico.
-
+  ✅ `terraform/` (backend S3 `os-service/…`, ECR `soat15-tc-os-service`, SNS `oficina-eventos`, SQS `os-saga-replies` + DLQ, assinatura raw + filter policy, outputs) com `terraform fmt -check` e `validate` limpos (1.9.5); jobs `terraform-validate`/`terraform-apply` no CI. 🔶 **Falta** `tflint` e o `apply` em `homolog` (precisa de credenciais do Lab).
+- [x] **T2.20** `k8s/ingress.yaml` (group `oficina-<env>`, paths `/api/ordens-servico`, `/api/clientes`, `/api/veiculos`, `/api/pecas`, `/api/servicos`, `/api/relatorios`, `/api/auth`, `/health`, `/internal`); `service.yaml` volta para `ClusterIP`; ConfigMap com URLs de fila/tópico.
+  ✅ `k8s/ingress.yaml` (group `oficina-ENV`, 10 paths), `service.yaml` → `ClusterIP`, ConfigMap com prazos da Saga, `oficina-api-messaging` criado pelo CI a partir do Terraform. Manifestos validados como YAML; **não aplicados** em cluster.
 ## Etapa 3 — Execution Service
 
 - [ ] **T3.1** Agregado `Execucao` + VOs, estados e transições (plano, Etapa 3).
@@ -192,3 +208,22 @@ e "executado contra a AWS" são registrados separadamente.
 - **Pendências**: remotos do GitHub e push (T0.3); `docker compose`/`docker build`
   não validados por falta de Docker no ambiente; mudanças no repo OS (lint, docs)
   **não commitadas** — `docs/` está no `.gitignore`, usar `git add -f docs/…`.
+
+### 2026-11-11 — Etapa 2 (OS Service)
+
+Branch `feat/fase4-etapa2` (sem push). **Verificado**: `tsc` e `eslint` limpos; 617 testes passando, **10 suítes falham só por falta de Docker** (7 repositórios Postgres, 2 integração, `messaging.spec.ts`) — "Could not find a working container runtime strategy", sem relação com o código. A cobertura global não pôde ser medida aqui (essas suítes entram no cálculo); rodar no CI/Docker.
+
+**Desvios / decisões**
+- Transação por `AsyncLocalStorage` (`PostgresUnitOfWork` + `txAwarePool`): os repositórios continuam usando `this.pool.query`; dentro do `run` as queries vão para a conexão da transação, e o `BEGIN/COMMIT` interno do `OrdemServicoRepository` vira no-op. Evitou mudar a assinatura de todos os repositórios.
+- `GerarOrcamento.itens[].referenciaId` de `SERVICO` é o **id do serviço da OS** (a entidade `Servico` não guarda o `catalogoServicoId`); `PECA` segue sendo o `pecaId`. Ajustar o contrato no Billing.
+- `CreateOrdemServico` ainda aceita `catalogoServicos` (estimativa inicial na recepção); o resultado do diagnóstico **substitui** os serviços (`registrarDiagnostico`).
+- Pagamento confirmado **depois** de a saga ter compensado (timeout × cliente pagando) reabre a saga em `COMPENSANDO` com `ESTORNAR_PAGAMENTO` — caso não previsto no plano.
+- Falha de compensação (`EstornoFalhou` ou timeout) é retentada até `SAGA_MAX_TENTATIVAS_COMPENSACAO`; a OS **não** é cancelada em `FALHA_COMPENSACAO` (dinheiro/estado exigem intervenção manual).
+- ECR novo `soat15-tc-os-service` (o antigo `soat15-tc-oficina-api` é do `k8s-infra`); `ECR_REPOSITORY` do CI trocado.
+- `WEBHOOK_SECRET` substituído por `INTERNAL_API_TOKEN` (GitHub Secret novo no repo do OS).
+
+**Pendências para o usuário / próximas etapas**
+- Rodar a suíte com Docker (repositórios, integração, `messaging.spec.ts`) e o `docker compose up` (LocalStack + `scripts/localstack-init.sh`) — nada disso foi executado.
+- Criar o GitHub Secret `INTERNAL_API_TOKEN` no repo do OS; `terraform apply` em `homolog` acontece no primeiro push.
+- As filas `execution-commands`/`billing-commands` são criadas pelos outros serviços (convenção de nome `soat15-tc-<env>-<fila>` usada no CI do OS).
+- Role `os_service` / database `oficina_os` (T2.18) → Etapa 6.

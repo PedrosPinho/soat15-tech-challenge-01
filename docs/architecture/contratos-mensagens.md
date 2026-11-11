@@ -117,8 +117,8 @@ parsear o corpo:
 | `SolicitarPagamento` | 1 | `ordemServicoId`, `orcamentoId` | `PagamentoSolicitado` / `PagamentoRecusado` |
 | `EstornarPagamento` | 1 | `ordemServicoId`, `pagamentoId`, `motivo` | `PagamentoEstornado` / `EstornoFalhou` |
 
-`itens[].tipo` ∈ `SERVICO` \| `PECA`; `referenciaId` é o `catalogoServicoId` ou
-`pecaId` do OS Service. **A precificação é do OS Service** (dono do catálogo e
+`itens[].tipo` ∈ `SERVICO` \| `PECA`; `referenciaId` é o **id do serviço da OS**
+(`SERVICO`) ou o `pecaId` (`PECA`), ambos do OS Service. **A precificação é do OS Service** (dono do catálogo e
 das peças); o Billing só registra e cobra o que recebeu.
 
 ```json
