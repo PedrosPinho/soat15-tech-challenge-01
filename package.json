@@ -26,10 +26,7 @@
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f",
-    "sonar:up": "docker compose up -d sonarqube",
-    "sonar:scan": "npm run test:coverage && docker compose --profile sonar run --rm sonar-scanner",
-    "sonar:down": "docker compose stop sonarqube"
+    "docker:logs": "docker compose logs -f"
   },
   "keywords": [
     "oficina",
@@ -79,6 +76,7 @@
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.14.0",
     "jest": "^30.3.0",
+    "jest-cucumber": "^4.5.0",
     "prettier": "^3.8.3",
     "supertest": "^7.2.2",
     "testcontainers": "^11.14.0",
