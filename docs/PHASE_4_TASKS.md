@@ -102,16 +102,21 @@ e "executado contra a AWS" são registrados separadamente.
   ✅ `k8s/ingress.yaml` (group `oficina-ENV`, 10 paths), `service.yaml` → `ClusterIP`, ConfigMap com prazos da Saga, `oficina-api-messaging` criado pelo CI a partir do Terraform. Manifestos validados como YAML; **não aplicados** em cluster.
 ## Etapa 3 — Execution Service
 
-- [ ] **T3.1** Agregado `Execucao` + VOs, estados e transições (plano, Etapa 3).
+- [x] **T3.1** Agregado `Execucao` + VOs, estados e transições (plano, Etapa 3).
   ✔ Testes de domínio de todas as transições.
-- [ ] **T3.2** `DynamoExecucaoRepository` (single-table, GSI fila por `status#prioridade#criadoEm`, GSI por `osId`, histórico `EVT#<ts>`), com `ConditionExpression` para concorrência.
+- [x] **T3.2** `DynamoExecucaoRepository` (single-table, GSI fila por `status#prioridade#criadoEm`, GSI por `osId`, histórico `EVT#<ts>`), com `ConditionExpression` para concorrência.
   ✔ Testes de integração com LocalStack.
-- [ ] **T3.3** Outbox via `TransactWriteItems` + relay; inbox por `PutItem` condicional `INBOX#<messageId>` com TTL.
-- [ ] **T3.4** Consumidor de `execution-commands`: `SolicitarDiagnostico`, `IniciarReparo`, `CancelarExecucao` (idempotentes).
-- [ ] **T3.5** API (escopo `interno`): `GET /api/execucoes/fila`, `GET /:id`, `PATCH /:id/diagnostico/iniciar|concluir`, `PATCH /:id/reparo/iniciar|concluir|falhar`, com validators e Swagger.
-- [ ] **T3.6** `terraform/`: ECR, tabela `execucoes` (on-demand, GSIs, TTL), SQS `execution-commands` + DLQ com policy liberando o envio pelo OS.
-- [ ] **T3.7** `k8s/`: Deployment (réplicas 1–2), Service `ClusterIP`, HPA, ConfigMap, Ingress (`/api/execucoes`).
-- [ ] **T3.8** Cobertura ≥ 80%.
+  ↳ Spec de integração `tests/integration-localstack.spec.ts` escrito, **não executado** (sem Docker); roda no CI com `LOCALSTACK_ENDPOINT`. Trava `OSLOCK#<osId>` garante 1 execução por OS.
+- [x] **T3.3** Outbox via `TransactWriteItems` + relay; inbox por `PutItem` condicional `INBOX#<messageId>` com TTL.
+  ↳ Inbox atômico: o item `INBOX#<messageId>` entra na mesma `TransactWriteItems` do efeito (condicional `attribute_not_exists`), em vez de um `PutItem` separado. Relay com *lease* condicional (`lockedUntil`) sobre GSI3 esparso.
+- [x] **T3.4** Consumidor de `execution-commands`: `SolicitarDiagnostico`, `IniciarReparo`, `CancelarExecucao` (idempotentes).
+  ↳ `IniciarReparo` responde `ReparoIniciado` ao **aceitar** o comando (execução vai a `AGUARDANDO_REPARO`); o mecânico inicia (`reparo/iniciar`) e conclui depois. Mesmo critério para `DiagnosticoIniciado` (na criação da execução).
+- [x] **T3.5** API (escopo `interno`): `GET /api/execucoes/fila`, `GET /:id`, `PATCH /:id/diagnostico/iniciar|concluir`, `PATCH /:id/reparo/iniciar|concluir|falhar`, com validators e Swagger.
+  ↳ Acrescentado `PATCH /:id/diagnostico/falhar` (necessário para emitir `DiagnosticoFalhou`).
+- [x] **T3.6** `terraform/`: ECR, tabela `execucoes` (on-demand, GSIs, TTL), SQS `execution-commands` + DLQ com policy liberando o envio pelo OS.
+  ↳ `terraform fmt`/`validate` OK (1.9.5). Lê o tópico `oficina-eventos` do estado do OS (`terraform_remote_state`): OS faz `apply` primeiro. `apply` não executado.
+- [x] **T3.7** `k8s/`: Deployment (réplicas 1–2), Service `ClusterIP`, HPA, ConfigMap, Ingress (`/api/execucoes`).
+- [x] **T3.8** Cobertura ≥ 80%.
 
 ## Etapa 4 — Billing Service
 
@@ -227,3 +232,21 @@ Branch `feat/fase4-etapa2` (sem push). **Verificado**: `tsc` e `eslint` limpos; 
 - Criar o GitHub Secret `INTERNAL_API_TOKEN` no repo do OS; `terraform apply` em `homolog` acontece no primeiro push.
 - As filas `execution-commands`/`billing-commands` são criadas pelos outros serviços (convenção de nome `soat15-tc-<env>-<fila>` usada no CI do OS).
 - Role `os_service` / database `oficina_os` (T2.18) → Etapa 6.
+
+### 2026-11-12 — Etapa 3 (Execution Service)
+
+Repo `soat15-tech-challenge-execution-service`, branch `feat/fase4-etapa3` (3 commits, sem push). **Verificado**: `tsc`, `eslint`, `prettier` e `npm run build` limpos; 199 testes passando, cobertura **98,8 % de linhas / 95,2 % de branches** (limite 80 %); `terraform fmt` + `validate` OK; YAML de K8s/CI/compose parseia.
+
+**Não verificado (sem Docker/AWS)**: `tests/integration-localstack.spec.ts` (6 testes, pulados sem `LOCALSTACK_ENDPOINT`), `docker compose up` + `scripts/localstack-init.sh`, `terraform apply`, deploy no EKS. O repositório DynamoDB foi testado com o `DocumentClient` mockado (formato dos comandos e mapeamento de `TransactionCanceledException`), não contra um DynamoDB real.
+
+**Desvios / decisões**
+- Eventos de resposta emitidos no **aceite do comando** (`DiagnosticoIniciado`, `ReparoIniciado`); as ações do mecânico entre eles não geram evento, exceto conclusão/falha.
+- `PATCH /:id/diagnostico/falhar` adicionado à API.
+- Inbox na mesma transação do efeito (não `PutItem` separado); trava `OSLOCK#<osId>` para 1 execução por OS.
+- `SolicitarDiagnostico` repetido (novo `messageId`) repete a resposta sem duplicar; execução cancelada responde `DiagnosticoFalhou`. Payload sem `ordemServicoId` é erro permanente (DLQ).
+- Service na porta 3002; HPA 1–2 réplicas; tabela `soat15-tc-<env>-execucoes`; fila `soat15-tc-<env>-execution-commands`.
+
+**Pendências para o usuário**
+- Rodar `docker compose up --build` e a suíte com `LOCALSTACK_ENDPOINT` definido.
+- Secrets no repo do Execution: `AWS_*` (Learner Lab) e opcionalmente `NEW_RELIC_LICENSE_KEY`; ordem de deploy: OS antes do Execution.
+- Nos nós, se o IMDS não responder de dentro do pod, subir `HttpPutResponseHopLimit` para 2.
