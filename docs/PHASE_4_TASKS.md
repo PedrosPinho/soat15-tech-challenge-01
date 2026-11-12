@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 7 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5, 6 e 7 implementadas (sem `apply`/Docker/conta New Relic). Próxima: Etapa 8 (CI/CD final).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 8 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5 a 8 implementadas (sem `apply`/Docker/conta New Relic/primeira execução real dos pipelines). Próxima: Etapa 9 (documentação e entregáveis).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -194,11 +194,17 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 8 — CI/CD
 
-- [ ] **T8.1 [EX/BI]** `ci-cd.yml` completo: `build` → `test` → `sonar` → `terraform` (plan em PR / apply em push) → `docker-build-push` → `deploy` → smoke `/health/ready`.
-- [ ] **T8.2 [OS]** Adicionar ao pipeline atual: job `sonar`, job `terraform` do serviço, Job de bootstrap de banco, Ingress, e o relatório BDD.
-- [ ] **T8.3 [OS/EX/BI]** `destroy.yml` manual por serviço (mesmo padrão dos repos de infra) — destrói filas/tabela/ECR do serviço.
+- [x] **T8.1 [EX/BI]** `ci-cd.yml` completo: `build` → `test` → `sonar` → `terraform` (plan em PR / apply em push) → `docker-build-push` → `deploy` → smoke `/health/ready`.
+  ↳ `build` → `test` → `sonar` (quality gate) → `terraform-apply` (+ `terraform-plan` em PR) → `docker-build-push` → `deploy` (smoke `/health/ready`) nos 3 serviços. 🔶 YAML válido e revisado; **nenhum pipeline rodou**.
+- [x] **T8.2 [OS]** Adicionar ao pipeline atual: job `sonar`, job `terraform` do serviço, Job de bootstrap de banco, Ingress, e o relatório BDD.
+  ↳ OS: `sonar`, `terraform-plan`; o bootstrap do banco, o Ingress e o relatório BDD já entraram nas Etapas 5/6.
+- [x] **T8.3 [OS/EX/BI]** `destroy.yml` manual por serviço (mesmo padrão dos repos de infra) — destrói filas/tabela/ECR do serviço.
+  ↳ `destroy.yml` manual nos 3 serviços: remove os workloads (Ingress primeiro, para o ALB interno não ficar órfão e travar o destroy da VPC) e roda `terraform destroy`; ordem de destruição documentada no cabeçalho.
 - [ ] **T8.4 [👤]** Branch protection nos 2 repos novos + checks obrigatórios `build`, `test`, `sonar` nos 3 repos de serviço.
+  ↳ Preparado, **não aplicado**: `scripts/protect-branches.sh [--dry-run]` (OS) aplica PR + checks `Build`/`Test`/`Sonar` em `main`/`homolog` dos 3 serviços via `gh api`. Depende de você (admin + os repos remotos existirem).
 - [ ] **T8.5** Primeira execução real em `homolog` dos 3 pipelines (registrar aqui os bugs achados e corrigidos, como em "Execução real" da Fase 3).
+  ⏳ Pendente de você: primeira execução real em `homolog` (registrar aqui os bugs achados, como na Fase 3).
+
 
 ## Etapa 9 — Documentação e entregáveis
 
@@ -323,3 +329,13 @@ Branch `feat/fase4-etapa7` nos 3 serviços e no `k8s-infra` (sem push). **Verifi
 - `src/shared/observability/tracing.ts`, `logger.ts`, `envelope.ts`, o adapter SQS/SNS e o `QueueDepthCollector` são cópias idênticas nos 3 serviços (como o envelope).
 - A DLQ é medida pela convenção `<fila>-dlq` (nome na AWS: `soat15-tc-<env>-<fila>-dlq`, derivado da URL da fila).
 - Alerta de taxa de compensação usa percentual simples (50 %/15 min): com poucas sagas é ruidoso — ajustar na demonstração.
+
+### 2026-11-12 — Etapa 8 (CI/CD)
+
+Branch `feat/fase4-etapa8` nos 3 serviços (sem push). **Verificado**: YAML dos workflows e `bash -n`/`--dry-run` do script. **Não verificado**: qualquer execução no GitHub Actions (nenhum remoto existe ainda para os repos novos).
+
+**Desvios / decisões**
+- Job `Sonar` **falha** (não pula) se `SONAR_TOKEN` não existe — como é check obrigatório, é melhor um erro claro do que um check "verde" vazio. Em PR de fork o job não roda (sem secrets).
+- `terraform plan` em PR usa `-lock=false` (não trava o estado remoto compartilhado) e escreve o plano no `GITHUB_STEP_SUMMARY`; em PR para `main` é `continue-on-error` (workspace prod inexistente, ADR-007).
+- O apply do Terraform agora espera o `Sonar` (build → test → sonar → terraform), então um quality gate reprovado impede criar recursos.
+- Ordem de destroy: Billing/Execution → OS → auth-lambda → k8s-infra → db-infra (os dois primeiros leem o estado do OS).
