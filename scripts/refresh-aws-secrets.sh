@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publica as credenciais temporárias da sessão atual do AWS Academy Learner Lab
-# como GitHub Secrets nos 4 repositórios da Fase 3, de uma vez.
+# como GitHub Secrets nos 6 repositórios (Fase 3 + os 2 serviços novos da Fase 4), de uma vez.
 #
 # Por quê: o Learner Lab não permite OIDC (IAM bloqueado, sem
 # iam:CreateOpenIDConnectProvider), então o CI/CD dos 4 repositórios usa
@@ -16,8 +16,11 @@
 #      AWS_SECRET_ACCESS_KEY/AWS_SESSION_TOKEN no shell antes de rodar.
 #   2. ./scripts/refresh-aws-secrets.sh
 #
+# Opções:
+#   --dry-run   só lista os repositórios-alvo; não lê credenciais nem publica nada.
+#
 # Requer: AWS CLI autenticado (perfil default ou env vars) e `gh` autenticado
-# com permissão de admin nos 4 repositórios.
+# com permissão de admin nos 6 repositórios.
 
 set -euo pipefail
 
@@ -26,7 +29,22 @@ REPOS=(
   "PedrosPinho/soat15-tech-challenge-db-infra"
   "PedrosPinho/soat15-tech-challenge-k8s-infra"
   "PedrosPinho/soat15-tech-challenge-auth-lambda"
+  "PedrosPinho/soat15-tech-challenge-billing-service"
+  "PedrosPinho/soat15-tech-challenge-execution-service"
 )
+
+DRY_RUN=false
+case "${1:-}" in
+  --dry-run) DRY_RUN=true ;;
+  "") ;;
+  *) echo "Uso: $0 [--dry-run]" >&2; exit 2 ;;
+esac
+
+if [[ "$DRY_RUN" == true ]]; then
+  echo "Dry-run: os secrets AWS_* seriam publicados em ${#REPOS[@]} repositórios (nada é lido nem enviado):"
+  printf '  - %s\n' "${REPOS[@]}"
+  exit 0
+fi
 
 command -v aws >/dev/null || { echo "Erro: aws CLI não encontrado no PATH." >&2; exit 1; }
 command -v gh >/dev/null || { echo "Erro: gh CLI não encontrado no PATH." >&2; exit 1; }
@@ -63,5 +81,5 @@ for repo in "${REPOS[@]}"; do
   gh secret set AWS_SESSION_TOKEN --repo "$repo" --body "$AWS_SESSION_TOKEN"
 done
 
-echo "Pronto — credenciais atualizadas nos 4 repositórios."
+echo "Pronto — credenciais atualizadas nos ${#REPOS[@]} repositórios."
 echo "Lembrete: expiram com a sessão do Learner Lab (~4h). Rode de novo na próxima sessão."
