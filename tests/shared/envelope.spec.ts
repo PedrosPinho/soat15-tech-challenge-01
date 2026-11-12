@@ -22,7 +22,11 @@ describe('envelope', () => {
       version: 2,
       occurredAt: new Date('2026-01-01T00:00:00Z'),
     });
-    expect(e).toMatchObject({ messageId: 'm1', version: 2, occurredAt: '2026-01-01T00:00:00.000Z' });
+    expect(e).toMatchObject({
+      messageId: 'm1',
+      version: 2,
+      occurredAt: '2026-01-01T00:00:00.000Z',
+    });
   });
 
   it('round-trip por JSON', () => {

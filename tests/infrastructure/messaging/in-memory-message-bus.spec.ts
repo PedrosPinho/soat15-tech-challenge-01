@@ -1,8 +1,7 @@
 import { InMemoryMessageBus } from '@infrastructure/messaging/in-memory-message-bus';
 import { createEnvelope } from '@shared/messaging/envelope';
 
-const msg = (type = 'X') =>
-  createEnvelope({ type, sagaId: 's', correlationId: 'c', payload: {} });
+const msg = (type = 'X') => createEnvelope({ type, sagaId: 's', correlationId: 'c', payload: {} });
 
 describe('InMemoryMessageBus', () => {
   it('entrega send ao handler inscrito', async () => {

@@ -63,16 +63,23 @@ describe('SagaOrchestrator — caminho feliz', () => {
   it('publica OrdemServicoStatusAlterado no tópico a cada transição', async () => {
     const h = makeHarness();
     await h.conduzir('diagnostico');
-    const eventos = h.outbox.entries.filter((e) => e.envelope.type === 'OrdemServicoStatusAlterado');
+    const eventos = h.outbox.entries.filter(
+      (e) => e.envelope.type === 'OrdemServicoStatusAlterado',
+    );
     expect(eventos.length).toBeGreaterThan(0);
-    expect(eventos.every((e) => e.kind === 'topic' && e.destination === 'oficina-eventos')).toBe(true);
+    expect(eventos.every((e) => e.kind === 'topic' && e.destination === 'oficina-eventos')).toBe(
+      true,
+    );
   });
 
   it('PagamentoSolicitado expõe o initPoint na saga', async () => {
     const h = makeHarness();
     await h.conduzir('aprovacao');
     await h.responder('PagamentoSolicitado', {
-      orcamentoId: 'orc-1', pagamentoId: 'pg-1', initPoint: 'http://mp', expiraEm: 'x',
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      initPoint: 'http://mp',
+      expiraEm: 'x',
     });
     expect((await h.saga()).dados.initPoint).toBe('http://mp');
     expect((await h.os()).status).toBe('AGUARDANDO_PAGAMENTO');
@@ -126,8 +133,13 @@ describe('SagaOrchestrator — idempotência e ordem', () => {
     const h = makeHarness();
     await expect(
       h.orchestrator.handleReply({
-        messageId: 'm', type: 'DiagnosticoIniciado', version: 1, sagaId: 's',
-        correlationId: 'c', occurredAt: new Date().toISOString(), payload: {},
+        messageId: 'm',
+        type: 'DiagnosticoIniciado',
+        version: 1,
+        sagaId: 's',
+        correlationId: 'c',
+        occurredAt: new Date().toISOString(),
+        payload: {},
       }),
     ).rejects.toThrow(ValidationError);
   });
@@ -258,7 +270,10 @@ describe('SagaOrchestrator — falhas e compensações (em ordem inversa)', () =
     const h = makeHarness({ timeoutPagamentoMs: 1000 });
     await h.conduzir('aprovacao');
     await h.responder('PagamentoSolicitado', {
-      orcamentoId: 'orc-1', pagamentoId: 'pg-1', initPoint: 'u', expiraEm: 'x',
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      initPoint: 'u',
+      expiraEm: 'x',
     });
     h.avancarRelogio(1001);
     await h.orchestrator.processarExpiradas();
@@ -351,7 +366,11 @@ describe('SagaOrchestrator — falha de compensação', () => {
     expect((await h.saga()).status).toBe('COMPENSADA');
 
     await h.responder('PagamentoConfirmado', {
-      orcamentoId: 'orc-1', pagamentoId: 'pg-9', mpPaymentId: '9', valor: 610, confirmadoEm: 'x',
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-9',
+      mpPaymentId: '9',
+      valor: 610,
+      confirmadoEm: 'x',
     });
     expect((await h.saga()).status).toBe('COMPENSANDO');
     expect(comandos(h).slice(-1)).toEqual(['EstornarPagamento']);
@@ -366,7 +385,11 @@ describe('SagaOrchestrator — falha de compensação', () => {
     h.avancarRelogio(1001);
     await h.orchestrator.processarExpiradas();
     await h.responder('PagamentoConfirmado', {
-      orcamentoId: 'orc-1', pagamentoId: 'pg-9', mpPaymentId: '9', valor: 610, confirmadoEm: 'x',
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-9',
+      mpPaymentId: '9',
+      valor: 610,
+      confirmadoEm: 'x',
     });
     await h.responder('OrcamentoCancelado', {});
     await h.responder('ExecucaoCancelada', {});
@@ -434,9 +457,99 @@ describe('SagaOrchestrator — cancelamento manual', () => {
     const h = makeHarness();
     const { OrdemServico } = await import('@domain/entities/ordem-servico.entity');
     await h.ordens.save(
-      OrdemServico.create({ id: 'legada', numeroOS: 'OS-1', clienteId: 'c', veiculoId: 'v', quilometragemEntrada: 0 }),
+      OrdemServico.create({
+        id: 'legada',
+        numeroOS: 'OS-1',
+        clienteId: 'c',
+        veiculoId: 'v',
+        quilometragemEntrada: 0,
+      }),
     );
     const os = await h.orchestrator.cancelar('legada', 'motivo');
     expect(os.status).toBe('CANCELADA');
+  });
+});
+
+describe('SagaOrchestrator — telemetria (eventos customizados do APM)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const nr = require('newrelic');
+  const eventos = (nome: string): Record<string, unknown>[] =>
+    nr.recordCustomEvent.mock.calls
+      .filter((c: unknown[]) => c[0] === nome)
+      .map((c: unknown[]) => c[1]);
+  beforeEach(() => nr.recordCustomEvent.mockClear());
+
+  it('registra SagaPassoExecutado por passo e SagaFinalizada(CONCLUIDA) com a duração', async () => {
+    const h = makeHarness();
+    await h.abrirOS();
+    nr.recordCustomEvent.mockClear();
+    await h.responder('DiagnosticoIniciado', { execucaoId: 'ex-1' });
+    h.avancarRelogio(5_000);
+    await h.responder('DiagnosticoConcluido', {
+      execucaoId: 'ex-1',
+      servicos: [{ catalogoServicoId: 'cat-1', pecas: [{ pecaId: 'peca-1', quantidade: 2 }] }],
+    });
+    await h.responder('OrcamentoGerado', {
+      orcamentoId: 'orc-1',
+      valorTotal: 610,
+      validadeAte: 'x',
+    });
+    await h.responder('OrcamentoAprovado', { orcamentoId: 'orc-1', aprovadoEm: 'x' });
+    await h.responder('PagamentoSolicitado', {
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      initPoint: 'u',
+      expiraEm: 'x',
+    });
+    await h.responder('PagamentoConfirmado', {
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      mpPaymentId: '1',
+      valor: 610,
+      confirmadoEm: 'x',
+    });
+    await h.responder('ReparoIniciado', { execucaoId: 'ex-1' });
+    expect(eventos('SagaFinalizada')).toHaveLength(0);
+    await h.responder('ReparoConcluido', { execucaoId: 'ex-1' });
+
+    const passos = eventos('SagaPassoExecutado');
+    expect(passos.length).toBeGreaterThanOrEqual(7);
+    expect(passos[0]).toMatchObject({
+      ordemServicoId: OS_ID,
+      passo: 'DIAGNOSTICO',
+      resultado: 'OK',
+    });
+    expect(eventos('SagaFinalizada')).toEqual([
+      expect.objectContaining({ ordemServicoId: OS_ID, resultado: 'CONCLUIDA', duracaoMs: 5_000 }),
+    ]);
+  });
+
+  it('SagaFinalizada(COMPENSADA) ao fim da compensação — e uma única vez', async () => {
+    const h = makeHarness();
+    await h.conduzir('diagnostico');
+    await h.responder('OrcamentoGerado', {
+      orcamentoId: 'orc-1',
+      valorTotal: 610,
+      validadeAte: 'x',
+    });
+    await h.responder('OrcamentoRecusado', { orcamentoId: 'orc-1', motivo: 'caro' });
+    expect(eventos('SagaFinalizada')).toHaveLength(0);
+    await h.responder('OrcamentoCancelado', { orcamentoId: 'orc-1' });
+    await h.responder('ExecucaoCancelada', { execucaoId: 'ex-1' });
+    expect(eventos('SagaFinalizada')).toEqual([
+      expect.objectContaining({ resultado: 'COMPENSADA' }),
+    ]);
+    await h.responder('ExecucaoCancelada', { execucaoId: 'ex-1' }); // duplicada com outro messageId
+    expect(eventos('SagaFinalizada')).toHaveLength(1);
+  });
+
+  it('FALHA_COMPENSACAO também fecha a saga (para o alerta)', async () => {
+    const h = makeHarness({ maxTentativasCompensacao: 0 });
+    await h.conduzir('pagamento');
+    await h.responder('ReparoFalhou', { execucaoId: 'ex-1', motivo: 'quebrou' });
+    await h.responder('EstornoFalhou', { pagamentoId: 'pg-1', motivo: 'MP fora' });
+    expect(eventos('SagaFinalizada')).toEqual([
+      expect.objectContaining({ resultado: 'FALHA_COMPENSACAO' }),
+    ]);
   });
 });

@@ -6,8 +6,13 @@ import { SagaOrchestrator } from '@application/saga/saga-orchestrator';
 
 jest.mock('nodemailer', () => ({ createTransport: () => ({ sendMail: jest.fn() }) }));
 
-const ENV = ['MESSAGING_DRIVER', 'EXECUTION_COMMANDS_QUEUE_URL', 'BILLING_COMMANDS_QUEUE_URL',
-  'SAGA_REPLIES_QUEUE_URL', 'EVENTS_TOPIC_ARN'];
+const ENV = [
+  'MESSAGING_DRIVER',
+  'EXECUTION_COMMANDS_QUEUE_URL',
+  'BILLING_COMMANDS_QUEUE_URL',
+  'SAGA_REPLIES_QUEUE_URL',
+  'EVENTS_TOPIC_ARN',
+];
 afterEach(() => ENV.forEach((k) => delete process.env[k]));
 
 describe('saga.factory', () => {
@@ -16,10 +21,17 @@ describe('saga.factory', () => {
     const bus = makeMessageBus();
     expect(bus).toBeInstanceOf(InMemoryMessageBus);
     const recebidas: string[] = [];
-    await bus.subscribe('os-saga-replies', async (m) => { recebidas.push(m.type); });
+    await bus.subscribe('os-saga-replies', async (m) => {
+      recebidas.push(m.type);
+    });
     await bus.publish('oficina-eventos', {
-      messageId: 'm', type: 'X', version: 1, sagaId: 's', correlationId: 'c',
-      occurredAt: new Date().toISOString(), payload: {},
+      messageId: 'm',
+      type: 'X',
+      version: 1,
+      sagaId: 's',
+      correlationId: 'c',
+      occurredAt: new Date().toISOString(),
+      payload: {},
     });
     expect(recebidas).toEqual(['X']);
   });
@@ -44,5 +56,15 @@ describe('saga.factory', () => {
 
   it('makeOutboxRelay cria o relay sobre o outbox Postgres', () => {
     expect(makeOutboxRelay(new InMemoryMessageBus())).toBeInstanceOf(OutboxRelay);
+  });
+});
+
+describe('makeQueueDepthCollector', () => {
+  it('só existe com SQS real', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { InMemoryMessageBus } = require('@infrastructure/messaging/in-memory-message-bus');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { makeQueueDepthCollector } = require('@main/factories/saga.factory');
+    expect(makeQueueDepthCollector(new InMemoryMessageBus())).toBeUndefined();
   });
 });

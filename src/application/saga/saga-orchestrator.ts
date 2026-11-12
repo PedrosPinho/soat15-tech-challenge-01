@@ -30,7 +30,8 @@ import {
   MessageCatalog,
   MessageType,
 } from '@shared/messaging/messages';
-import { logger } from '@shared/logger';
+import { registrarEvento } from '@shared/observability/tracing';
+import { logger, vincularSaga } from '@shared/logger';
 import { COMPENSACOES, PASSOS_A_PULAR_NA_FALHA } from './ciclo-os.saga';
 import { SagaConfig } from './saga-config';
 
@@ -60,7 +61,23 @@ interface Ctx {
   mudancas: { anterior: StatusOS }[];
   historicos: StatusHistoricoEntry[];
   mensagemId?: string;
+  /** Status da saga ao carregar (para detectar a transição para um estado terminal). */
+  statusInicial?: SagaInstancia['status'];
 }
+
+/** Evento customizado do APM, emitido DEPOIS do commit (reflete só o que foi persistido). */
+interface EventoTelemetria {
+  nome: 'SagaPassoExecutado' | 'SagaFinalizada';
+  attrs: Record<string, string | number | boolean>;
+}
+
+/** O que a transação produziu para ser anunciado depois do commit. */
+interface PosCommit {
+  mudancas: { os: OrdemServico; anterior: StatusOS }[];
+  eventos: EventoTelemetria[];
+}
+const SEM_POS: PosCommit = { mudancas: [], eventos: [] };
+const TERMINAIS: SagaInstancia['status'][] = ['CONCLUIDA', 'COMPENSADA', 'FALHA_COMPENSACAO'];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -124,14 +141,14 @@ export class SagaOrchestrator {
 
   /** Processa uma resposta recebida em `os-saga-replies` (idempotente via inbox). */
   async handleReply(envelope: Envelope): Promise<void> {
-    const mudancas = await this.d.uow.run(async () => {
+    const pos = await this.d.uow.run(async () => {
       const novo = await this.d.inbox.markProcessed(envelope.messageId, envelope.type);
       if (!novo) {
         logger.info(
           { messageId: envelope.messageId, type: envelope.type },
           'Mensagem duplicada ignorada (inbox)',
         );
-        return [];
+        return SEM_POS;
       }
       const osId = (envelope.payload as { ordemServicoId?: string }).ordemServicoId;
       if (!osId) throw new ValidationError(`Mensagem ${envelope.type} sem ordemServicoId`);
@@ -139,17 +156,17 @@ export class SagaOrchestrator {
       const ctx = await this.carregar(osId, envelope.messageId);
       if (!ctx) {
         logger.warn({ osId, type: envelope.type }, 'Saga não encontrada para a resposta recebida');
-        return [];
+        return SEM_POS;
       }
       await this.despachar(ctx, envelope);
       return this.persistir(ctx);
     });
-    this.notificar(mudancas);
+    this.notificar(pos);
   }
 
   /** Cancelamento manual: dispara a compensação (não só troca o status). */
   async cancelar(ordemServicoId: string, motivo: string): Promise<OrdemServico> {
-    const { os, mudancas } = await this.d.uow.run(async () => {
+    const { os, pos } = await this.d.uow.run(async () => {
       const ctx = await this.carregar(ordemServicoId);
       if (!ctx) {
         // OS anterior à Saga (sem instância): cancela direto.
@@ -164,7 +181,7 @@ export class SagaOrchestrator {
           motivo,
           ocorridoEm: this.clock(),
         });
-        return { os: cancelada, mudancas: [] };
+        return { os: cancelada, pos: SEM_POS };
       }
       if (!motivo.trim()) throw new ValidationError('Motivo de cancelamento é obrigatório');
       if (ctx.os.status === 'CANCELADA' || ctx.saga.status === 'COMPENSANDO') {
@@ -178,10 +195,10 @@ export class SagaOrchestrator {
       }
       this.log(ctx, ctx.saga.passoAtual, 'CancelamentoManual', 'OK', motivo);
       await this.falhar(ctx, motivo, []);
-      const mudancas = await this.persistir(ctx);
-      return { os: ctx.os, mudancas };
+      const pos = await this.persistir(ctx);
+      return { os: ctx.os, pos };
     });
-    this.notificar(mudancas);
+    this.notificar(pos);
     return os;
   }
 
@@ -191,13 +208,13 @@ export class SagaOrchestrator {
     let tratadas = 0;
     for (const candidata of expiradas) {
       try {
-        const mudancas = await this.d.uow.run(async () => {
+        const pos = await this.d.uow.run(async () => {
           const ctx = await this.carregar(candidata.ordemServicoId);
-          if (!ctx || !ctx.saga.expiraEm || ctx.saga.expiraEm > this.clock()) return [];
+          if (!ctx || !ctx.saga.expiraEm || ctx.saga.expiraEm > this.clock()) return SEM_POS;
           await this.aoExpirar(ctx);
           return this.persistir(ctx);
         });
-        this.notificar(mudancas);
+        this.notificar(pos);
         tratadas++;
       } catch (error) {
         logger.error({ error, sagaId: candidata.id }, 'Falha ao tratar saga expirada');
@@ -671,6 +688,7 @@ export class SagaOrchestrator {
     if (!saga) return null;
     const os = await this.d.ordens.findById(osId);
     if (!os) throw new NotFoundError(`Ordem de serviço ${osId} não encontrada`);
+    vincularSaga(saga.id, osId);
     return {
       saga: { ...saga, dados: structuredClone(saga.dados) as SagaDados },
       os,
@@ -680,16 +698,42 @@ export class SagaOrchestrator {
       mudancas: [],
       historicos: [],
       mensagemId,
+      statusInicial: saga.status,
     };
   }
 
   /** Grava OS, saga (lock otimista), log e outbox; devolve as mudanças para notificar pós-commit. */
-  private async persistir(ctx: Ctx): Promise<{ os: OrdemServico; anterior: StatusOS }[]> {
+  private async persistir(ctx: Ctx): Promise<PosCommit> {
     if (ctx.osMudou) await this.d.ordens.update(ctx.os);
     ctx.saga.atualizadoEm = this.clock();
     ctx.saga = await this.d.sagas.update(ctx.saga);
     await this.gravarLogEOutbox(ctx);
-    return ctx.mudancas.map((m) => ({ os: ctx.os, anterior: m.anterior }));
+    return {
+      mudancas: ctx.mudancas.map((m) => ({ os: ctx.os, anterior: m.anterior })),
+      eventos: this.eventosDeTelemetria(ctx),
+    };
+  }
+
+  /** `SagaPassoExecutado` por linha do log da saga e `SagaFinalizada` ao entrar num estado terminal. */
+  private eventosDeTelemetria(ctx: Ctx): EventoTelemetria[] {
+    const base = { sagaId: ctx.saga.id, ordemServicoId: ctx.os.id };
+    const eventos: EventoTelemetria[] = ctx.logs.map((l) => ({
+      nome: 'SagaPassoExecutado',
+      attrs: { ...base, passo: l.passo, acao: String(l.acao), resultado: l.resultado },
+    }));
+    const terminou =
+      TERMINAIS.includes(ctx.saga.status) && !TERMINAIS.includes(ctx.statusInicial as never);
+    if (terminou) {
+      eventos.push({
+        nome: 'SagaFinalizada',
+        attrs: {
+          ...base,
+          resultado: ctx.saga.status,
+          duracaoMs: this.clock().getTime() - ctx.saga.criadoEm.getTime(),
+        },
+      });
+    }
+    return eventos;
   }
 
   /** Variante usada em `iniciar` (a saga acabou de ser criada na mesma transação). */
@@ -703,8 +747,9 @@ export class SagaOrchestrator {
     for (const msg of ctx.out) await this.d.outbox.enqueue(msg);
   }
 
-  private notificar(mudancas: { os: OrdemServico; anterior: StatusOS }[]): void {
-    for (const m of mudancas) {
+  private notificar(pos: PosCommit): void {
+    for (const e of pos.eventos) registrarEvento(e.nome, e.attrs);
+    for (const m of pos.mudancas) {
       try {
         this.d.onStatusChange?.(m.os, m.anterior);
       } catch (error) {

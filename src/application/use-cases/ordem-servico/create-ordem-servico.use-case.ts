@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { registrarEvento } from '@shared/observability/tracing';
 import { OrdemServico } from '@domain/entities/ordem-servico.entity';
 import { Servico } from '@domain/entities/servico.entity';
 import { NumeroOS } from '@domain/value-objects/numero-os.vo';
@@ -46,11 +47,21 @@ export class CreateOrdemServicoUseCase {
         throw new NotFoundError(`Serviço do catálogo ${item.catalogoServicoId} não encontrado`);
       }
 
-      const pecasUtilizadas: { pecaId: string; descricao: string; quantidade: number; precoUnitario: number }[] = [];
+      const pecasUtilizadas: {
+        pecaId: string;
+        descricao: string;
+        quantidade: number;
+        precoUnitario: number;
+      }[] = [];
       for (const p of item.pecasUtilizadas ?? []) {
         const peca = await this.pecaRepo.findById(p.pecaId);
         if (!peca) throw new NotFoundError(`Peça ${p.pecaId} não encontrada`);
-        pecasUtilizadas.push({ pecaId: peca.id, descricao: peca.descricao, quantidade: p.quantidade, precoUnitario: peca.precoVenda });
+        pecasUtilizadas.push({
+          pecaId: peca.id,
+          descricao: peca.descricao,
+          quantidade: p.quantidade,
+          precoUnitario: peca.precoVenda,
+        });
       }
 
       servicos.push(
@@ -85,6 +96,8 @@ export class CreateOrdemServicoUseCase {
       await this.osRepo.save(os);
       await this.saga.iniciar(os, correlationId, dto.observacoes);
     });
+    // Depois do commit: a saga existe de verdade. Alimenta "sagas iniciadas/hora" no dashboard.
+    registrarEvento('SagaIniciada', { ordemServicoId: os.id, numeroOS: os.numeroOS });
     return OrdemServicoMapper.toDto(os);
   }
 }
