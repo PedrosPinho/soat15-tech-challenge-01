@@ -1,0 +1,119 @@
+# Ambiente de integração LOCAL: os 3 serviços + Postgres + LocalStack + Mailhog, sem AWS nem
+# Mercado Pago (gateway fake). Pré-requisito: os repositórios irmãos clonados ao lado deste:
+#   ../soat15-tech-challenge-billing-service   ../soat15-tech-challenge-execution-service
+#
+#   docker compose -f docker-compose.integration.yml up --build -d
+#   ./scripts/smoke-fluxo-feliz.sh
+#   docker compose -f docker-compose.integration.yml down -v
+#
+# Portas no host: OS 3001 · Execution 3002 · Billing 3003 · Mailhog 8025 · LocalStack 4566.
+x-aws: &aws
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  EVENTS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:oficina-eventos
+  MESSAGING_DRIVER: sqs
+  NODE_ENV: production
+  PORT: 3001
+  JWT_SECRET: integration-jwt-secret
+  INTERNAL_API_TOKEN: integration-internal-token
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oficina
+      POSTGRES_PASSWORD: senha123
+      POSTGRES_DB: oficina
+    volumes:
+      - ./k8s/db-bootstrap.sql:/sql/db-bootstrap.sql:ro
+      - ./scripts/integration-db-init.sh:/docker-entrypoint-initdb.d/10-bootstrap.sh:ro
+    healthcheck:
+      # psql (e não pg_isready): só passa depois que o init criou os databases
+      test: psql -U oficina -d oficina_billing -c 'select 1' && psql -U oficina -d oficina_os -c 'select 1'
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [integracao]
+
+  localstack:
+    image: localstack/localstack:3.8
+    environment:
+      SERVICES: sns,sqs,dynamodb
+    ports: ['4566:4566']
+    volumes:
+      # topologia da Saga (tópico, filas + DLQ, assinatura com filter policy) e tabela do Execution
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/10-saga.sh:ro
+      - ../soat15-tech-challenge-execution-service/scripts/localstack-init.sh:/etc/localstack/init/ready.d/20-execution.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'awslocal dynamodb describe-table --table-name execucoes >/dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [integracao]
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports: ['8025:8025']
+    networks: [integracao]
+
+  os-service:
+    build: .
+    ports: ['3001:3001']
+    command: sh -c "npm run db:migrate && npm run db:seed && node dist/index.js"
+    environment:
+      <<: *aws
+      DATABASE_URL: postgres://os_service:os-dev-pass@postgres:5432/oficina_os
+      BCRYPT_ROUNDS: 10
+      EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/execution-commands
+      BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/billing-commands
+      SAGA_REPLIES_QUEUE_URL: http://localstack:4566/000000000000/os-saga-replies
+      BILLING_SERVICE_URL: http://billing-service:3001
+      OUTBOX_RELAY_INTERVAL_MS: 300
+      SAGA_SWEEPER_INTERVAL_MS: 2000
+      NOTIFICATION_PROVIDER: smtp
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+    depends_on:
+      postgres: { condition: service_healthy }
+      localstack: { condition: service_healthy }
+    networks: [integracao]
+
+  billing-service:
+    build: ../soat15-tech-challenge-billing-service
+    ports: ['3003:3001']
+    command: sh -c "npm run db:migrate && node dist/index.js"
+    environment:
+      <<: *aws
+      DATABASE_URL: postgres://billing_service:billing-dev-pass@postgres:5432/oficina_billing
+      BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/billing-commands
+      PAYMENT_GATEWAY: fake
+      MP_WEBHOOK_SECRET: integration-mp-secret
+      WEBHOOK_SECRET: integration-webhook-secret
+      OUTBOX_RELAY_INTERVAL_MS: 300
+      PUBLIC_BASE_URL: http://localhost:3003
+      NOTIFICATION_PROVIDER: smtp
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+    depends_on:
+      postgres: { condition: service_healthy }
+      localstack: { condition: service_healthy }
+    networks: [integracao]
+
+  execution-service:
+    build: ../soat15-tech-challenge-execution-service
+    ports: ['3002:3001']
+    environment:
+      <<: *aws
+      DYNAMODB_TABLE: execucoes
+      EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/execution-commands
+      OUTBOX_RELAY_INTERVAL_MS: 300
+    depends_on:
+      localstack: { condition: service_healthy }
+    networks: [integracao]
+
+networks:
+  integracao:
+    driver: bridge
