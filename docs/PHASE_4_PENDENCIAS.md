@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 8. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-12, após a Etapa 9 (todas as etapas de código/documentação concluídas). Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -77,7 +77,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 7. Ainda é código meu (não é seu), por etapa
 
-- Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
+- Nada. Todas as etapas de código e documentação estão feitas; o que resta está nas seções acima e na 12.
 
 ## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`, sem push)
 
@@ -111,3 +111,12 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] ⛔ **T8.5 — primeira execução real em `homolog`** dos 3 pipelines (ordem: OS → Execution/Billing). Espere bugs: registre cada um em `PHASE_4_TASKS.md` (seção Etapa 8) como na Fase 3. Candidatos prováveis: nome de output/parâmetro SSM, permissão da LabRole, `kubectl wait` do Job de bootstrap, `sonar.organization`/`projectKey`, shape de resposta no smoke.
 - [ ] 🔶 Conferir no 1º `plan` de PR que `terraform_remote_state` do OS resolve (o OS precisa ter aplicado antes no mesmo workspace).
 - [ ] ⚪ `destroy.yml` (Actions → Run workflow) ao fim de cada sessão do Learner Lab, na ordem do cabeçalho; o passo de workloads remove o Ingress primeiro para o ALB não ficar órfão.
+
+## 12. Etapa 9 — entregáveis finais (branch `feat/fase4-etapa9`, sem push)
+
+- [ ] ⛔ **Vídeo (≤ 15 min)** (T9.6) — roteiro no Passo 8 do `PHASE_4_EXECUTION_GUIDE.md`; gravar numa sessão do lab recém-aplicada, depois de rodar o fluxo completo e as falhas. Material pronto: collection Postman `docs/postman/oficina-fase4-fluxo-completo.postman_collection.json` (pasta "Falhas e compensações") e `scripts/smoke-fluxo-feliz.sh`.
+- [ ] ⛔ **PDF do portal** (T9.7) — conteúdo no Passo 9 do guia. Os diagramas (componentes, sequência feliz e de compensação) estão em Mermaid em `docs/architecture/`; exporte como imagem (mermaid.live ou a extensão do VS Code). Inclua prints de branch protection, quality gate e cobertura.
+- [ ] 🔶 **Importar a collection no Postman** e rodar contra o compose de integração (nunca foi aberta no Postman real).
+- [ ] 🔶 Conferir que os **badges do SonarCloud** do README do OS apontam para o `projectKey` real.
+- [ ] 🔶 Conferir que o Mermaid dos diagramas **renderiza no GitHub** (sintaxe validada só por leitura; ex.: `sequenceDiagram` com `-)`/`--)`).
+- [ ] ⚪ Push das branches `feat/fase4-etapa*` e PRs para `homolog` (e depois `main`), na ordem das etapas; as branches de etapa são cumulativas (cada uma parte da anterior).

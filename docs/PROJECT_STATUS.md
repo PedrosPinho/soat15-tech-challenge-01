@@ -1,8 +1,47 @@
 # Status do Projeto — Auto Repair Shop Management System
 
-**Última Atualização**: 2026-09-09
-**Testes**: 532 unitários/aplicação/apresentação + 65 de integração PostgreSQL + 9 de integração E2E (Testcontainers) | **Cobertura**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-**Status atual**: Fase 1 e Fase 2 completas (histórico abaixo) → **Fase 3 (Cloud, Serverless e Observabilidade) com os 4 pipelines executados e verdes em `homolog`, incluindo Observabilidade completa** — `db-infra`, `k8s-infra`, app principal (deploy no EKS) e `auth-lambda` (fases 1 e 2, VPC Link incluso) aplicados com sucesso contra a AWS real; `db:seed` implementado e os dois fluxos de autenticação (cliente por CPF e login interno e-mail/senha) validados ponta a ponta via `curl` contra o endpoint público do API Gateway; APM + `nri-bundle` conectados de verdade ao New Relic, e os 4 dashboards + 6 alertas NRQL + Synthetics monitor aplicados com sucesso (12 recursos criados). **Toda a Fase 3 está pronta, incluindo os itens administrativos** (branch protection nos 4 repos, `soat-architecture` como colaborador em todos, `main` promovida a partir de `homolog` nos 4, diagrama de arquitetura em todo README) — só restam os dois entregáveis finais que dependem do usuário: vídeo de demonstração e PDF do Portal do Aluno
+**Última Atualização**: 2026-11-12
+**Status atual**: **Fase 4 (Microsserviços, Saga e mensageria) — implementada e testada localmente; falta a primeira execução real na AWS** (ver abaixo). Fases 1–3 completas (histórico mais adiante).
+**Testes (OS Service)**: ver [Fase 4](#-tech-challenge--fase-4-microsserviços-saga-orquestrada-e-mensageria). Billing: 261 testes, 99,6 % linhas; Execution: 219 testes, 99,6 % linhas.
+
+---
+
+## 🧭 Tech Challenge — Fase 4 (Microsserviços, Saga orquestrada e mensageria)
+
+**Plano e tasks**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) · [`PHASE_4_TASKS.md`](PHASE_4_TASKS.md) (com o registro de cada etapa) ·
+**pendências do usuário**: [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md) · guia das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
+
+### Entregue (código, testes e IaC — por etapa)
+
+| Etapa | Entrega | Estado |
+|---|---|---|
+| 1 | Contratos de mensagens, RFC-005, ADR-008…015, esqueletos de Billing e Execution | ✅ |
+| 2 | **OS Service**: orquestrador da Saga (compensação, lock otimista, sweeper de timeout, pagamento tardio), outbox/inbox, `IMessageBus` (SQS/SNS | memória), `GET /:id/historico`, cancelamento por compensação, Terraform (ECR/SNS/SQS), Ingress | ✅ 🔶 suítes Postgres/Docker não rodadas |
+| 3 | **Execution Service** (DynamoDB single-table, fila por prioridade, API do mecânico, outbox em `TransactWriteItems`) | ✅ 🔶 integração LocalStack não rodada |
+| 4 | **Billing Service** (orçamento/pagamento, Mercado Pago Checkout Pro, webhook com HMAC, estorno, reconciliação) | ✅ 🔶 sandbox do MP e Postgres real não testados |
+| 5 | Plataforma: roles/databases por serviço, nós `t3.medium`, VPC Link → ALB, Lambda de token via HTTP (sem acesso ao RDS), rota pública do webhook | ✅ 🔶 nenhum `apply` |
+| 6 | BDD (6 cenários), contratos entre serviços, integração LocalStack, SonarCloud, compose de integração + smoke | ✅ 🔶 smoke e compose nunca executados |
+| 7 | Tracing distribuído pelas filas, eventos da Saga, `FilaProfundidade`, dashboard/alertas | ✅ 🔶 sem conta New Relic |
+| 8 | CI/CD com quality gate, `terraform plan` em PR, `destroy.yml`, script de branch protection | ✅ 🔶 nenhum pipeline rodou |
+| 9 | READMEs, diagramas (componentes, sequências, modelo de dados por serviço), Postman do fluxo completo | ✅ (vídeo e PDF: ver abaixo) |
+
+### Arquitetura
+3 microsserviços — **OS Service** (este repo, PostgreSQL `oficina_os`), **Billing** (PostgreSQL `oficina_billing`) e **Execution**
+(DynamoDB) — + `db-infra`, `k8s-infra`, `auth-lambda`. Saga orquestrada no OS; SQS para comandos, SNS para eventos; nenhum
+serviço acessa o banco de outro. Diagramas: [`component-diagram.md`](architecture/component-diagram.md),
+[`sequence-saga-feliz.md`](architecture/sequence-saga-feliz.md), [`sequence-saga-compensacao.md`](architecture/sequence-saga-compensacao.md),
+[`data-model.md`](architecture/data-model.md).
+
+### Verificação honesta
+- **Verificado localmente**: `tsc`, lint, prettier, testes unitários/BDD/contratos nos 3 serviços (Billing e Execution ≥ 99 % de linhas),
+  `terraform fmt/validate` nos 6 repos de IaC, YAML dos manifestos/pipelines.
+- **Nunca executado** (ambiente de desenvolvimento sem Docker/AWS/contas externas): suítes Testcontainers/LocalStack, `docker compose`,
+  `smoke-fluxo-feliz.sh`, qualquer `terraform apply`, deploy no EKS, Mercado Pago sandbox, SonarCloud, New Relic. Cada item está
+  listado em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md).
+- **Cobertura do OS Service** só é mensurável com Docker (sem as suítes de Postgres: 86,6 % de linhas) — o número oficial sai do CI.
+
+### Entregáveis que dependem do usuário
+- Vídeo (≤ 15 min) — roteiro no Passo 8 do guia · PDF do portal — conteúdo no Passo 9 do guia.
 
 ---
 

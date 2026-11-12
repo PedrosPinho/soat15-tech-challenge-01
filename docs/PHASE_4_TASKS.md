@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 8 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5 a 8 implementadas (sem `apply`/Docker/conta New Relic/primeira execução real dos pipelines). Próxima: Etapa 9 (documentação e entregáveis).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 9 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5 a 9 implementadas (sem `apply`/Docker/conta New Relic/primeira execução real dos pipelines). O que falta é com você: ver `PHASE_4_PENDENCIAS.md` (contas, validação com Docker/AWS, vídeo e PDF).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -208,13 +208,20 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 9 — Documentação e entregáveis
 
-- [ ] **T9.1 [EX/BI]** README completo (propósito, arquitetura do serviço com diagrama, banco e justificativa, contratos produzidos/consumidos, endpoints, execução local, CI/CD, evidência de cobertura, Swagger/Postman).
-- [ ] **T9.2 [OS]** README: reescrever como OS Service + seção "Saga Pattern — estratégia orquestrada e justificativa" + diagramas de sequência + links dos outros 5 repos.
-- [ ] **T9.3 [OS]** `docs/architecture/`: `component-diagram.md` (microsserviços), `sequence-saga-feliz.md`, `sequence-saga-compensacao.md`, `data-model.md` por serviço.
-- [ ] **T9.4 [OS/EX/BI]** Swagger por serviço + collection Postman do fluxo completo (variáveis encadeadas: token → OS → execução → orçamento → pagamento).
-- [ ] **T9.5 [OS]** Atualizar `docs/PROJECT_STATUS.md` com a Fase 4.
+- [x] **T9.1 [EX/BI]** README completo (propósito, arquitetura do serviço com diagrama, banco e justificativa, contratos produzidos/consumidos, endpoints, execução local, CI/CD, evidência de cobertura, Swagger/Postman).
+  ↳ READMEs de Billing e Execution: diagrama de posição na solução, contratos, banco, endpoints, execução local, CI/CD, cobertura medida (99,6 % de linhas em ambos), Swagger/Postman.
+- [x] **T9.2 [OS]** README: reescrever como OS Service + seção "Saga Pattern — estratégia orquestrada e justificativa" + diagramas de sequência + links dos outros 5 repos.
+  ↳ README do OS reescrito (tabela dos 6 repos, arquitetura geral, justificativa da divisão, Saga orquestrada vs coreografada com sequência, runbook de `FALHA_COMPENSACAO`, CI/CD, observabilidade). Badges do SonarCloud presumem `projectKey=pedrospinho_soat15-tech-challenge-01`.
+- [x] **T9.3 [OS]** `docs/architecture/`: `component-diagram.md` (microsserviços), `sequence-saga-feliz.md`, `sequence-saga-compensacao.md`, `data-model.md` por serviço.
+  ↳ `component-diagram.md` (Fase 4; o da Fase 3 ficou em `component-diagram-fase3.md`), `sequence-saga-feliz.md`, `sequence-saga-compensacao.md` (tabela de compensação conferida com `PASSOS_A_PULAR_NA_FALHA` e o BDD) e `data-model.md` com ER do `oficina_os`, do `oficina_billing` e o modelo single-table do DynamoDB.
+- [x] **T9.4 [OS/EX/BI]** Swagger por serviço + collection Postman do fluxo completo (variáveis encadeadas: token → OS → execução → orçamento → pagamento).
+  ↳ Swagger por serviço já existia; nova collection `docs/postman/oficina-fase4-fluxo-completo.postman_collection.json` (24 requisições, variáveis encadeadas, pasta de falhas/compensações). Nunca importada no Postman real.
+- [x] **T9.5 [OS]** Atualizar `docs/PROJECT_STATUS.md` com a Fase 4.
+  ↳ `PROJECT_STATUS.md` ganhou a seção da Fase 4 com o estado de cada etapa e a verificação honesta.
 - [ ] **T9.6 [👤]** Vídeo (≤ 15 min) — roteiro no guia de execução.
+  ⏳ Com você — roteiro no Passo 8 do guia (ensaiar na mesma sessão do lab).
 - [ ] **T9.7 [👤]** PDF do portal — conteúdo no guia de execução.
+  ⏳ Com você — conteúdo no Passo 9 do guia.
 
 ---
 
@@ -339,3 +346,7 @@ Branch `feat/fase4-etapa8` nos 3 serviços (sem push). **Verificado**: YAML dos 
 - `terraform plan` em PR usa `-lock=false` (não trava o estado remoto compartilhado) e escreve o plano no `GITHUB_STEP_SUMMARY`; em PR para `main` é `continue-on-error` (workspace prod inexistente, ADR-007).
 - O apply do Terraform agora espera o `Sonar` (build → test → sonar → terraform), então um quality gate reprovado impede criar recursos.
 - Ordem de destroy: Billing/Execution → OS → auth-lambda → k8s-infra → db-infra (os dois primeiros leem o estado do OS).
+
+### 2026-11-12 — Etapa 9 (documentação)
+
+Branch `feat/fase4-etapa9` nos 3 serviços (sem push). Só documentação e a collection Postman — nenhuma mudança de código. Números de cobertura re-medidos nas branches finais (Billing 261 testes / 99,6 % linhas / 92,9 % branches; Execution 219 / 99,6 % / 93,2 %). Diagramas em Mermaid (renderizam no GitHub); o PDF exige exportá-los como imagem (Passo 9 do guia).
