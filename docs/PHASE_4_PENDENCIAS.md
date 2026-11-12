@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 7. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-12, após a Etapa 8. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -77,7 +77,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 7. Ainda é código meu (não é seu), por etapa
 
-- Etapa 8 — CI/CD final (SonarCloud). Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
+- Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
 
 ## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`, sem push)
 
@@ -103,3 +103,11 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] 🔶 Conferir contra dados reais: nomes de evento/atributo (`SagaIniciada`, `SagaPassoExecutado`, `SagaFinalizada`, `FilaProfundidade`), a NRQL aninhada do billboard de DLQ e o `transactionName` do webhook MP (alerta). Ajustar em `k8s-infra/newrelic_saga.tf`.
 - [ ] 🔶 **Forçar uma mensagem para a DLQ** (ex.: enviar JSON inválido a `…-billing-commands`) e conferir que o alerta "Mensagem em DLQ" dispara (≤ ~6 min: coleta de 60 s + janela de 5 min).
 - [ ] ⚪ O alerta "taxa de compensação > 50 %" é ruidoso com pouco volume; ajuste o limiar/duração se disparar à toa no vídeo.
+
+## 11. Etapa 8 — CI/CD (branch `feat/fase4-etapa8` nos 3 serviços, sem push)
+
+- [ ] ⛔ **`SONAR_TOKEN`** como GitHub Secret nos 3 serviços (Guia Passo 3) — sem ele o job `Sonar` falha e, sendo check obrigatório, bloqueia merge e o `terraform apply`.
+- [ ] ⛔ **Branch protection**: com os remotos criados, `./scripts/protect-branches.sh --dry-run` e depois sem a flag (cria PR obrigatório + checks `Build`, `Test`, `Sonar` em `main`/`homolog` dos 3 serviços). Só rode **depois** de o `Sonar` rodar uma vez verde, senão ninguém consegue mergear.
+- [ ] ⛔ **T8.5 — primeira execução real em `homolog`** dos 3 pipelines (ordem: OS → Execution/Billing). Espere bugs: registre cada um em `PHASE_4_TASKS.md` (seção Etapa 8) como na Fase 3. Candidatos prováveis: nome de output/parâmetro SSM, permissão da LabRole, `kubectl wait` do Job de bootstrap, `sonar.organization`/`projectKey`, shape de resposta no smoke.
+- [ ] 🔶 Conferir no 1º `plan` de PR que `terraform_remote_state` do OS resolve (o OS precisa ter aplicado antes no mesmo workspace).
+- [ ] ⚪ `destroy.yml` (Actions → Run workflow) ao fim de cada sessão do Learner Lab, na ordem do cabeçalho; o passo de workloads remove o Ingress primeiro para o ALB não ficar órfão.
