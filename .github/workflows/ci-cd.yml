@@ -62,8 +62,21 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # SQS/SNS reais para tests/integration/messaging-localstack.spec.ts.
+      localstack:
+        image: localstack/localstack:3.8
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: sqs,sns
+        options: >-
+          --health-cmd "curl -fs http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       NODE_ENV: test
+      LOCALSTACK_ENDPOINT: http://localhost:4566
       DATABASE_URL: postgres://oficina:ci-password@localhost:5432/oficina
       JWT_SECRET: ci-test-jwt-secret
       INTERNAL_API_TOKEN: ci-test-internal-token
@@ -90,6 +103,18 @@ jobs:
         run: |
           set -o pipefail
           npm run test:coverage | tee coverage-output.txt
+
+      - name: Relatório BDD (ciclo da OS)
+        if: always()
+        shell: bash
+        run: |
+          npx jest tests/bdd tests/contracts --silent --verbose 2>&1 | grep -E "✓|✕|Tests:" > bdd-output.txt || true
+          {
+            echo '## BDD — ciclo da OS e contratos entre serviços'
+            echo '```'
+            cat bdd-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish coverage summary
         if: always()
