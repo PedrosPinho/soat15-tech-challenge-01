@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 (OS), 3 (Execution), 4 (Billing) e 5 (plataforma) implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapa 5 (plataforma) implementada nos 4 repos (sem `apply`). Próxima: Etapa 6 (testes e qualidade).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 6 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5 (plataforma) e 6 (testes e qualidade) implementadas (sem `apply`/Docker). Próxima: Etapa 7 (observabilidade distribuída).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -159,13 +159,20 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 6 — Testes e qualidade
 
-- [ ] **T6.1 [OS]** `jest-cucumber` + `tests/bdd/features/ciclo-os.feature` (`# language: pt`) com os 6 cenários do plano; *step definitions* com Postgres (Testcontainers) + `InMemoryMessageBus` + fakes de Billing/Execution.
+- [x] **T6.1 [OS]** `jest-cucumber` + `tests/bdd/features/ciclo-os.feature` (`# language: pt`) com os 6 cenários do plano; *step definitions* com Postgres (Testcontainers) + `InMemoryMessageBus` + fakes de Billing/Execution.
   ✔ 6 cenários verdes no CI; relatório do BDD publicado no `GITHUB_STEP_SUMMARY`.
-- [ ] **T6.2 [OS/EX/BI]** Testes de integração com LocalStack (Testcontainers) para o adapter de mensageria e, no EX, o repositório DynamoDB.
-- [ ] **T6.3 [OS/EX/BI]** `coverageThreshold` 80% global em cada `jest.config.js`, excluindo só bootstrap (`src/index.ts`).
+  ✅ 6 cenários em português verdes (`tests/bdd/`), com mutação conferida (trocar a ordem esperada de compensação quebra o cenário). Relatório no `GITHUB_STEP_SUMMARY` (passo no CI). **Desvio**: o OS roda com repositórios em memória (rollback transacional simulado), não Postgres/Testcontainers — o Postgres real já é coberto pelas suítes de repositório/integração; BDD ficou executável sem Docker.
+  ➕ **Contratos entre serviços** (`tests/contracts/`, não previstos no plano): produtor gera envelopes reais → JSON versionado → copiado ao consumidor, que o alimenta aos handlers reais. Pegou na prática ids de correlação inconsistentes entre fluxos. Cobre os 7 comandos do OS e os 17 eventos da filter policy.
+- [x] **T6.2 [OS/EX/BI]** Testes de integração com LocalStack (Testcontainers) para o adapter de mensageria e, no EX, o repositório DynamoDB.
+  🔶 `tests/integration/messaging-localstack.spec.ts` (raw delivery + filter policy, delete pós-commit, DLQ) nos 3 repos e o spec do DynamoDB no Execution; CI sobe LocalStack como service container. **Escritos e type-checados, nunca executados** (sem Docker). Não usa Testcontainers: service container do GitHub Actions.
+- [x] **T6.3 [OS/EX/BI]** `coverageThreshold` 80% global em cada `jest.config.js`, excluindo só bootstrap (`src/index.ts`).
   ✔ `npm run test:coverage` ≥ 80% nos 3 (registrar os números aqui).
-- [ ] **T6.4 [OS/EX/BI]** `sonar-project.properties` apontando para SonarCloud (`sonar.organization`, `sonar.projectKey`), remover `sonar.login/password` hardcoded do OS.
-- [ ] **T6.5 [OS]** Docker-compose de integração local (os 3 serviços + Postgres + LocalStack) e script de smoke do fluxo feliz.
+  ✅ Medido sem Docker: **Billing 98,2 % linhas / 93,5 % branches**, **Execution 98,8 % / 95,3 %** (limite 80 %). 🔶 **OS: não mensurável aqui** — sem as 10 suítes de Docker: 86,6 % linhas, 77,0 % branches, 78,5 % funções (abaixo de 80 % só porque os repositórios/mappers/rotas Postgres ficam descobertos sem Docker); o número real sai do CI.
+- [x] **T6.4 [OS/EX/BI]** `sonar-project.properties` apontando para SonarCloud (`sonar.organization`, `sonar.projectKey`), remover `sonar.login/password` hardcoded do OS.
+  ↳ `sonar-project.properties` nos 3 repos (`sonar.organization=pedrospinho`, `projectKey=pedrospinho_<repo>` — **valores presumidos, conferir no SonarCloud**); `sonar.login/password` removidos e o SonarQube local (compose + scripts npm) eliminado. O scan no CI fica para a Etapa 8.
+- [x] **T6.5 [OS]** Docker-compose de integração local (os 3 serviços + Postgres + LocalStack) e script de smoke do fluxo feliz.
+  🔶 `docker-compose.integration.yml` (OS + Billing + Execution + Postgres com o MESMO `db-bootstrap.sql` + LocalStack + Mailhog) e `scripts/smoke-fluxo-feliz.sh` (curl+jq, 10 passos até OS `FINALIZADA` e `receitaTotal` no dashboard). Billing ganhou `POST /internal/dev/mercadopago/pagamentos` (só com `PAYMENT_GATEWAY=fake`) para simular o comprador. **Nada disso foi executado** (sem Docker); o script só passou por `bash -n`.
+
 
 ## Etapa 7 — Observabilidade distribuída
 
@@ -290,3 +297,12 @@ Branch `feat/fase4-etapa5` em 4 repos (sem push): `db-infra`, `k8s-infra`, `auth
 - `eks_service_tag_value`/`eks_nlb_listener_port` viraram `eks_ingress_group`/`eks_alb_listener_port`; o CI do auth-lambda exporta `TF_VAR_internal_api_token` (novo GitHub Secret `INTERNAL_API_TOKEN` nesse repo).
 - O API Gateway não roteia por serviço: o `ANY /api/{proxy+}` vai ao ALB e o Ingress distribui por path.
 - `db-infra` e `k8s-infra` ainda leem o remote state de `homolog` fixo (herdado da Fase 3).
+
+### 2026-11-12 — Etapa 6 (testes e qualidade)
+
+Branch `feat/fase4-etapa6` nos 3 serviços (sem push; as branches das etapas anteriores foram mantidas nos commits de cada etapa). **Verificado**: OS — BDD (6) + contratos (25) verdes, `tsc` limpo; Billing 243 testes e Execution 201 passando; lint/prettier limpos. **Não verificado**: tudo que exige Docker (integração LocalStack nos 3, compose de integração, smoke) e a cobertura real do OS.
+
+**Desvios / decisões**
+- Contratos por exemplo: se o formato de um comando/evento mudar, o teste do **produtor** falha até regenerar (`UPDATE_CONTRACTS=1 npx jest tests/contracts`) e copiar o JSON ao consumidor — o processo é manual (sem repositório compartilhado, como decidido na A3/A4).
+- `FakePaymentGateway` passou a gerar ids determinísticos (`pref-N`, `refund-N`) para os contratos serem estáveis.
+- O BDD usa os eventos reais do contrato nos testes de contrato, com os ids de correlação trocados pelos da saga (cada fixture vem de um fluxo diferente do produtor).
