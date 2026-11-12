@@ -20,4 +20,5 @@ AGENTS.md
 PROJECT_STATUS.md
 project_sumary.md
 
-.claude/*terraform/.terraform/
+.claude/*
+terraform/.terraform/
