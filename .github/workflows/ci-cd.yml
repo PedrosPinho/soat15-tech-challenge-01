@@ -254,12 +254,33 @@ jobs:
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/namespace.yaml | \
             sed "s/name: oficina$/name: $NAMESPACE/" | kubectl apply -f -
 
-      - name: Secret (endpoint/senha do RDS e JWT_SECRET vêm do SSM — nunca em arquivo)
-        # DATABASE_URL/JWT_SECRET: lidos do SSM Parameter Store, nos parâmetros que
-        # db-infra e auth-lambda já criam por workspace (ver rds.tf/ssm.tf naqueles
-        # repositórios) — o endpoint do RDS não tem parâmetro próprio (só a senha),
-        # então vem do describe-db-instances pelo identifier, que segue a mesma
-        # convenção de nome (`${project_name}-${workspace}-...`).
+      - name: Bootstrap dos databases/roles (Job; senha master só existe aqui)
+        # Cria (idempotente) oficina_os/oficina_billing e os roles os_service/billing_service,
+        # com REVOKE CONNECT ... FROM PUBLIC (ADR-012). Roda no cluster porque o runner do
+        # GitHub não alcança o RDS. O Billing depende deste passo: o OS faz deploy primeiro.
+        run: |
+          DB_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "soat15-tc-${TF_ENV}-db" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)
+          get() { aws ssm get-parameter --name "$1" --with-decryption --query 'Parameter.Value' --output text; }
+          kubectl create secret generic oficina-db-bootstrap -n "$NAMESPACE" \
+            --from-literal=PGHOST="$DB_ENDPOINT" \
+            --from-literal=PGUSER=oficina \
+            --from-literal=PGPASSWORD="$(get /soat15-tc/${TF_ENV}/db/password)" \
+            --from-literal=OS_PASSWORD="$(get /soat15-tc/${TF_ENV}/db/os-service-password)" \
+            --from-literal=BILLING_PASSWORD="$(get /soat15-tc/${TF_ENV}/db/billing-service-password)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap oficina-db-bootstrap-sql -n "$NAMESPACE" \
+            --from-file=db-bootstrap.sql=k8s/db-bootstrap.sql --dry-run=client -o yaml | kubectl apply -f -
+          kubectl delete job oficina-db-bootstrap -n "$NAMESPACE" --ignore-not-found
+          sed -e "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/job-db-bootstrap.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/oficina-db-bootstrap -n "$NAMESPACE" --timeout=120s \
+            || { kubectl logs job/oficina-db-bootstrap -n "$NAMESPACE" --tail=100; exit 1; }
+          kubectl delete secret oficina-db-bootstrap -n "$NAMESPACE" --ignore-not-found
+
+      - name: Secret (role os_service no database oficina_os e JWT_SECRET vêm do SSM — nunca em arquivo)
+        # DATABASE_URL: role `os_service` (não mais o master) no database `oficina_os` — criados
+        # pelo passo anterior; a senha vem do SSM (db-infra). JWT_SECRET: auth-lambda.
         # INTERNAL_API_TOKEN: token serviço-a-serviço (Lambda de auth -> /internal,
         # OS -> Billing). Mesmo valor nos 3 serviços e na Lambda: GitHub Secret
         # em cada repositório (ver PHASE_4_EXECUTION_GUIDE.md, Passo 4).
@@ -267,13 +288,12 @@ jobs:
           DB_ENDPOINT=$(aws rds describe-db-instances \
             --db-instance-identifier "soat15-tc-${TF_ENV}-db" \
             --query 'DBInstances[0].Endpoint.Address' --output text)
-          DB_PASSWORD=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/db/password" --with-decryption --query 'Parameter.Value' --output text)
+          DB_PASSWORD=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/db/os-service-password" --with-decryption --query 'Parameter.Value' --output text)
           JWT_SECRET=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/jwt-secret" --with-decryption --query 'Parameter.Value' --output text)
-          # A senha do RDS permite caracteres especiais (#, %, ?, [, ], etc. — ver
-          # override_special em db-infra/rds.tf) que quebram a URL sem escapar.
+          # Senha só alfanumérica (db-infra), mas escapa por garantia.
           DB_PASSWORD_URLENC=$(jq -rn --arg v "$DB_PASSWORD" '$v|@uri')
           kubectl create secret generic oficina-api-secret -n "$NAMESPACE" \
-            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina?sslmode=no-verify" \
+            --from-literal=DATABASE_URL="postgres://os_service:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina_os?sslmode=no-verify" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
             --from-literal=INTERNAL_API_TOKEN="${{ secrets.INTERNAL_API_TOKEN }}" \
             --from-literal=NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}" \

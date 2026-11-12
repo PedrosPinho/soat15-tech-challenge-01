@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 4. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-12, após a Etapa 5. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -25,7 +25,10 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] 🔶 **Billing**: `docker compose up --build`; `TEST_DATABASE_URL=postgres://oficina:senha123@localhost:5433/oficina_billing npm test` (ativa `tests/integration.postgres.spec.ts`, 5 testes).
 - [ ] 🔶 `docker build` dos 3 serviços (nenhuma imagem foi construída).
 - [ ] 🔶 Fluxo ponta a ponta local (3 serviços + LocalStack): criar OS → diagnóstico → orçamento → aprovar → pagamento → reparo, e o caminho de compensação. Ainda não existe teste E2E multi-serviço (Etapa 6).
-- [ ] ⚪ `tflint` nos 3 `terraform/` (não instalado no ambiente).
+- [ ] ⚪ `tflint` nos `terraform/` dos 6 repos (não instalado no ambiente).
+- [ ] 🔶 **Bootstrap do banco** (`k8s/db-bootstrap.sql`): nunca rodou. Teste com `psql` como `billing_service` em `oficina_os` ⇒ `permission denied for database`; e `os_service` conectando em `oficina_os` com a URL do Secret.
+- [ ] 🔶 **Lambda de token** contra o ambiente real: `POST /auth/token` com os mesmos CPFs da Fase 3 (200/400/403/404). Lembre: o database `oficina_os` nasce vazio — o seed do OS recria admin e cliente de teste.
+- [ ] 🔶 `kubectl get pods -A` sem `Pending` com os 3 serviços (`t3.medium`); se faltar memória, desligar `kubeEvents` no `nri-bundle`.
 
 ## 3. Contas externas (Etapa 0)
 
@@ -46,17 +49,19 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 | `WEBHOOK_SECRET` | — | — | ✅ | aprovação externa de orçamento (migrou do OS) |
 | `MP_NOTIFICATION_URL` | — | — | ✅ | URL pública do webhook no API Gateway — só existe após o 1º deploy do gateway (Etapa 5/T5.4) |
 | `NEW_RELIC_LICENSE_KEY` | ⚪ | ⚪ | ⚪ | |
+
+**Repos de infra** (`db-infra`, `k8s-infra`, `auth-lambda`) também precisam dos 3 `AWS_*`. O `auth-lambda` ganhou um secret novo: **`INTERNAL_API_TOKEN`** (mesmo valor dos serviços; vira `TF_VAR_internal_api_token` e entra na Lambda de token).
 | `SONAR_TOKEN` | ⚪ | ⚪ | ⚪ | Etapa 8 |
 
 - [ ] ⛔ Criar os Environments `homolog` e `prod` nos repos que os usam (os jobs `terraform-apply` e `deploy` referenciam `environment:`).
-- [ ] ⛔ **T0.6** Atualizar `scripts/refresh-aws-secrets.sh` (OS) para publicar nos **6** repos — **ainda não feito** (é uma task de código minha, pendente).
+- [ ] ⛔ **T0.6** `scripts/refresh-aws-secrets.sh` já publica nos **6** repos (`--dry-run` lista). Falta você rodá-lo com as credenciais do Learner Lab no início de cada sessão.
 
 ## 5. Ordem do primeiro deploy
 
-1. Plataforma: `db-infra` → `k8s-infra` (com as mudanças da Etapa 5, ainda **não implementadas**: bootstrap dos databases/roles, node `t3.medium`, VPC Link para o ALB).
-2. **OS Service** primeiro (dono do tópico SNS `oficina-eventos` e da fila `os-saga-replies`; o Terraform dos outros dois lê o estado dele).
-3. Execution e Billing (qualquer ordem). Billing exige antes o database `oficina_billing`, o role `billing_service` e o SSM `/soat15-tc/<env>/db/billing-service-password` (T5.1/T5.2).
-4. `auth-lambda` (aponta para o ALB; Etapa 5).
+1. Plataforma: `db-infra` (gera as senhas dos roles no SSM) → `k8s-infra` (nós `t3.medium`). Com estado antigo da Fase 3, o `apply` do `k8s-infra` **troca o node group** (instância mudou) e o do `db-infra` tira a regra Lambda→RDS do SG.
+2. **OS Service** primeiro (dono do tópico SNS `oficina-eventos` e da fila `os-saga-replies`; o Terraform dos outros dois lê o estado dele). O deploy do OS roda o **Job de bootstrap** que cria `oficina_os`/`oficina_billing` e os roles — o Billing depende dele.
+3. Execution e Billing (qualquer ordem). Billing exige antes o bootstrap feito pelo deploy do OS.
+4. `auth-lambda` **depois** dos Ingress (precisa do ALB): fase 1 do apply cria só a API e `POST /auth/token` (que responde 500 até a fase 2); com `enable_vpc_link_integration=true` (default) o `plan` falha se o ALB ainda não existir.
 - [ ] ⛔ Rodar o `terraform apply` em `homolog` pelo push (o CI aplica só em `homolog`; em `main` só faz `plan`, ADR-007) e conferir no console: tabela `…-execucoes`, 2 filas de comando + DLQs, tópico `oficina-eventos`, fila `os-saga-replies` com a assinatura e a filter policy.
 
 ## 6. Decisões/contratos para você confirmar
@@ -69,7 +74,17 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 7. Ainda é código meu (não é seu), por etapa
 
-- Etapa 5 — plataforma: bootstrap do DB/roles (T5.1–T5.2), `t3.medium` (T5.3), VPC Link/ALB e rota pública do webhook MP (T5.4), Lambda de token via `/internal/clientes/by-cpf` (T5.5).
-- Etapa 6 — testes: E2E/BDD multi-serviço, cobertura do OS, role `os_service`/database `oficina_os` (T2.18).
+- Etapa 6 — testes: E2E/BDD multi-serviço, cobertura do OS (medir com Docker), teste de isolamento de banco.
 - Etapa 7 — observabilidade distribuída (New Relic, propagação de `traceparent`).
 - Etapa 8 — CI/CD final (SonarCloud). Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
+
+## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`, sem push)
+
+| Repo | Mudança |
+|---|---|
+| `db-infra` | senhas dos roles `os-service`/`billing-service` no SSM; SG do RDS sem a Lambda |
+| `k8s-infra` | `node_instance_type = t3.medium`; comentários do ALB/nri-bundle |
+| `auth-lambda` | token via HTTP no OS; VPC Link → ALB; rota pública do webhook MP; sem `pg`/RDS |
+| `soat15-tech-challenge-01` (OS) | `k8s/db-bootstrap.sql` + Job; `DATABASE_URL` com `os_service`/`oficina_os`; `refresh-aws-secrets.sh` p/ 6 repos |
+- [ ] ⛔ Push + PR dessas 3 branches nos repos de infra (`main`/`homolog` protegidas), na ordem do item 5.
+- [ ] ⚪ Os repos de infra leem `terraform_remote_state` do workspace `homolog` fixo (herança da Fase 3): em `prod` não há ambiente real (ADR-007).

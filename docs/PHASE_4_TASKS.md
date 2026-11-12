@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 (OS), 3 (Execution) e 4 (Billing) implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Próxima: Etapa 5 (plataforma compartilhada).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 (OS), 3 (Execution), 4 (Billing) e 5 (plataforma) implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapa 5 (plataforma) implementada nos 4 repos (sem `apply`). Próxima: Etapa 6 (testes e qualidade).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -25,8 +25,9 @@ e "executado contra a AWS" são registrados separadamente.
   🔶 **Parcial**: os dois repositórios já existem **localmente** (`/home/pedropinho/soat/…`) com commit inicial, `main` + `homolog` e git user/email locais configurados. **Falta**: criar os remotos públicos no GitHub, `git remote add origin … && git push -u origin main homolog` e adicionar `soat-architecture` (ver Passo 1 do guia).
 - [ ] **T0.4 [👤]** Conta Mercado Pago Developers: aplicação, credenciais de **teste**, usuários de teste (vendedor/comprador), webhook secret.
 - [ ] **T0.5 [👤]** SonarCloud: organização ligada ao GitHub, 3 projetos, `SONAR_TOKEN` em cada repo de serviço.
-- [ ] **T0.6 [OS]** `scripts/refresh-aws-secrets.sh` publicando nos 6 repos (lista de repos parametrizada).
+- [x] **T0.6 [OS]** `scripts/refresh-aws-secrets.sh` publicando nos 6 repos (lista de repos parametrizada).
   ✔ `--dry-run` lista os 6 repos; execução real atualiza os secrets nos 6.
+  ✅ `--dry-run` lista os 6 repos (testado); execução real depende de `gh`/credenciais — não executada.
 
 ## Etapa 1 — Contratos, decisões e esqueletos
 
@@ -93,7 +94,7 @@ e "executado contra a AWS" são registrados separadamente.
   ✅ `GET /internal/clientes/by-cpf/:cpf` (`internalTokenMiddleware`, comparação em tempo constante) montado em `/internal`, fora de `/api`.
 - [x] **T2.17** `DashboardUseCase` lê `receitaTotal` do Billing (`GET /internal/financeiro/resumo`, timeout 2s, fallback `null` + log de warning).
   ✅ `HttpFinanceiroGateway` (timeout 2 s, fallback `null` + warning); `receitaTotal: number | null`.
-- [ ] **T2.18** Conexão como `os_service` no database `oficina_os` (`DATABASE_URL` montada no deploy com o role novo).
+- [x] **T2.18** Conexão como `os_service` no database `oficina_os` (`DATABASE_URL` montada no deploy com o role novo).
   🔶 O app só consome `DATABASE_URL`; a criação do role `os_service`/database `oficina_os` e a montagem da URL no deploy dependem do `db-infra` (Etapa 6). O CI ainda usa `oficina`/`oficina` até lá.
 - [ ] **T2.19** `terraform/` próprio: backend S3 (key própria), ECR `soat15-tc-os-service`, SNS `oficina-eventos`, SQS `os-saga-replies` + DLQ + assinatura com filter policy, outputs (ARNs/URLs) consumidos pelos outros serviços via `terraform_remote_state`.
   ✔ `terraform validate` + `tflint` limpos; `apply` em `homolog` confirmado.
@@ -141,14 +142,20 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 5 — Plataforma compartilhada
 
-- [ ] **T5.1 [DB]** Script SQL idempotente de bootstrap (`CREATE DATABASE`/`ROLE` se não existir, `GRANT`, `REVOKE CONNECT ... FROM PUBLIC`) + senhas dos roles geradas pelo Terraform no SSM (`/soat15-tc/<env>/db/os-service-password`, `.../billing-service-password`).
-- [ ] **T5.2 [OS/BI]** `k8s/job-db-bootstrap.yaml` executado pelo pipeline antes da migration (usa a senha master do SSM só nesse Job).
+- [x] **T5.1 [DB]** Script SQL idempotente de bootstrap (`CREATE DATABASE`/`ROLE` se não existir, `GRANT`, `REVOKE CONNECT ... FROM PUBLIC`) + senhas dos roles geradas pelo Terraform no SSM (`/soat15-tc/<env>/db/os-service-password`, `.../billing-service-password`).
+  ↳ Senhas dos roles em `db-infra` (`random_password` alfanumérico → SSM `…/db/os-service-password` e `…/billing-service-password`); SQL idempotente em `k8s/db-bootstrap.sql` (OS). 🔶 Nunca executado contra um PostgreSQL/RDS reais (sem Docker/psql aqui): `\gexec`, `GRANT role TO CURRENT_USER` e `CREATE DATABASE … OWNER` precisam de validação.
+- [x] **T5.2 [OS/BI]** `k8s/job-db-bootstrap.yaml` executado pelo pipeline antes da migration (usa a senha master do SSM só nesse Job).
   ✔ `psql` como `billing_service` em `oficina_os` ⇒ `permission denied`.
-- [ ] **T5.3 [K8S]** `node_instance_type = "t3.medium"`; revisar componentes do `nri-bundle` (desligar o que não é usado nos dashboards).
+  ↳ `k8s/job-db-bootstrap.yaml` + passo no CI do OS (Secret com a senha master é apagado após o Job). O `DATABASE_URL` do OS passou a usar `os_service`/`oficina_os` (**fecha a T2.18**). 🔶 Teste `psql` como `billing_service` em `oficina_os` ⇒ `permission denied`: pendente.
+- [x] **T5.3 [K8S]** `node_instance_type = "t3.medium"`; revisar componentes do `nri-bundle` (desligar o que não é usado nos dashboards).
   ✔ `kubectl get pods -A` sem `Pending` com os 3 serviços implantados.
-- [ ] **T5.4 [AUTH]** VPC Link → listener do **ALB** do IngressGroup (lookup por tag `ingress.k8s.aws/stack`); manter `/auth/token`, `/api/auth/login`, `/health/ready` públicos; nova rota pública `POST /api/pagamentos/webhooks/mercadopago`.
-- [ ] **T5.5 [AUTH]** Lambda de token chama `GET /internal/clientes/by-cpf/:cpf` no ALB interno (URL e `x-internal-token` via SSM); remover `pg`/`db.ts`, a regra Lambda→RDS do SG em `db-infra` e o acesso ao parâmetro de senha do banco.
+  ↳ `node_instance_type = t3.medium`. `nri-bundle` mantido (low data mode); comentário indica o que desligar primeiro se houver `Pending`. 🔶 `kubectl get pods -A` com os 3 serviços: não verificável aqui.
+- [x] **T5.4 [AUTH]** VPC Link → listener do **ALB** do IngressGroup (lookup por tag `ingress.k8s.aws/stack`); manter `/auth/token`, `/api/auth/login`, `/health/ready` públicos; nova rota pública `POST /api/pagamentos/webhooks/mercadopago`.
+  ↳ VPC Link → listener do ALB (`data.aws_lb` por tag `ingress.k8s.aws/stack = oficina-<env>`, porta 80); rota pública `POST /api/pagamentos/webhooks/mercadopago`; `/internal/*` sem rota. `terraform validate` OK; não aplicado.
+- [x] **T5.5 [AUTH]** Lambda de token chama `GET /internal/clientes/by-cpf/:cpf` no ALB interno (URL e `x-internal-token` via SSM); remover `pg`/`db.ts`, a regra Lambda→RDS do SG em `db-infra` e o acesso ao parâmetro de senha do banco.
   ✔ `POST /auth/token` continua 200/400/403/404 com os mesmos CPFs da Fase 3.
+  ↳ Lambda de token chama `/internal/clientes/by-cpf/:cpf` (`INTERNAL_BASE_URL` = DNS do ALB, `INTERNAL_API_TOKEN` via `TF_VAR`); removidos `pg`, `db.ts`, `DATABASE_URL` e a regra Lambda→RDS do SG (db-infra). 29→32 testes (novos: cliente HTTP e handler de token: 400/404/403/200/500, 404≡403 no corpo). 🔶 Os mesmos CPFs da Fase 3 contra o ambiente real: não verificado.
+
 
 ## Etapa 6 — Testes e qualidade
 
@@ -271,3 +278,15 @@ Repo `soat15-tech-challenge-billing-service`, branch `feat/fase4-etapa4` (5 comm
 - `GET /internal/financeiro/resumo` devolve `{ receitaTotal, totalEstornado, pagamentosConfirmados, pagamentosEstornados }` (o OS lê só `receitaTotal`).
 - `/internal` não está no Ingress: o OS chama `http://billing-service:3003` dentro do cluster. Service na porta 3003.
 - `PAYMENT_GATEWAY=fake` no `docker-compose` (sem conta MP); `mercadopago` nos manifests K8s.
+
+### 2026-11-12 — Etapa 5 (plataforma compartilhada)
+
+Branch `feat/fase4-etapa5` em 4 repos (sem push): `db-infra`, `k8s-infra`, `auth-lambda` e OS. **Verificado**: `terraform fmt`/`validate` (1.9.5) nos 3 repos de infra; auth-lambda `tsc` + 32 testes; `bash -n` e `--dry-run` do script; YAMLs. **Não verificado**: qualquer `apply`, o SQL do bootstrap, o Job no cluster, o VPC Link/ALB reais e a Lambda contra o OS real.
+
+**Desvios / decisões**
+- Bootstrap do banco: SQL no repo do OS (`k8s/db-bootstrap.sql`) e roda no pipeline do OS — o Billing exige que o OS tenha feito deploy antes.
+- Senhas dos roles só alfanuméricas (entram em URL/`psql -v` sem escape).
+- A Lambda de token só emite tokens depois da fase 2 do apply (precisa do DNS do ALB); sem ele responde 500.
+- `eks_service_tag_value`/`eks_nlb_listener_port` viraram `eks_ingress_group`/`eks_alb_listener_port`; o CI do auth-lambda exporta `TF_VAR_internal_api_token` (novo GitHub Secret `INTERNAL_API_TOKEN` nesse repo).
+- O API Gateway não roteia por serviço: o `ANY /api/{proxy+}` vai ao ALB e o Ingress distribui por path.
+- `db-infra` e `k8s-infra` ainda leem o remote state de `homolog` fixo (herdado da Fase 3).
