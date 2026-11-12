@@ -1,82 +1,84 @@
-# Diagrama de Componentes — Fase 3 (Cloud)
+# Diagrama de Componentes — Fase 4 (microsserviços)
 
-> Visão de implantação em nuvem. Para o desenho de camadas do código (DDD), ver o
-> diagrama existente no [`README.md`](../../README.md). Este documento cobre a
-> topologia de infraestrutura descrita em [`PHASE_3_PLAN.md`](../PHASE_3_PLAN.md).
+> Topologia vigente. A da Fase 3 (monólito atrás de um NLB) ficou em
+> [`component-diagram-fase3.md`](component-diagram-fase3.md). Decisões: [`RFC-005`](rfcs/RFC-005-microsservicos-e-saga.md),
+> `ADR-008` a `ADR-015`; contratos das mensagens: [`contratos-mensagens.md`](contratos-mensagens.md).
 
 ## Visão geral
 
 ```mermaid
-flowchart TB
-    Client([Cliente / Usuário interno])
+flowchart LR
+  U[Cliente / Atendente / Mecânico] --> APIGW[API Gateway HTTP API]
+  MP[(Mercado Pago)] -- "webhook assinado" --> APIGW
+  APIGW -- "POST /auth/token" --> LT[Lambda Token]
+  APIGW -. authorizer .-> LA[Lambda Authorizer]
+  LT -- "GET /internal/clientes/by-cpf" --> ALB
+  APIGW -- VPC Link --> ALB[ALB interno<br/>IngressGroup oficina-env]
 
-    subgraph AWS["AWS (conta AWS Academy Learner Lab, us-east-1)"]
-        subgraph Edge["Borda"]
-            APIGW[API Gateway HTTP API]
-            AuthzLambda[Lambda Authorizer]
-            TokenLambda["Lambda — POST /auth/token"]
-        end
+  subgraph EKS["EKS — namespace oficina-env"]
+    ALB -- "/api/ordens-servico, /api/clientes,<br/>/api/veiculos, /api/pecas, /api/servicos,<br/>/api/relatorios, /api/auth" --> OS[OS Service<br/>orquestrador da Saga]
+    ALB -- "/api/orcamentos, /api/pagamentos" --> BI[Billing Service]
+    ALB -- "/api/execucoes" --> EX[Execution Service]
+  end
 
-        subgraph VPC["VPC"]
-            subgraph Public["Subnets públicas"]
-                NLB[Network Load Balancer interno]
-            end
+  OS --> PGOS[(RDS PostgreSQL<br/>oficina_os)]
+  BI --> PGBI[(RDS PostgreSQL<br/>oficina_billing)]
+  EX --> DDB[(DynamoDB<br/>execucoes)]
 
-            subgraph Private["Subnets privadas"]
-                subgraph EKS["EKS — namespace oficina"]
-                    Pod1[Pod API réplica 1]
-                    Pod2[Pod API réplica 2]
-                    HPA[HorizontalPodAutoscaler]
-                end
-                RDS[(RDS PostgreSQL 16)]
-                TokenLambda -.consulta cliente.-> RDS
-            end
-        end
+  OS -- comandos --> QB[[SQS billing-commands]]
+  OS -- comandos --> QE[[SQS execution-commands]]
+  QB --> BI
+  QE --> EX
+  BI -- eventos --> SNS{{SNS oficina-eventos}}
+  EX -- eventos --> SNS
+  OS -- "eventos de status" --> SNS
+  SNS -- "filter policy por type" --> QR[[SQS os-saga-replies]]
+  QR --> OS
+  BI -- REST --> MP
+  OS -- "REST /internal/financeiro/resumo" --> BI
 
-        ECR[(ECR — imagem da API)]
-        SSM[[SSM Parameter Store — segredos]]
-        SES[SES / SMTP externo]
-        NewRelic[New Relic — APM, infra, logs, alertas]
-    end
-
-    Client -->|HTTPS| APIGW
-    APIGW -->|POST /auth/token| TokenLambda
-    APIGW -->|"/api/* (protegido)"| AuthzLambda
-    AuthzLambda -.valida JWT.-> APIGW
-    APIGW -->|VPC Link| NLB
-    NLB --> Pod1
-    NLB --> Pod2
-    HPA -.escala.-> Pod1
-    HPA -.escala.-> Pod2
-    Pod1 --> RDS
-    Pod2 --> RDS
-    Pod1 -.envia e-mail.-> SES
-    Pod2 -.envia e-mail.-> SES
-    EKS -.pull de imagem.-> ECR
-    Pod1 -.lê segredos no apply.-> SSM
-    TokenLambda -.lê segredos.-> SSM
-    Pod1 -.métricas/logs/traces.-> NewRelic
-    Pod2 -.métricas/logs/traces.-> NewRelic
-    EKS -.métricas de cluster.-> NewRelic
+  OS & BI & EX -. "APM + traces + logs" .-> NR[New Relic]
 ```
 
-## Componentes e responsabilidade
+- **Um banco por serviço** (ADR-008, ADR-012): `oficina_os` e `oficina_billing` na mesma instância RDS,
+  cada um com seu role (`REVOKE CONNECT ... FROM PUBLIC`); `execucoes` no DynamoDB (NoSQL, ADR-011).
+  **Nenhum serviço lê o banco de outro** — dados trafegam por mensagens e rotas `/internal/*`.
+- **Comunicação síncrona (REST)**: borda → serviços pelo API Gateway; OS → Billing (`receitaTotal` do dashboard,
+  com timeout de 2 s e fallback `null`); Lambda de token → OS (`/internal/clientes/by-cpf`, ADR-015); Billing → Mercado Pago.
+- **Comunicação assíncrona**: comandos ponto a ponto em SQS, eventos em SNS (fan-out) — ADR-010. Todo envio passa por
+  *transactional outbox* e todo consumo por *inbox* idempotente; cada fila tem DLQ (`maxReceiveCount = 5`).
+- **Saga orquestrada** no OS Service (ADR-009): [sequência feliz](sequence-saga-feliz.md) e
+  [compensações](sequence-saga-compensacao.md).
 
-| Componente | Responsabilidade | Repositório |
-|---|---|---|
-| API Gateway (HTTP API) | Borda pública, roteamento, throttling, integração com Lambdas e VPC Link | `soat15-tech-challenge-auth-lambda` |
-| Lambda `POST /auth/token` | Valida CPF, consulta cliente no RDS, emite JWT com `scope: cliente` | `soat15-tech-challenge-auth-lambda` |
-| Lambda Authorizer | Valida JWT (assinatura, expiração, situação do cliente) para rotas `/api/*` | `soat15-tech-challenge-auth-lambda` |
-| NLB interno | Alvo do VPC Link, expõe o `Service` do EKS só dentro da VPC | `soat15-tech-challenge-k8s-infra` |
-| EKS + HPA | Roda a API principal (Node.js/Express), escala por CPU | `soat15-tech-challenge-k8s-infra` (cluster) / este repo (manifestos e imagem) |
-| RDS PostgreSQL 16 | Persistência relacional (clientes, veículos, OS, peças, pagamentos, usuários) | `soat15-tech-challenge-db-infra` |
-| SSM Parameter Store | Segredos (`SecureString`): credenciais do RDS, `JWT_SECRET` | `soat15-tech-challenge-db-infra` (parâmetros do banco) / `auth-lambda` (JWT) |
-| ECR | Registro da imagem Docker da API | `soat15-tech-challenge-k8s-infra` |
-| SES / SMTP externo | Implementação de `INotificationService` (e-mail de mudança de status de OS) | este repo (`SesNotificationService`) |
-| New Relic | APM, métricas de infraestrutura K8s, logs correlacionados, dashboards e alertas | este repo (agente) + `k8s-infra` (Helm `nri-bundle`) |
+## Mensageria (por ambiente, prefixo `soat15-tc-<env>-`)
 
-## Notas de desenho
+| Recurso | Tipo | Produtor → Consumidor | Dono (Terraform) |
+|---|---|---|---|
+| `billing-commands` (+ DLQ) | SQS | OS → Billing | Billing |
+| `execution-commands` (+ DLQ) | SQS | OS → Execution | Execution |
+| `oficina-eventos` | SNS | Billing, Execution e OS publicam | OS |
+| `os-saga-replies` (+ DLQ) | SQS inscrita no SNS (raw delivery + filter policy) | → OS | OS |
 
-- **API Gateway não fala diretamente com pods**: passa por VPC Link → NLB interno, porque o cluster fica em subnets privadas sem exposição pública direta.
-- **Sem NAT Gateway** (restrição de orçamento do Learner Lab): a Lambda de autenticação só precisa alcançar o RDS (dentro da VPC) e o SSM (via *Interface VPC Endpoint*, se necessário); os nós do EKS ficam em subnets públicas com security group restrito para poder alcançar o ECR/SSM sem NAT. Ver `ADR-006` para a decisão de segurança associada (`LabRole` compartilhada).
-- **Duas linhas de defesa de autenticação**: o Lambda Authorizer valida na borda, e o `authMiddleware` da aplicação valida de novo a assinatura do JWT — o Service do EKS nunca confia cegamente na borda.
+## Infraestrutura (6 repositórios)
+
+```mermaid
+flowchart TB
+  subgraph Plataforma
+    DB["db-infra<br/>VPC · RDS · SG · senhas dos roles (SSM)"]
+    K8S["k8s-infra<br/>EKS t3.medium · LB Controller · nri-bundle · dashboards/alertas"]
+    AUTH["auth-lambda<br/>API Gateway · Lambdas · VPC Link → ALB"]
+  end
+  subgraph Serviços["Serviços (cada um: código + Terraform + k8s/ + CI/CD)"]
+    OSR["soat15-tech-challenge-01<br/>OS Service · ECR · SNS · fila de respostas"]
+    BIR["billing-service<br/>ECR · billing-commands"]
+    EXR["execution-service<br/>ECR · DynamoDB · execution-commands"]
+  end
+  DB --> K8S --> AUTH
+  K8S --> OSR
+  OSR -- "terraform_remote_state (tópico SNS)" --> BIR
+  OSR -- "terraform_remote_state (tópico SNS)" --> EXR
+  OSR -. "Job de bootstrap cria oficina_os e oficina_billing" .-> DB
+```
+
+Ordem do primeiro deploy: `db-infra` → `k8s-infra` → **OS Service** → Execution/Billing → `auth-lambda`
+(precisa do ALB). Destruição na ordem inversa (cabeçalho dos `destroy.yml`).

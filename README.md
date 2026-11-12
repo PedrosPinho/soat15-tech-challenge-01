@@ -1,44 +1,149 @@
-# Auto Repair Shop Management System
+# OS Service — Oficina Mecânica (Tech Challenge SOAT · Fase 4)
 
-Sistema de gestão para oficinas mecânicas desenvolvido com **Domain-Driven Design (DDD)** e arquitetura em camadas, como Tech Challenge da Pós-Tech SOAT FIAP.
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=pedrospinho_soat15-tech-challenge-01&metric=alert_status)](https://sonarcloud.io/project/overview?id=pedrospinho_soat15-tech-challenge-01)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pedrospinho_soat15-tech-challenge-01&metric=coverage)](https://sonarcloud.io/project/overview?id=pedrospinho_soat15-tech-challenge-01)
 
-**Fase 1** entregou a aplicação (API REST completa, DDD em camadas, testes, Swagger).
-**Fase 2** evoluiu essa base para produção: Clean Architecture, testes de
-integração/E2E com Postgres real, containerização, Kubernetes com autoscaling.
-**Fase 3** (atual) migrou tudo para a nuvem de verdade: autenticação por CPF via
-Function Serverless + API Gateway, infraestrutura em 4 repositórios provisionada
-por Terraform, deploy automático num EKS real (AWS Academy Learner Lab) e
-observabilidade com New Relic. Ver [`docs/PHASE_3_PLAN.md`](docs/PHASE_3_PLAN.md)
-e [`docs/PHASE_3_TASKS.md`](docs/PHASE_3_TASKS.md) para o planejamento e o
-checklist detalhado, e [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) para o
-status atual.
+Sistema de gestão para oficinas mecânicas (Pós-Tech SOAT FIAP). Na **Fase 4** o monólito das fases anteriores foi
+decomposto em **3 microsserviços independentes** — cada um com repositório, pipeline, infraestrutura e banco próprios —
+coordenados por uma **Saga orquestrada** com compensação. **Este repositório é o OS Service**: dono do cadastro
+(clientes, veículos, peças, estoque, catálogo), do agregado Ordem de Serviço e do **orquestrador da Saga**.
 
-## 🚀 Deploy ao vivo
+| Fase | Entrega |
+|---|---|
+| 1 | API REST completa, DDD em camadas, testes, Swagger |
+| 2 | Clean Architecture, Postgres real nos testes, Docker, Kubernetes + HPA |
+| 3 | Nuvem: EKS, RDS, Terraform em 4 repos, autenticação por CPF (Lambda + API Gateway), New Relic |
+| **4** | **Microsserviços (OS, Billing, Execution), Saga orquestrada, SQS/SNS, DynamoDB, Mercado Pago, SonarCloud** |
 
-- **API pública** (API Gateway, autenticação por CPF): `https://8vp6dbqs8g.execute-api.us-east-1.amazonaws.com`
-- Ordem de deploy e demais links: [`soat15-tech-challenge-db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra) → [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) → esta aplicação (EKS) → [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda)
-- A infraestrutura roda por sessão do AWS Academy Learner Lab (orçamento limitado) — se o endpoint acima não responder, é porque a infra foi destruída ao fim de uma sessão de trabalho; ver [`PHASE_3_EXECUTION_GUIDE.md`](docs/PHASE_3_EXECUTION_GUIDE.md) para reaplicar.
+Planejamento e decisões: [`PHASE_4_PLAN.md`](docs/PHASE_4_PLAN.md), [`PHASE_4_TASKS.md`](docs/PHASE_4_TASKS.md),
+[`RFC-005`](docs/architecture/rfcs/RFC-005-microsservicos-e-saga.md), `ADR-008` a `ADR-015` em
+[`docs/architecture/adrs/`](docs/architecture/adrs). Status geral: [`PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+
+## Repositórios da solução
+
+| Repositório | Papel | Banco / recursos |
+|---|---|---|
+| **[`soat15-tech-challenge-01`](https://github.com/PedrosPinho/soat15-tech-challenge-01)** (este) | **OS Service** — cadastros, Ordem de Serviço, orquestrador da Saga | PostgreSQL `oficina_os` · SNS `oficina-eventos` · SQS `os-saga-replies` |
+| [`soat15-tech-challenge-billing-service`](https://github.com/PedrosPinho/soat15-tech-challenge-billing-service) | **Billing Service** — orçamento e pagamento (Mercado Pago) | PostgreSQL `oficina_billing` · SQS `billing-commands` |
+| [`soat15-tech-challenge-execution-service`](https://github.com/PedrosPinho/soat15-tech-challenge-execution-service) | **Execution Service** — fila de diagnóstico e reparo | **DynamoDB** `execucoes` (NoSQL) · SQS `execution-commands` |
+| [`soat15-tech-challenge-db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra) | VPC, RDS, security groups, senhas dos roles | Terraform |
+| [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) | EKS, ALB Controller, New Relic (dashboards/alertas) | Terraform |
+| [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) | API Gateway, Lambda de token por CPF e Authorizer | Terraform + Lambda |
+
+## Arquitetura da solução
+
+```mermaid
+flowchart LR
+  U[Cliente / Atendente / Mecânico] --> APIGW[API Gateway]
+  MP[(Mercado Pago)] -- webhook assinado --> APIGW
+  APIGW -- VPC Link --> ALB[ALB interno]
+  subgraph EKS
+    ALB --> OS[OS Service<br/>orquestrador da Saga]
+    ALB --> BI[Billing Service]
+    ALB --> EX[Execution Service]
+  end
+  OS --> PGOS[(PostgreSQL<br/>oficina_os)]
+  BI --> PGBI[(PostgreSQL<br/>oficina_billing)]
+  EX --> DDB[(DynamoDB<br/>execucoes)]
+  OS -- comandos --> QB[[SQS billing-commands]] --> BI
+  OS -- comandos --> QE[[SQS execution-commands]] --> EX
+  BI & EX & OS -- eventos --> SNS{{SNS oficina-eventos}} --> QR[[SQS os-saga-replies]] --> OS
+  BI -- REST --> MP
+```
+
+Diagrama detalhado, mensageria e infraestrutura: [`component-diagram.md`](docs/architecture/component-diagram.md).
+**Por que 3 serviços** (RFC-005/ADR-008): fronteiras por capacidade de negócio — o cadastro e o ciclo da OS ficam juntos
+(são consultados em quase todo passo); cobrança (integração externa, dado financeiro) e execução (fila operacional,
+acesso por chave) têm ciclos de vida, escala e falha próprios. Quatro serviços ou um por entidade só trocariam
+transações triviais por sagas e chamadas síncronas, sem ganho que cobrisse o custo operacional.
+**Bancos**: PostgreSQL onde há dado relacional/transacional (OS, Billing); DynamoDB no Execution, onde o acesso é por
+chave e o histórico é uma lista de eventos ([`data-model.md`](docs/architecture/data-model.md)). **Nenhum serviço acessa o banco de outro.**
+
+## Responsabilidades do OS Service
+
+- Cadastro de **clientes** (PF/PJ), **veículos**, **peças**, **estoque** (reserva/baixa atômicas) e **catálogo de serviços**.
+- Agregado **Ordem de Serviço** (`RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → AGUARDANDO_PAGAMENTO → EM_EXECUCAO → FINALIZADA → ENTREGUE`, `CANCELADA` a partir dos estados não finais) e seu histórico.
+- **Orquestrador da Saga** "Ciclo da OS": envia comandos ao Billing e ao Execution, reage às respostas, compensa em caso de falha.
+- **Precificação** do orçamento (dono do catálogo e das peças) e **reserva/baixa de estoque**.
+- Dashboard (a receita vem do Billing por REST, com timeout e fallback), notificação por e-mail a cada mudança de status.
+- `GET /internal/clientes/by-cpf/:cpf` para a Lambda de autenticação (ADR-015).
 
 ---
 
-## Objetivos
+## Saga Pattern — estratégia orquestrada e justificativa
 
-Implementar um sistema integrado que permita à oficina:
+O fluxo *abrir OS → gerar orçamento → aguardar aprovação → pagar → executar* atravessa três
+serviços, cada um com seu banco. Não há transação distribuída: usamos uma **Saga orquestrada**,
+com o orquestrador **dentro do OS Service** (`src/application/saga/`).
 
-- Cadastrar e gerenciar **clientes** (PF e PJ com validação de CPF/CNPJ) e seus **veículos**
-- Manter um **catálogo de peças** com controle de preços, margens e estoque
-- Manter um **catálogo de serviços** com preço e tempo estimado
-- Abrir, executar e encerrar **ordens de serviço** com controle de ciclo de vida
-  (`RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → AGUARDANDO_PAGAMENTO → EM_EXECUCAO → FINALIZADA → ENTREGUE`,
-  com `CANCELADA` a partir dos estados não finais) — **orquestrado por uma Saga** (Fase 4)
-- Notificar o cliente por **e-mail** a cada mudança de status da OS
-- Orçamento, aprovação e **pagamento** (Mercado Pago) ficam no **Billing Service**; a execução do diagnóstico/reparo, no **Execution Service**
-- Consultar um **dashboard** com métricas de operação
+| | Orquestrada (escolhida) | Coreografada |
+|---|---|---|
+| Fluxo e compensações | num só lugar, declarativos (`ciclo-os.saga.ts`) | espalhados em 3 serviços |
+| "Em que passo está a OS X?" | `GET /:id/historico` (estado persistido em `saga_instancias`/`saga_passos_log`) | só reconstruindo eventos |
+| Teste | BDD/unitário do orquestrador com bus em memória | exige subir tudo |
+| Custo | orquestrador é um ponto crítico (mitigado: estado persistido, lock otimista, sweeper de timeout) | risco de ciclos de eventos |
 
-**Objetivos da Fase 2**: preparar essa aplicação para rodar de forma produtiva —
-containerizada, orquestrada com autoscaling, provisionada via infraestrutura como
-código, e implantada por um pipeline de CI/CD — mantendo a cobertura de testes e a
-qualidade de código da Fase 1.
+**Compensação em ordem inversa.** Se o reparo falha: `EstornarPagamento` → `CancelarOrcamento` →
+liberar reserva de estoque → `CancelarExecucao` → OS `CANCELADA`. Cada compensação é idempotente
+e retentável; se não convergir, a saga vai para `FALHA_COMPENSACAO` (alerta, intervenção manual).
+
+**Confiabilidade.** *Transactional outbox* (estado + mensagem na mesma transação), *inbox*
+idempotente por `messageId`, filas SQS com DLQ, lock otimista por `versao` e sweeper de
+timeouts (`SAGA_TIMEOUT_APROVACAO`, `SAGA_TIMEOUT_PAGAMENTO`). Contratos das mensagens em
+[`docs/architecture/contratos-mensagens.md`](docs/architecture/contratos-mensagens.md);
+decisões em `RFC-005` e `ADR-008` a `ADR-015`.
+
+### Fluxo (caminho feliz)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as Atendente/Mecânico/Cliente
+  participant OS as OS Service (orquestrador)
+  participant EX as Execution
+  participant BI as Billing
+  A->>OS: POST /api/ordens-servico
+  OS-)EX: SolicitarDiagnostico
+  EX--)OS: DiagnosticoConcluido (mecânico conclui)
+  OS->>OS: precifica + reserva estoque
+  OS-)BI: GerarOrcamento
+  BI--)OS: OrcamentoGerado
+  A->>BI: aprovar orçamento
+  BI--)OS: OrcamentoAprovado
+  OS-)BI: SolicitarPagamento
+  BI--)OS: PagamentoSolicitado (link do Mercado Pago)
+  A->>BI: paga → webhook → PagamentoConfirmado
+  OS-)EX: IniciarReparo
+  EX--)OS: ReparoConcluido
+  OS->>OS: baixa do estoque · OS FINALIZADA · saga CONCLUIDA
+```
+
+Sequências completas, com o checkout do Mercado Pago, e todas as compensações (reparo falha → estorno →
+cancelar orçamento → liberar reserva → cancelar execução):
+[`sequence-saga-feliz.md`](docs/architecture/sequence-saga-feliz.md) e
+[`sequence-saga-compensacao.md`](docs/architecture/sequence-saga-compensacao.md). Os 6 cenários acima são executáveis
+em `tests/bdd/` (ver [Testes](#testes-e-qualidade)).
+
+### Runbook: saga em `FALHA_COMPENSACAO`
+
+A compensação esgotou as tentativas (ex.: estorno recusado pelo Mercado Pago). A OS **não** é cancelada. Alerta no
+New Relic ("Saga em FALHA_COMPENSACAO"). Ver `GET /api/ordens-servico/:id/historico` (passo que falhou), corrigir a causa
+(ex.: estornar no painel do MP e reconciliar com `POST /internal/pagamentos/:id/sincronizar` no Billing) e tratar a OS
+manualmente.
+
+### Variáveis de ambiente da Saga
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `MESSAGING_ENABLED` | `true` | `false` sobe só a API (sem Saga) |
+| `MESSAGING_DRIVER` | `sqs` | `memory` para dev/testes sem AWS |
+| `AWS_ENDPOINT_URL` | — | LocalStack local |
+| `EXECUTION_COMMANDS_QUEUE_URL`, `BILLING_COMMANDS_QUEUE_URL`, `SAGA_REPLIES_QUEUE_URL`, `EVENTS_TOPIC_ARN` | — | destinos (saída do Terraform) |
+| `SAGA_TIMEOUT_APROVACAO` / `SAGA_TIMEOUT_PAGAMENTO` | `3d` / `1h` | prazo de espera (`30s`, `5m`, `2h`) |
+| `SAGA_TIMEOUT_COMPENSACAO` / `SAGA_MAX_TENTATIVAS_COMPENSACAO` | `2m` / `3` | retry de compensação |
+| `SAGA_SWEEPER_INTERVAL_MS` / `OUTBOX_RELAY_INTERVAL_MS` | `15000` / `1000` | intervalo dos workers |
+| `INTERNAL_API_TOKEN` | — | protege `/internal/*` e a chamada ao Billing |
+| `BILLING_SERVICE_URL` | — | `receitaTotal` do dashboard (fallback `null` se fora) |
 
 ---
 
@@ -46,137 +151,62 @@ qualidade de código da Fase 1.
 
 | Camada | Tecnologia |
 |---|---|
-| Runtime | Node.js 20+ |
-| Linguagem | TypeScript 5+ (strict) |
-| Framework | Express.js 5 |
-| Banco de dados | PostgreSQL 16 (`pg` + `node-pg-migrate`, sem ORM) |
-| Notificação | Amazon SES (prod) ou Nodemailer/Mailhog (dev/local), por trás da mesma port |
-| Logs | `pino` (JSON) + correlationId via `AsyncLocalStorage` |
-| Testes | Jest + ts-jest + Supertest + Testcontainers (Postgres real) |
-| Documentação | Swagger UI / OpenAPI 3.0 + collection Postman |
-| Container | Docker + Docker Compose |
-| Orquestração | Kubernetes — EKS real via [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra) (manifests em `k8s/`); `kind` local só para testar manifesto sem AWS |
-| Infraestrutura como código | Terraform em 3 repositórios satélite — [`db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra), [`k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra), [`auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) |
-| CI/CD | GitHub Actions (`.github/workflows/ci-cd.yml`) — build/test/push ECR/deploy EKS |
-| Qualidade | SonarQube + SonarScanner |
-| Segurança | JWT, bcrypt, Helmet, rate limiting |
-| Observabilidade | New Relic (APM na app + `nri-bundle` no cluster) — ver seção [Observabilidade](#observabilidade) |
-| Autenticação de cliente | CPF via Function Serverless + API Gateway — [`soat15-tech-challenge-auth-lambda`](https://github.com/PedrosPinho/soat15-tech-challenge-auth-lambda) |
+| Runtime / linguagem | Node.js 20 · TypeScript 5 (strict) · Express 5 |
+| Banco | PostgreSQL 16 (`pg` + `node-pg-migrate`, sem ORM) |
+| Mensageria | Amazon SQS (comandos) + SNS (eventos), *transactional outbox* + *inbox* idempotente + DLQ |
+| Notificação | Amazon SES (prod) ou Nodemailer/Mailhog (dev), atrás da mesma port |
+| Testes | Jest · ts-jest · Supertest · Testcontainers · `jest-cucumber` (BDD) · LocalStack |
+| Qualidade | SonarCloud (quality gate no CI) · ESLint · Prettier |
+| Container / orquestração | Docker · Kubernetes (EKS, Ingress em ALB interno compartilhado) |
+| IaC | Terraform (`terraform/`: ECR, SNS, SQS) + repos de plataforma |
+| CI/CD | GitHub Actions |
+| Observabilidade | New Relic (APM, distributed tracing pelas filas, dashboards/alertas por Terraform) |
+| Segurança | JWT (interno/cliente), bcrypt, Helmet, rate limiting, `x-internal-token` nas rotas `/internal` |
 
 ---
 
-## Arquitetura
+## Arquitetura do serviço
 
 ```
 src/
-├── domain/           # Entidades, value objects, regras de negócio, interfaces de repo e de serviços (ports)
-├── application/      # Use cases, DTOs, mappers
-├── infrastructure/   # Repositórios Postgres, notificações (SES/Nodemailer), logger, segurança
-├── presentation/     # Controllers, routes, middlewares, validators
-├── main/              # Composition root (factories que fazem o wiring de dependências)
-└── shared/            # Erros de domínio
+├── domain/           # Entidades, value objects, ports (repositórios, IMessageBus, IUnitOfWork, gateways)
+├── application/
+│   ├── saga/         # orquestrador, definição da Saga (ciclo-os.saga.ts), workers (consumidor, sweeper)
+│   ├── messaging/    # outbox relay, tarefas periódicas
+│   └── use-cases/    # casos de uso HTTP
+├── infrastructure/   # Postgres (repos, UnitOfWork), SQS/SNS e bus em memória, SES/Nodemailer, HTTP (Billing)
+├── presentation/     # controllers, rotas (/api e /internal), middlewares, validators
+├── main/             # composition root (factories)
+└── shared/           # envelope de mensagens, logger, observabilidade (tracing)
 ```
 
-**Princípios aplicados**: Aggregate Roots, Value Objects (CPF/CNPJ, Placa, Endereço),
-Repository Pattern, Ports & Adapters para integrações externas (`INotificationService`
-→ `SesNotificationService`/`NodemailerNotificationService`, selecionável por env var),
-composition root isolando a montagem de
-dependências da camada de rotas, imutabilidade em todas as entidades de domínio, TDD.
-
-### Fluxo de infraestrutura (Fase 2)
-
-```mermaid
-flowchart LR
-    subgraph Local["Desenvolvimento local"]
-        Dev([Desenvolvedor]) -->|docker compose up| Compose[App + Postgres + Mailhog]
-    end
-
-    subgraph Pipeline["CI/CD — GitHub Actions"]
-        direction LR
-        Build[build] --> Test[test] --> Sonar[sonar + quality gate] --> TF[terraform apply] --> DockerBuild[docker-build-push] --> CIDeploy[deploy]
-    end
-
-    Dev -->|git push main/homolog| GH[(GitHub)]
-    GH --> Pipeline
-    DockerBuild -->|push imagem| ECR[(Amazon ECR)]
-    CIDeploy -->|apply k8s/ + rollout| K8s
-
-    subgraph K8s["EKS — soat15-tech-challenge-k8s-infra (namespace oficina-prod/homolog)"]
-        Svc[Service ClusterIP :3001 + Ingress no ALB interno] --> API[Deployment oficina-api]
-        HPA -.escala 2–6.-> API
-        API --> RDS[(RDS PostgreSQL — soat15-tech-challenge-db-infra)]
-    end
-
-    APIGW[API Gateway + Lambdas de CPF — soat15-tech-challenge-auth-lambda] -->|VPC Link/ALB| Svc
-    Cliente([Cliente HTTP]) --> APIGW
-```
-
-Diagrama completo dos 4 repositórios em
-[`docs/architecture/component-diagram.md`](docs/architecture/component-diagram.md).
-
-Detalhes de cada etapa: [`k8s/README.md`](k8s/README.md) (manifestos Kubernetes) e
-[`infra/README.md`](infra/README.md) (Terraform).
+Ports & Adapters: `IMessageBus` (`SqsSnsMessageBus` | `InMemoryMessageBus`), `IUnitOfWork` (transação por
+`AsyncLocalStorage`, sem mudar a assinatura dos repositórios), `IFinanceiroGateway`, `INotificationService`.
+Contratos das mensagens: [`contratos-mensagens.md`](docs/architecture/contratos-mensagens.md).
 
 ---
 
 ## Quick Start
 
-### Pré-requisitos
-
-- Node.js 20+
-- Docker e Docker Compose
-
-### 1. Configurar variáveis de ambiente
-
 ```bash
 cp .env.example .env
-# edite .env — defina POSTGRES_PASSWORD, JWT_SECRET, INTERNAL_API_TOKEN e SONAR_TOKEN
+docker compose up -d                 # app + Postgres + Mailhog + LocalStack (Saga) — API em http://localhost:3001
+# ou, sem Docker para a API:
+npm install && docker compose up -d postgres mailhog localstack && npm run db:migrate && npm run dev
 ```
 
-### 2. Subir os serviços
+`MESSAGING_ENABLED=false` sobe só a API (sem Saga); `MESSAGING_DRIVER=memory` roda a Saga sem AWS.
+
+**Os 3 serviços juntos (integração local)** — com os repositórios do Billing e do Execution clonados ao lado:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.integration.yml up --build -d
+./scripts/smoke-fluxo-feliz.sh        # OS → diagnóstico → orçamento → pagamento (gateway fake) → reparo → FINALIZADA
+docker compose -f docker-compose.integration.yml down -v
 ```
 
-O serviço `app` roda `npm run db:migrate` antes de subir (ver `docker-compose.yml`).
-A API ficará disponível em `http://localhost:3001`, e o Mailhog (captura os e-mails
-enviados quando `NOTIFICATION_PROVIDER=smtp`, o default local) em
-`http://localhost:8025`.
-
-### 3. Desenvolvimento local (sem Docker para a API)
-
-```bash
-npm install
-docker compose up -d postgres mailhog   # apenas as dependências
-npm run db:migrate
-npm run dev
-```
-
----
-
-## Kubernetes e Terraform
-
-**Deploy real (EKS)**: cluster provisionado por
-[`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra)
-(depende de [`db-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-db-infra)
-aplicado antes); os manifestos deste repositório (`k8s/`) são aplicados
-automaticamente pelo CI/CD (`.github/workflows/ci-cd.yml`) a cada push em
-`main`/`homolog` — ver a seção [CI/CD](#cicd) abaixo.
-
-**Uso local sem AWS**: `infra/` provisiona um cluster **kind** efêmero (herança da
-Fase 2, útil para testar mudança de manifesto sem depender de sessão do Learner Lab):
-
-```bash
-cd infra
-cp terraform.tfvars.example terraform.tfvars   # preencha os valores
-terraform init
-terraform apply
-```
-
-Passo a passo detalhado, incluindo como instalar o `metrics-server` (necessário para o
-HPA funcionar em `kind`) e como gerar carga para observar o autoscaling:
-[`infra/README.md`](infra/README.md) e [`k8s/README.md`](k8s/README.md).
+Collection Postman do **fluxo completo** (token → OS → execução → orçamento → pagamento):
+[`docs/postman/oficina-fase4-fluxo-completo.postman_collection.json`](docs/postman/oficina-fase4-fluxo-completo.postman_collection.json).
 
 ---
 
@@ -279,37 +309,46 @@ Para importar no Postman/Insomnia: **Import → Link** apontando para
 
 ---
 
-## Testes
+## Fluxo Principal
 
-```bash
-npm test                  # todos os testes
-npm run test:coverage     # com relatório de cobertura
-npm run test:watch        # modo watch
-npm run test:unit         # só tests/domain (unitários)
-npm run test:integration  # só tests/integration (E2E via supertest)
+```
+1. POST /api/auth/login                          → obter token JWT
+2. POST /api/clientes e /api/veiculos            → cadastrar cliente e veículo
+3. POST /api/pecas e /api/servicos               → cadastrar peças e serviços no catálogo
+4. POST /api/ordens-servico                      → abrir OS (RECEBIDA) — inicia a Saga
+5. PATCH /api/execucoes/:id/diagnostico/concluir → mecânico conclui (Execution Service)
+6. (Billing) POST /api/orcamentos/:id/aprovar    → cliente aprova o orçamento
+7. (Mercado Pago) cliente paga pelo link         → AGUARDANDO_PAGAMENTO → EM_EXECUCAO
+8. PATCH /api/execucoes/:id/reparo/concluir      → FINALIZADA (baixa do estoque)
+9. PATCH /api/ordens-servico/:id/entregar        → ENTREGUE
+10. GET  /api/ordens-servico/:id/historico       → status + passos da Saga a qualquer momento
+11. GET  /api/relatorios/dashboard               → métricas (receita vem do Billing)
 ```
 
-**Cobertura atual**: Statements 97,7% | Branches 95,1% | Functions 93,5% | Lines 98,1%
-(threshold mínimo: 80%, configurado em `jest.config.js`) — 532 testes de domínio/
-aplicação/apresentação + 65 de integração PostgreSQL + 9 E2E (Testcontainers).
-
-Inclui testes de integração reais contra PostgreSQL (via Testcontainers, precisa de
-Docker) e testes E2E ponta a ponta do ciclo de vida da OS, listagem/ordenação e
-escopos de autorização via HTTP (`tests/integration/`).
+A cada mudança de status, o cliente recebe um e-mail automático.
 
 ---
 
-## CI/CD (Fase 4)
+## Testes e qualidade
 
-`build` → `test` (Postgres + LocalStack, cobertura ≥ 80 %, relatório BDD) → `sonar` (SonarCloud, **espera o quality
-gate**) → `terraform apply` (ECR, SNS/SQS; em PR roda `terraform plan` e comenta no resumo) → `docker-build-push` →
-`deploy` (bootstrap de banco, migration, seed, Deployment/Service/HPA/Ingress, `rollout status`, smoke `/health/ready`).
-Deploy real só em `homolog` (em `main` o `apply` vira `plan` e o deploy falha de propósito, ADR-007). Checks
-obrigatórios da branch protection: `Build`, `Test`, `Sonar` (`./scripts/protect-branches.sh`). `destroy.yml` (manual)
-remove os workloads (Ingress primeiro, para o ALB não ficar órfão) e a infraestrutura do serviço; ordem completa de
-destruição no cabeçalho do arquivo.
+```bash
+npm test                  # todos (suítes com Testcontainers precisam de Docker)
+npm run test:coverage     # com cobertura (threshold global de 80 % no jest.config.js)
+npx jest tests/bdd        # os 6 cenários BDD do ciclo da OS
+npx jest tests/contracts  # contratos com Billing e Execution
+```
 
-## Qualidade — SonarCloud, BDD e contratos
+**Evidência de cobertura** (mínimo exigido: 80 % por serviço, gate no CI e no SonarCloud):
+
+| Serviço | Linhas | Branches | Como foi medido |
+|---|---|---|---|
+| Billing | 98,2 % | 93,5 % | `npm run test:coverage`, sem os testes de integração (Postgres/LocalStack) |
+| Execution | 98,8 % | 95,3 % | idem (sem LocalStack) |
+| OS | _ver o relatório do CI_ | | as suítes com Testcontainers exigem Docker; sem elas: 86,6 % de linhas |
+
+Relatório de cobertura e BDD publicados em cada execução do CI (`GITHUB_STEP_SUMMARY`) e no SonarCloud (badges no topo).
+
+### SonarCloud, BDD e contratos
 
 - **SonarCloud** (substitui o SonarQube local da Fase 3): `sonar-project.properties` aponta para a
   organização/projeto no SonarCloud; o scan roda no CI com o `lcov` do `npm run test:coverage` e o
@@ -324,6 +363,35 @@ destruição no cabeçalho do arquivo.
   que o consomem: `os-commands.json` → Billing/Execution; `billing-events.json` e `execution-events.json` → OS).
 - **Integração**: Postgres (Testcontainers) e SQS/SNS reais (`tests/integration/messaging-localstack.spec.ts`,
   exige `LOCALSTACK_ENDPOINT`; o CI sobe o LocalStack como service container).
+
+---
+
+## CI/CD
+
+`build` → `test` (Postgres + LocalStack, cobertura ≥ 80 %, relatório BDD) → `sonar` (SonarCloud, **espera o quality gate**) →
+`terraform apply` (ECR, SNS/SQS; em PR roda `terraform plan`) → `docker-build-push` (ECR) → `deploy` (bootstrap de banco,
+migration, seed, Deployment/Service/HPA/Ingress, `rollout status`, smoke `/health/ready`). Deploy real só em `homolog`
+(em `main` o `apply` vira `plan` e o deploy falha de propósito, ADR-007). Branch protection com `Build`, `Test` e `Sonar`
+obrigatórios (`./scripts/protect-branches.sh`). `destroy.yml` manual remove os workloads (Ingress primeiro, para o ALB
+não ficar órfão) e a infraestrutura; ordem de destruição no cabeçalho do arquivo.
+
+**Secrets do GitHub**: `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` (Learner Lab, sem OIDC; renovados por
+[`scripts/refresh-aws-secrets.sh`](scripts/refresh-aws-secrets.sh) nos 6 repositórios), `INTERNAL_API_TOKEN` (o mesmo valor
+dos serviços e da Lambda), `SONAR_TOKEN`, `NEW_RELIC_LICENSE_KEY` (opcional — sem ela o agente fica desligado sem erro).
+Se a 1ª execução do dia falhar com `ExpiredToken`, rode o script de refresh e reexecute. Nenhum segredo está no repositório:
+`JWT_SECRET` e as senhas dos roles vêm do SSM em tempo de deploy.
+
+---
+
+## Kubernetes e Terraform
+
+- `terraform/` — ECR do serviço, tópico SNS `oficina-eventos`, fila `os-saga-replies` (+ DLQ) com assinatura *raw delivery* e
+  filter policy por tipo; estado remoto no S3, workspaces `homolog`/`prod`.
+- `k8s/` — Deployment/Service (ClusterIP)/HPA, **Ingress** no ALB interno compartilhado pelos 3 serviços (IngressGroup
+  `oficina-<env>`), Jobs de bootstrap do banco, migration e seed. Detalhes em [`k8s/README.md`](k8s/README.md).
+- Plataforma (VPC, RDS, EKS, API Gateway) nos repositórios da tabela acima. Ordem do 1º deploy: `db-infra` → `k8s-infra` →
+  **OS Service** → Execution/Billing → `auth-lambda`.
+- `infra/` — cluster **kind** efêmero da Fase 2 (testar manifestos sem AWS).
 
 ---
 
@@ -368,47 +436,6 @@ key como GitHub Secret `NEW_RELIC_LICENSE_KEY` neste repositório e em
 
 ---
 
-## CI/CD
-
-Pipeline em `.github/workflows/ci-cd.yml`, com 4 jobs a cada push/PR nas branches
-`main`/`homolog` (Fase 3 — publica no ECR e implanta no EKS real de
-`soat15-tech-challenge-k8s-infra`; a versão anterior, com kind efêmero e GHCR, fica
-no histórico do Git):
-
-1. **build** — `npm ci` + `npm run type-check` + `npm run build`.
-2. **test** — `npm run test:coverage` contra Postgres (service container para
-   `health.spec.ts`; Testcontainers para os testes de repositório e o E2E), com os
-   thresholds do `jest.config.js` (mínimo 80%) como gate; publica o relatório de
-   cobertura como artefato do workflow.
-3. **docker-build-push** — só em push (não em PR): builda a imagem e publica no ECR
-   (`soat15-tc-oficina-api:<sha>`).
-4. **deploy** — só em push: `aws eks update-kubeconfig`, monta o Secret a partir do
-   SSM Parameter Store (endpoint/senha do RDS, `JWT_SECRET`) e do GitHub Secret
-   (`NEW_RELIC_LICENSE_KEY`), roda o `Job` de migration e o `Job` de seed
-   (usuário admin + cliente de teste, idempotente), aplica
-   `configmap`/`deployment`/`service`/`hpa` de `k8s/` (namespace `oficina-prod`
-   em `main`, `oficina-homolog` em `homolog` — mesmo cluster, namespaces
-   separados), espera o rollout e faz um smoke test em `/health/ready`.
-
-### Secrets do GitHub
-
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` — credenciais
-  temporárias da sessão do AWS Academy Learner Lab (sem OIDC, IAM bloqueado).
-  Renovadas por [`scripts/refresh-aws-secrets.sh`](scripts/refresh-aws-secrets.sh) no
-  início de cada sessão de trabalho, nos 4 repositórios de uma vez.
-- `WEBHOOK_SECRET` — não é compartilhado com nenhuma Lambda, então não tem parâmetro
-  SSM; é um secret próprio deste repositório.
-- `NEW_RELIC_LICENSE_KEY` — opcional; sem ele o agente APM fica desabilitado sem
-  quebrar o deploy (ver [Observabilidade](#observabilidade)).
-
-Se a primeira execução do dia falhar com `ExpiredToken`/`UnrecognizedClientException`,
-rode o script de refresh de novo e reexecute — não é instabilidade da pipeline.
-
-Nenhum valor real de secret está neste repositório — `JWT_SECRET`/senha do RDS vêm do
-SSM Parameter Store em tempo de deploy (ver `db-infra`/`auth-lambda`).
-
----
-
 ## Scripts
 
 ```bash
@@ -426,62 +453,10 @@ npm run docker:logs     # logs dos serviços em tempo real
 
 ---
 
-## Fluxo Principal
+## Histórico
 
-```
-1. POST /api/auth/login                          → obter token JWT
-2. POST /api/clientes e /api/veiculos            → cadastrar cliente e veículo
-3. POST /api/pecas e /api/servicos               → cadastrar peças e serviços no catálogo
-4. POST /api/ordens-servico                      → abrir OS (RECEBIDA) — inicia a Saga
-5. PATCH /api/execucoes/:id/diagnostico/concluir → mecânico conclui (Execution Service)
-6. (Billing) POST /api/orcamentos/:id/aprovar    → cliente aprova o orçamento
-7. (Mercado Pago) cliente paga pelo link         → AGUARDANDO_PAGAMENTO → EM_EXECUCAO
-8. PATCH /api/execucoes/:id/reparo/concluir      → FINALIZADA (baixa do estoque)
-9. PATCH /api/ordens-servico/:id/entregar        → ENTREGUE
-10. GET  /api/ordens-servico/:id/historico       → status + passos da Saga a qualquer momento
-11. GET  /api/relatorios/dashboard               → métricas (receita vem do Billing)
-```
-
-A cada mudança de status, o cliente recebe um e-mail automático.
-
----
-
-## Saga Pattern — por que orquestrada
-
-O fluxo *abrir OS → gerar orçamento → aguardar aprovação → pagar → executar* atravessa três
-serviços, cada um com seu banco. Não há transação distribuída: usamos uma **Saga orquestrada**,
-com o orquestrador **dentro do OS Service** (`src/application/saga/`).
-
-| | Orquestrada (escolhida) | Coreografada |
-|---|---|---|
-| Fluxo e compensações | num só lugar, declarativos (`ciclo-os.saga.ts`) | espalhados em 3 serviços |
-| "Em que passo está a OS X?" | `GET /:id/historico` (estado persistido em `saga_instancias`/`saga_passos_log`) | só reconstruindo eventos |
-| Teste | BDD/unitário do orquestrador com bus em memória | exige subir tudo |
-| Custo | orquestrador é um ponto crítico (mitigado: estado persistido, lock otimista, sweeper de timeout) | risco de ciclos de eventos |
-
-**Compensação em ordem inversa.** Se o reparo falha: `EstornarPagamento` → `CancelarOrcamento` →
-liberar reserva de estoque → `CancelarExecucao` → OS `CANCELADA`. Cada compensação é idempotente
-e retentável; se não convergir, a saga vai para `FALHA_COMPENSACAO` (alerta, intervenção manual).
-
-**Confiabilidade.** *Transactional outbox* (estado + mensagem na mesma transação), *inbox*
-idempotente por `messageId`, filas SQS com DLQ, lock otimista por `versao` e sweeper de
-timeouts (`SAGA_TIMEOUT_APROVACAO`, `SAGA_TIMEOUT_PAGAMENTO`). Contratos das mensagens em
-[`docs/architecture/contratos-mensagens.md`](docs/architecture/contratos-mensagens.md);
-decisões em `RFC-005` e `ADR-008` a `ADR-015`.
-
-### Variáveis de ambiente da Saga
-
-| Variável | Padrão | Uso |
-|---|---|---|
-| `MESSAGING_ENABLED` | `true` | `false` sobe só a API (sem Saga) |
-| `MESSAGING_DRIVER` | `sqs` | `memory` para dev/testes sem AWS |
-| `AWS_ENDPOINT_URL` | — | LocalStack local |
-| `EXECUTION_COMMANDS_QUEUE_URL`, `BILLING_COMMANDS_QUEUE_URL`, `SAGA_REPLIES_QUEUE_URL`, `EVENTS_TOPIC_ARN` | — | destinos (saída do Terraform) |
-| `SAGA_TIMEOUT_APROVACAO` / `SAGA_TIMEOUT_PAGAMENTO` | `3d` / `1h` | prazo de espera (`30s`, `5m`, `2h`) |
-| `SAGA_TIMEOUT_COMPENSACAO` / `SAGA_MAX_TENTATIVAS_COMPENSACAO` | `2m` / `3` | retry de compensação |
-| `SAGA_SWEEPER_INTERVAL_MS` / `OUTBOX_RELAY_INTERVAL_MS` | `15000` / `1000` | intervalo dos workers |
-| `INTERNAL_API_TOKEN` | — | protege `/internal/*` e a chamada ao Billing |
-| `BILLING_SERVICE_URL` | — | `receitaTotal` do dashboard (fallback `null` se fora) |
+Monólito (Fases 1–3): ver [`PHASE_2_PLAN.md`](docs/PHASE_2_PLAN.md), [`PHASE_3_PLAN.md`](docs/PHASE_3_PLAN.md) e
+[`component-diagram-fase3.md`](docs/architecture/component-diagram-fase3.md).
 
 ---
 

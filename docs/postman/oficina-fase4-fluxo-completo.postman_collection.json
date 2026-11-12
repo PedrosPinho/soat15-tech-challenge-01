@@ -1,0 +1,758 @@
+{
+  "info": {
+    "name": "Oficina Fase 4 — fluxo completo (OS + Execution + Billing)",
+    "description": "Fluxo ponta a ponta pelos 3 microsserviços com variáveis encadeadas (token → OS → execução → orçamento → pagamento). Rode as pastas em ordem; passos assíncronos podem precisar de alguns segundos (repita a requisição). Local: docker-compose.integration.yml (gateway de pagamento fake). Nuvem: troque as 3 URLs pelo endpoint do API Gateway (e use o checkout real do Mercado Pago).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 · Cadastros e abertura da OS",
+      "item": [
+        {
+          "name": "01 Login (admin do seed)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/auth/login"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@oficina.com\",\n  \"senha\": \"senha123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const v = j.token; if (v) pm.collectionVariables.set('token', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Criar serviço no catálogo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/servicos"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descricao\": \"Revisão completa\",\n  \"preco\": 250,\n  \"tempoEstimado\": 60\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const v = j.id; if (v) pm.collectionVariables.set('servico_id', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Criar cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/clientes"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cliente Fluxo\",\n  \"cpfCnpj\": \"{{cpf}}\",\n  \"tipo\": \"PESSOA_FISICA\",\n  \"telefone\": \"11999999999\",\n  \"email\": \"cliente@exemplo.com\",\n  \"endereco\": {\n    \"logradouro\": \"Rua A\",\n    \"numero\": \"1\",\n    \"bairro\": \"Centro\",\n    \"cidade\": \"São Paulo\",\n    \"estado\": \"SP\",\n    \"cep\": \"01000000\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const v = j.id; if (v) pm.collectionVariables.set('cliente_id', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Criar veículo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/veiculos"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clienteId\": \"{{cliente_id}}\",\n  \"placa\": \"{{placa}}\",\n  \"marca\": \"Fiat\",\n  \"modelo\": \"Uno\",\n  \"ano\": 2020\n}"
+            }
+          }
+        },
+        {
+          "name": "05 Abrir OS (inicia a Saga)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/ordens-servico"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cpfCnpj\": \"{{cpf}}\",\n  \"placa\": \"{{placa}}\",\n  \"quilometragemEntrada\": 1000\n}"
+            },
+            "description": "Cria a OS (RECEBIDA) e a saga; o OS envia SolicitarDiagnostico ao Execution."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const v = j.id; if (v) pm.collectionVariables.set('os_id', v);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · Diagnóstico (Execution)",
+      "item": [
+        {
+          "name": "06 Execution · fila de diagnóstico",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/fila?status=AGUARDANDO_DIAGNOSTICO&limit=100"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data || [];",
+                  "const e = d.find(x => x.ordemServicoId === pm.collectionVariables.get('os_id'));",
+                  "if (e) pm.collectionVariables.set('execucao_id', e.id); else console.log('execução ainda não chegou à fila: repita a requisição');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Execution · iniciar diagnóstico",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/{{execucao_id}}/diagnostico/iniciar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "08 Execution · concluir diagnóstico",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/{{execucao_id}}/diagnostico/concluir"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"servicos\": [\n    {\n      \"catalogoServicoId\": \"{{servico_id}}\",\n      \"pecas\": []\n    }\n  ],\n  \"observacoes\": \"Troca de óleo e filtros\"\n}"
+            },
+            "description": "Publica DiagnosticoConcluido → o OS precifica, reserva estoque e envia GerarOrcamento ao Billing."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 · Orçamento e pagamento (Billing)",
+      "item": [
+        {
+          "name": "09 Billing · orçamento da OS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billing_url}}/api/orcamentos?ordemServicoId={{os_id}}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Se 404, aguarde alguns segundos (assíncrono) e repita."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json(); const v = j.data && j.data.id; if (v) pm.collectionVariables.set('orcamento_id', v);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Billing · aprovar orçamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{billing_url}}/api/orcamentos/{{orcamento_id}}/aprovar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Publica OrcamentoAprovado → o OS envia SolicitarPagamento."
+          }
+        },
+        {
+          "name": "11 Billing · pagamento solicitado (initPoint)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billing_url}}/api/orcamentos/{{orcamento_id}}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Com Mercado Pago real, abra `pagamento.initPoint` e pague com o comprador de teste (titular APRO = aprovado, OTHE = recusado)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data || {}; const p = d.pagamento;",
+                  "if (p) { pm.collectionVariables.set('pagamento_id', p.id); pm.collectionVariables.set('valor_total', d.valorTotal); console.log('Checkout:', p.initPoint); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12a [gateway fake] Simular comprador pagando",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-internal-token",
+                "value": "{{internal_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billing_url}}/internal/dev/mercadopago/pagamentos"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mpPaymentId\": \"fluxo-{{$timestamp}}\",\n  \"status\": \"approved\",\n  \"orcamentoId\": \"{{orcamento_id}}\",\n  \"valor\": {{valor_total}}\n}"
+            },
+            "description": "Só existe com PAYMENT_GATEWAY=fake. No sandbox real, pule este passo e pague no initPoint."
+          }
+        },
+        {
+          "name": "12b Billing · reconciliar (equivale ao webhook)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-internal-token",
+                "value": "{{internal_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billing_url}}/internal/pagamentos/{{pagamento_id}}/sincronizar"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Com o webhook do MP configurado isto não é necessário; serve também para recuperar um webhook perdido."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4 · Reparo e fechamento",
+      "item": [
+        {
+          "name": "13 Execution · fila de reparo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/fila?status=AGUARDANDO_REPARO&limit=100"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Após PagamentoConfirmado o OS envia IniciarReparo; a execução aparece aqui."
+          }
+        },
+        {
+          "name": "14 Execution · iniciar reparo",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/{{execucao_id}}/reparo/iniciar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "15 Execution · concluir reparo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/{{execucao_id}}/reparo/concluir"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"observacoes\": \"Serviço concluído\"\n}"
+            },
+            "description": "Publica ReparoConcluido → OS FINALIZADA, baixa definitiva do estoque, saga CONCLUIDA."
+          }
+        },
+        {
+          "name": "16 OS · consultar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{os_url}}/api/ordens-servico/{{os_id}}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "17 OS · histórico (status + passos da Saga)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{os_url}}/api/ordens-servico/{{os_id}}/historico"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "18 OS · entregar",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{os_url}}/api/ordens-servico/{{os_id}}/entregar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "19 OS · dashboard (receita vem do Billing)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{os_url}}/api/relatorios/dashboard"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 · Falhas e compensações (alternativas)",
+      "item": [
+        {
+          "name": "F1 Reparo falha → estorno + cancelamentos",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{exec_url}}/api/execucoes/{{execucao_id}}/reparo/falhar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motivo\": \"Motor fundido\"\n}"
+            },
+            "description": "Use no lugar do passo 15. A Saga compensa: EstornarPagamento → CancelarOrcamento → libera reserva → CancelarExecucao → OS CANCELADA. Confira em 17."
+          }
+        },
+        {
+          "name": "F2 Cliente recusa o orçamento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{billing_url}}/api/orcamentos/{{orcamento_id}}/recusar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motivo\": \"Muito caro\"\n}"
+            },
+            "description": "Use no lugar do passo 10."
+          }
+        },
+        {
+          "name": "F3 Pagamento recusado (gateway fake)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-internal-token",
+                "value": "{{internal_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{billing_url}}/internal/dev/mercadopago/pagamentos"
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mpPaymentId\": \"recusado-{{$timestamp}}\",\n  \"status\": \"rejected\",\n  \"orcamentoId\": \"{{orcamento_id}}\",\n  \"valor\": {{valor_total}}\n}"
+            },
+            "description": "Use no lugar do 12a, depois o 12b. No sandbox real, pague com o titular OTHE."
+          }
+        },
+        {
+          "name": "F4 Cancelamento manual da OS (202)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{os_url}}/api/ordens-servico/{{os_id}}/cancelar"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motivo\": \"Cliente desistiu\"\n}"
+            },
+            "description": "Dispara a compensação a partir do passo atual."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "os_url",
+      "value": "http://localhost:3001"
+    },
+    {
+      "key": "exec_url",
+      "value": "http://localhost:3002"
+    },
+    {
+      "key": "billing_url",
+      "value": "http://localhost:3003"
+    },
+    {
+      "key": "internal_token",
+      "value": "integration-internal-token"
+    },
+    {
+      "key": "cpf",
+      "value": "52998224725"
+    },
+    {
+      "key": "placa",
+      "value": "FLX1A23"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "servico_id",
+      "value": ""
+    },
+    {
+      "key": "cliente_id",
+      "value": ""
+    },
+    {
+      "key": "os_id",
+      "value": ""
+    },
+    {
+      "key": "execucao_id",
+      "value": ""
+    },
+    {
+      "key": "orcamento_id",
+      "value": ""
+    },
+    {
+      "key": "pagamento_id",
+      "value": ""
+    },
+    {
+      "key": "valor_total",
+      "value": ""
+    }
+  ]
+}
