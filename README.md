@@ -299,24 +299,21 @@ escopos de autorização via HTTP (`tests/integration/`).
 
 ---
 
-## Qualidade — SonarQube
+## Qualidade — SonarCloud, BDD e contratos
 
-```bash
-# Subir SonarQube (http://localhost:9000 — admin/admin no primeiro acesso)
-npm run sonar:up
-
-# Gerar cobertura e enviar análise
-npm run sonar:scan
-
-# Parar SonarQube
-npm run sonar:down
-```
-
-Após o primeiro login no SonarQube, gere um token em **My Account → Security** e adicione ao `.env`:
-
-```
-SONAR_TOKEN=seu-token-aqui
-```
+- **SonarCloud** (substitui o SonarQube local da Fase 3): `sonar-project.properties` aponta para a
+  organização/projeto no SonarCloud; o scan roda no CI com o `lcov` do `npm run test:coverage` e o
+  `SONAR_TOKEN` (GitHub Secret). Cobertura mínima de 80% por serviço (`coverageThreshold`).
+- **BDD do ciclo da OS** (`tests/bdd/features/ciclo-os.feature`, `jest-cucumber`, em português): 6 cenários
+  — caminho feliz, orçamento recusado, pagamento recusado, falha no reparo (com estorno), timeout de
+  aprovação e mensagem duplicada. O orquestrador real conversa por um `InMemoryMessageBus` com
+  participantes simulados de Execution e Billing. `npx jest tests/bdd`.
+- **Contratos entre serviços** (`tests/contracts/`): cada serviço produz envelopes reais e os compara com um
+  JSON versionado; o JSON do produtor é copiado para o repositório do consumidor, que o alimenta aos
+  handlers reais. Regenerar: `UPDATE_CONTRACTS=1 npx jest tests/contracts` (e copiar o JSON para os repos
+  que o consomem: `os-commands.json` → Billing/Execution; `billing-events.json` e `execution-events.json` → OS).
+- **Integração**: Postgres (Testcontainers) e SQS/SNS reais (`tests/integration/messaging-localstack.spec.ts`,
+  exige `LOCALSTACK_ENDPOINT`; o CI sobe o LocalStack como service container).
 
 ---
 
