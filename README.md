@@ -342,8 +342,8 @@ npx jest tests/contracts  # contratos com Billing e Execution
 
 | Serviço | Linhas | Branches | Como foi medido |
 |---|---|---|---|
-| Billing | 98,2 % | 93,5 % | `npm run test:coverage`, sem os testes de integração (Postgres/LocalStack) |
-| Execution | 98,8 % | 95,3 % | idem (sem LocalStack) |
+| Billing | 99,6 % | 92,9 % | `npm run test:coverage`, sem os testes de integração (Postgres/LocalStack) |
+| Execution | 99,6 % | 93,2 % | idem (sem LocalStack) |
 | OS | _ver o relatório do CI_ | | as suítes com Testcontainers exigem Docker; sem elas: 86,6 % de linhas |
 
 Relatório de cobertura e BDD publicados em cada execução do CI (`GITHUB_STEP_SUMMARY`) e no SonarCloud (badges no topo).
