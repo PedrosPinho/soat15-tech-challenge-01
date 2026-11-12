@@ -93,7 +93,7 @@ flowchart LR
 
     subgraph Pipeline["CI/CD — GitHub Actions"]
         direction LR
-        Build[build] --> Test[test] --> DockerBuild[docker-build-push] --> CIDeploy[deploy]
+        Build[build] --> Test[test] --> Sonar[sonar + quality gate] --> TF[terraform apply] --> DockerBuild[docker-build-push] --> CIDeploy[deploy]
     end
 
     Dev -->|git push main/homolog| GH[(GitHub)]
@@ -102,12 +102,12 @@ flowchart LR
     CIDeploy -->|apply k8s/ + rollout| K8s
 
     subgraph K8s["EKS — soat15-tech-challenge-k8s-infra (namespace oficina-prod/homolog)"]
-        Svc[Service LoadBalancer :3001] --> API[Deployment oficina-api]
+        Svc[Service ClusterIP :3001 + Ingress no ALB interno] --> API[Deployment oficina-api]
         HPA -.escala 2–6.-> API
         API --> RDS[(RDS PostgreSQL — soat15-tech-challenge-db-infra)]
     end
 
-    APIGW[API Gateway + Lambdas de CPF — soat15-tech-challenge-auth-lambda] -->|VPC Link/NLB| Svc
+    APIGW[API Gateway + Lambdas de CPF — soat15-tech-challenge-auth-lambda] -->|VPC Link/ALB| Svc
     Cliente([Cliente HTTP]) --> APIGW
 ```
 
@@ -298,6 +298,16 @@ Docker) e testes E2E ponta a ponta do ciclo de vida da OS, listagem/ordenação 
 escopos de autorização via HTTP (`tests/integration/`).
 
 ---
+
+## CI/CD (Fase 4)
+
+`build` → `test` (Postgres + LocalStack, cobertura ≥ 80 %, relatório BDD) → `sonar` (SonarCloud, **espera o quality
+gate**) → `terraform apply` (ECR, SNS/SQS; em PR roda `terraform plan` e comenta no resumo) → `docker-build-push` →
+`deploy` (bootstrap de banco, migration, seed, Deployment/Service/HPA/Ingress, `rollout status`, smoke `/health/ready`).
+Deploy real só em `homolog` (em `main` o `apply` vira `plan` e o deploy falha de propósito, ADR-007). Checks
+obrigatórios da branch protection: `Build`, `Test`, `Sonar` (`./scripts/protect-branches.sh`). `destroy.yml` (manual)
+remove os workloads (Ingress primeiro, para o ALB não ficar órfão) e a infraestrutura do serviço; ordem completa de
+destruição no cabeçalho do arquivo.
 
 ## Qualidade — SonarCloud, BDD e contratos
 
