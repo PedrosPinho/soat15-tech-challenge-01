@@ -334,6 +334,23 @@ base do dashboard de tempo médio por status. Infraestrutura do cluster
 [`soat15-tech-challenge-k8s-infra`](https://github.com/PedrosPinho/soat15-tech-challenge-k8s-infra),
 mesmo padrão de "gated até existir a credencial".
 
+### Observabilidade distribuída (Fase 4)
+
+- **Trace único através do SQS/SNS**: quem enfileira captura os headers W3C/New Relic da transação corrente
+  (`insertDistributedTraceHeaders`) e os grava no campo opcional `trace` do envelope (e nos `MessageAttributes`
+  `traceparent`/`tracestate`/`newrelic`); quem consome abre uma `startBackgroundTransaction` ("Queue") e chama
+  `acceptDistributedTraceHeaders`. O trace de uma OS atravessa OS → Billing/Execution → OS. O trace é gravado **no
+  momento do enqueue** (não no relay do outbox), senão ele se perderia no caminho transacional. Código em
+  `src/shared/observability/tracing.ts` (idêntico nos 3 serviços); sem licença do agente tudo vira no-op.
+- **`sagaId`/`ordemServicoId`** entram no contexto do logger (`AsyncLocalStorage`) e como atributos customizados da
+  transação — busca "tudo da OS X" em Logs/Distributed Tracing.
+- **Eventos customizados** (emitidos *depois do commit*): `SagaIniciada`, `SagaPassoExecutado{passo, acao, resultado}`
+  e `SagaFinalizada{resultado, duracaoMs}` (CONCLUIDA | COMPENSADA | FALHA_COMPENSACAO).
+- **`FilaProfundidade{servico, fila, tipo, mensagens, emVoo}`** a cada 60 s (`QUEUE_DEPTH_INTERVAL_MS`): cada serviço mede
+  as suas filas e DLQs com `GetQueueAttributes`, porque a integração CloudWatch do New Relic é inviável no Learner Lab.
+- Dashboard **"Saga / Microsserviços"** e alertas (FALHA_COMPENSACAO, DLQ > 0, taxa de compensação, webhook do MP) em
+  `k8s-infra/newrelic_saga.tf`.
+
 **Para ligar de vez**: criar conta New Relic (free tier) e publicar a license
 key como GitHub Secret `NEW_RELIC_LICENSE_KEY` neste repositório e em
 `k8s-infra`. Detalhes e pendências (instrumentação de Lambda, dashboards) em

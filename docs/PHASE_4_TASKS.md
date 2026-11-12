@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 6 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5 (plataforma) e 6 (testes e qualidade) implementadas (sem `apply`/Docker). Próxima: Etapa 7 (observabilidade distribuída).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 a 7 implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Etapas 5, 6 e 7 implementadas (sem `apply`/Docker/conta New Relic). Próxima: Etapa 8 (CI/CD final).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -176,14 +176,21 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 7 — Observabilidade distribuída
 
-- [ ] **T7.1 [EX/BI]** Agente New Relic (`newrelic.js` carregado primeiro, mock em `tests/__mocks__`), `NEW_RELIC_APP_NAME=<serviço>-<env>`.
-- [ ] **T7.2 [OS/EX/BI]** Propagação de trace no adapter de mensageria (`insertDistributedTraceHeaders` no envio, `startBackgroundTransaction` + `acceptDistributedTraceHeaders('Queue', …)` no consumo).
+- [x] **T7.1 [EX/BI]** Agente New Relic (`newrelic.js` carregado primeiro, mock em `tests/__mocks__`), `NEW_RELIC_APP_NAME=<serviço>-<env>`.
+  ↳ Já estava pronto desde as Etapas 3/4: `require('newrelic')` primeiro em `index.ts`, `NEW_RELIC_APP_NAME=<serviço>-<env>` no Secret do CI, mock em `tests/__mocks__` (agora com `getTransaction`/`startBackgroundTransaction`).
+- [x] **T7.2 [OS/EX/BI]** Propagação de trace no adapter de mensageria (`insertDistributedTraceHeaders` no envio, `startBackgroundTransaction` + `acceptDistributedTraceHeaders('Queue', …)` no consumo).
   ✔ Um trace único OS → Billing → OS visível no Distributed Tracing.
-- [ ] **T7.3 [OS/EX/BI]** `sagaId`/`ordemServicoId` no contexto do logger (`AsyncLocalStorage`) e como atributos customizados da transação.
-- [ ] **T7.4 [OS]** Eventos customizados `SagaPassoExecutado` e `SagaFinalizada{resultado, duracaoMs}`.
-- [ ] **T7.5 [OS/EX/BI]** Coletor periódico de `ApproximateNumberOfMessages` das próprias filas/DLQs → evento `FilaProfundidade`.
-- [ ] **T7.6 [K8S]** Dashboard "Saga / Microsserviços" e alertas (`FALHA_COMPENSACAO`, DLQ > 0, taxa de compensação, erro no webhook MP) em Terraform.
+  🔶 Implementado e testado com o agente mockado (headers vão no envelope e nos MessageAttributes; consumo em transação "Queue" ligada ao produtor; erro do handler vai ao APM e a mensagem volta à fila). **Desvio**: o trace é capturado no **enqueue** (`createEnvelope`) e viaja no campo opcional `trace` do envelope — capturar no relay do outbox perderia a transação de origem. ✔ "trace único OS → Billing → OS no Distributed Tracing": **não verificado** (precisa de conta New Relic + deploy).
+- [x] **T7.3 [OS/EX/BI]** `sagaId`/`ordemServicoId` no contexto do logger (`AsyncLocalStorage`) e como atributos customizados da transação.
+  ✅ `vincularSaga` (logger + atributos da transação) no consumidor de mensagens, no orquestrador, nos use cases do Billing e no webhook do MP.
+- [x] **T7.4 [OS]** Eventos customizados `SagaPassoExecutado` e `SagaFinalizada{resultado, duracaoMs}`.
+  ✅ `SagaPassoExecutado`, `SagaFinalizada` (emitidos após o commit; única vez por saga) e, a mais, `SagaIniciada` (no use case de criação da OS) para o gráfico de iniciadas/hora. Testado (CONCLUIDA, COMPENSADA, FALHA_COMPENSACAO).
+- [x] **T7.5 [OS/EX/BI]** Coletor periódico de `ApproximateNumberOfMessages` das próprias filas/DLQs → evento `FilaProfundidade`.
+  ✅ `QueueDepthCollector` nos 3 serviços (fila própria + `<fila>-dlq`, por convenção de nome), só com SQS real; testado com SQS mockado.
+- [x] **T7.6 [K8S]** Dashboard "Saga / Microsserviços" e alertas (`FALHA_COMPENSACAO`, DLQ > 0, taxa de compensação, erro no webhook MP) em Terraform.
   ✔ Mensagem forçada para a DLQ dispara o alerta.
+  🔶 `k8s-infra/newrelic_saga.tf`: dashboard em 2 páginas e 4 alertas na política existente; `terraform fmt`/`validate` OK. ✔ "mensagem forçada para a DLQ dispara o alerta": **não verificado**; nomes de evento/atributo e a NRQL aninhada do billboard de DLQ devem ser conferidos contra dados reais.
+
 
 ## Etapa 8 — CI/CD
 
@@ -306,3 +313,13 @@ Branch `feat/fase4-etapa6` nos 3 serviços (sem push; as branches das etapas ant
 - Contratos por exemplo: se o formato de um comando/evento mudar, o teste do **produtor** falha até regenerar (`UPDATE_CONTRACTS=1 npx jest tests/contracts`) e copiar o JSON ao consumidor — o processo é manual (sem repositório compartilhado, como decidido na A3/A4).
 - `FakePaymentGateway` passou a gerar ids determinísticos (`pref-N`, `refund-N`) para os contratos serem estáveis.
 - O BDD usa os eventos reais do contrato nos testes de contrato, com os ids de correlação trocados pelos da saga (cada fixture vem de um fluxo diferente do produtor).
+
+### 2026-11-12 — Etapa 7 (observabilidade distribuída)
+
+Branch `feat/fase4-etapa7` nos 3 serviços e no `k8s-infra` (sem push). **Verificado**: `tsc`/lint/prettier limpos; Execution 217 e Billing 261 testes passando (cobertura ≥ 98 % linhas); OS — saga/BDD/contratos/mensageria (124) passando, as mesmas 10 suítes de Docker seguem sem rodar; `terraform fmt`/`validate` no `k8s-infra`. **Não verificado**: tudo que exige o agente real (traces, atributos, eventos chegando na conta) e os recursos New Relic via Terraform.
+
+**Desvios / decisões**
+- Campo opcional `trace` no envelope (compatível com v1 — o consumidor que não o conhece o ignora); ausente quando não há transação, então os contratos (`tests/contracts`) não mudaram.
+- `src/shared/observability/tracing.ts`, `logger.ts`, `envelope.ts`, o adapter SQS/SNS e o `QueueDepthCollector` são cópias idênticas nos 3 serviços (como o envelope).
+- A DLQ é medida pela convenção `<fila>-dlq` (nome na AWS: `soat15-tc-<env>-<fila>-dlq`, derivado da URL da fila).
+- Alerta de taxa de compensação usa percentual simples (50 %/15 min): com poucas sagas é ruidoso — ajustar na demonstração.
