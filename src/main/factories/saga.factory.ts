@@ -17,6 +17,7 @@ import { PostgresSagaRepository } from '@infrastructure/database/postgres/reposi
 import { PostgresStatusHistoricoRepository } from '@infrastructure/database/postgres/repositories/status-historico.repository.impl';
 import { PostgresUnitOfWork } from '@infrastructure/database/postgres/unit-of-work';
 import { InMemoryMessageBus } from '@infrastructure/messaging/in-memory-message-bus';
+import { filaComDlq, QueueDepthCollector } from '@infrastructure/messaging/queue-depth-collector';
 import { SqsSnsMessageBus } from '@infrastructure/messaging/sqs-sns-message-bus';
 import { Destinations } from '@shared/messaging/messages';
 import { makeNotificationService } from './notification.factory';
@@ -98,3 +99,14 @@ export const makeOutboxRelay = (bus: IMessageBus): OutboxRelay => {
     intervalMs: Number(process.env.OUTBOX_RELAY_INTERVAL_MS ?? 1000),
   });
 };
+
+/** Mede a fila de respostas da Saga (e a DLQ) — só com SQS real. Evento `FilaProfundidade`. */
+export const makeQueueDepthCollector = (bus: IMessageBus): QueueDepthCollector | undefined =>
+  bus instanceof SqsSnsMessageBus
+    ? new QueueDepthCollector(
+        new SQSClient({ region: process.env.AWS_REGION ?? 'us-east-1' }),
+        'os-service',
+        filaComDlq(Destinations.SagaReplies, required('SAGA_REPLIES_QUEUE_URL')),
+        Number(process.env.QUEUE_DEPTH_INTERVAL_MS ?? 60_000),
+      )
+    : undefined;

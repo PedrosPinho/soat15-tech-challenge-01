@@ -4,7 +4,11 @@ import { SagaInstancia, SagaPassoLog } from '@domain/entities/saga.entity';
 import { IInboxRepository } from '@domain/repositories/inbox.repository';
 import { IItemEstoqueRepository } from '@domain/repositories/item-estoque.repository';
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
-import { IOutboxRepository, NewOutboxEntry, OutboxEntry } from '@domain/repositories/outbox.repository';
+import {
+  IOutboxRepository,
+  NewOutboxEntry,
+  OutboxEntry,
+} from '@domain/repositories/outbox.repository';
 import { ISagaRepository, SagaConcurrencyError } from '@domain/repositories/saga.repository';
 import {
   IStatusHistoricoRepository,
@@ -39,14 +43,33 @@ export class FakeUow implements IUnitOfWork {
 
 export class FakeOrdens implements IOrdemServicoRepository {
   map = new Map<string, OrdemServico>();
-  async save(os: OrdemServico) { this.map.set(os.id, os); }
-  async update(os: OrdemServico) { this.map.set(os.id, os); }
-  async findById(id: string) { return this.map.get(id) ?? null; }
-  async findByNumeroOS() { return null; }
-  async findByClienteId() { return { ordens: [], total: 0 }; }
-  async list() { return { ordens: [], total: 0 }; }
-  async nextSequence() { return 1; }
-  snapshot() { const c = new Map(this.map); return () => { this.map = c; }; }
+  async save(os: OrdemServico) {
+    this.map.set(os.id, os);
+  }
+  async update(os: OrdemServico) {
+    this.map.set(os.id, os);
+  }
+  async findById(id: string) {
+    return this.map.get(id) ?? null;
+  }
+  async findByNumeroOS() {
+    return null;
+  }
+  async findByClienteId() {
+    return { ordens: [], total: 0 };
+  }
+  async list() {
+    return { ordens: [], total: 0 };
+  }
+  async nextSequence() {
+    return 1;
+  }
+  snapshot() {
+    const c = new Map(this.map);
+    return () => {
+      this.map = c;
+    };
+  }
 }
 
 export class FakeSagas implements ISagaRepository {
@@ -54,7 +77,9 @@ export class FakeSagas implements ISagaRepository {
   logs: SagaPassoLog[] = [];
   /** Força uma colisão de versão na próxima atualização. */
   falharProximaAtualizacao = false;
-  async create(s: SagaInstancia) { this.map.set(s.id, structuredClone(s)); }
+  async create(s: SagaInstancia) {
+    this.map.set(s.id, structuredClone(s));
+  }
   async findByOrdemServicoId(id: string) {
     const s = [...this.map.values()].find((x) => x.ordemServicoId === id);
     return s ? structuredClone(s) : null;
@@ -71,48 +96,94 @@ export class FakeSagas implements ISagaRepository {
   }
   async findExpired(now: Date, limit: number) {
     return [...this.map.values()]
-      .filter((s) => s.expiraEm && s.expiraEm <= now && ['EM_ANDAMENTO', 'COMPENSANDO'].includes(s.status))
+      .filter(
+        (s) =>
+          s.expiraEm && s.expiraEm <= now && ['EM_ANDAMENTO', 'COMPENSANDO'].includes(s.status),
+      )
       .slice(0, limit)
       .map((s) => structuredClone(s));
   }
-  async appendLog(e: SagaPassoLog) { this.logs.push(e); }
-  async listLog(id: string) { return this.logs.filter((l) => l.sagaId === id); }
+  async appendLog(e: SagaPassoLog) {
+    this.logs.push(e);
+  }
+  async listLog(id: string) {
+    return this.logs.filter((l) => l.sagaId === id);
+  }
   snapshot() {
-    const m = structuredClone(this.map); const l = [...this.logs];
-    return () => { this.map = m; this.logs = l; };
+    const m = structuredClone(this.map);
+    const l = [...this.logs];
+    return () => {
+      this.map = m;
+      this.logs = l;
+    };
   }
 }
 
 export class FakeOutbox implements IOutboxRepository {
   entries: NewOutboxEntry[] = [];
-  async enqueue(e: NewOutboxEntry) { this.entries.push(e); }
-  async claimBatch(_limit: number): Promise<OutboxEntry[]> { return []; }
+  async enqueue(e: NewOutboxEntry) {
+    this.entries.push(e);
+  }
+  async claimBatch(_limit: number): Promise<OutboxEntry[]> {
+    return [];
+  }
   async markPublished(_id: string) {}
   async markFailed(_id: string, _error: string, _retryAt: Date) {}
-  snapshot() { const c = [...this.entries]; return () => { this.entries = c; }; }
-  ofType(type: string) { return this.entries.filter((e) => e.envelope.type === type).map((e) => e.envelope); }
-  get types() { return this.entries.map((e) => e.envelope.type); }
+  snapshot() {
+    const c = [...this.entries];
+    return () => {
+      this.entries = c;
+    };
+  }
+  ofType(type: string) {
+    return this.entries.filter((e) => e.envelope.type === type).map((e) => e.envelope);
+  }
+  get types() {
+    return this.entries.map((e) => e.envelope.type);
+  }
 }
 
 export class FakeInbox implements IInboxRepository {
   seen = new Set<string>();
-  async markProcessed(id: string) { if (this.seen.has(id)) return false; this.seen.add(id); return true; }
-  snapshot() { const c = new Set(this.seen); return () => { this.seen = c; }; }
+  async markProcessed(id: string) {
+    if (this.seen.has(id)) return false;
+    this.seen.add(id);
+    return true;
+  }
+  snapshot() {
+    const c = new Set(this.seen);
+    return () => {
+      this.seen = c;
+    };
+  }
 }
 
 export class FakeHistorico implements IStatusHistoricoRepository {
   entries: StatusHistoricoEntry[] = [];
-  async add(e: StatusHistoricoEntry) { this.entries.push(e); }
-  async listByOrdemServico(id: string) { return this.entries.filter((e) => e.ordemServicoId === id); }
-  snapshot() { const c = [...this.entries]; return () => { this.entries = c; }; }
+  async add(e: StatusHistoricoEntry) {
+    this.entries.push(e);
+  }
+  async listByOrdemServico(id: string) {
+    return this.entries.filter((e) => e.ordemServicoId === id);
+  }
+  snapshot() {
+    const c = [...this.entries];
+    return () => {
+      this.entries = c;
+    };
+  }
 }
 
 export class FakeEstoque implements IItemEstoqueRepository {
   items = new Map<string, { disp: number; res: number }>();
   async save() {}
   async update() {}
-  async list() { return []; }
-  async findByPecaId() { return null; }
+  async list() {
+    return [];
+  }
+  async findByPecaId() {
+    return null;
+  }
   private get(pecaId: string) {
     const i = this.items.get(pecaId);
     if (!i) throw new ValidationError(`Sem estoque cadastrado para ${pecaId}`);
@@ -120,26 +191,38 @@ export class FakeEstoque implements IItemEstoqueRepository {
   }
   private dto(pecaId: string): ItemEstoque {
     const i = this.get(pecaId);
-    return ItemEstoque.create({ pecaId, quantidadeDisponivel: i.disp, nivelMinimo: 0, nivelMaximo: 1000 });
+    return ItemEstoque.create({
+      pecaId,
+      quantidadeDisponivel: i.disp,
+      nivelMinimo: 0,
+      nivelMaximo: 1000,
+    });
   }
   async reservar(pecaId: string, q: number) {
     const i = this.get(pecaId);
     if (i.disp < q) throw new ValidationError('Estoque insuficiente');
-    i.disp -= q; i.res += q; return this.dto(pecaId);
+    i.disp -= q;
+    i.res += q;
+    return this.dto(pecaId);
   }
   async utilizar(pecaId: string, q: number) {
     const i = this.get(pecaId);
     if (i.res < q) throw new ValidationError('Quantidade a utilizar excede o reservado');
-    i.res -= q; return this.dto(pecaId);
+    i.res -= q;
+    return this.dto(pecaId);
   }
   async liberarReserva(pecaId: string, q: number) {
     const i = this.get(pecaId);
     if (i.res < q) throw new ValidationError('Quantidade a liberar excede o reservado');
-    i.res -= q; i.disp += q; return this.dto(pecaId);
+    i.res -= q;
+    i.disp += q;
+    return this.dto(pecaId);
   }
   snapshot() {
     const c = new Map([...this.items].map(([k, v]) => [k, { ...v }]));
-    return () => { this.items = c; };
+    return () => {
+      this.items = c;
+    };
   }
 }
 
@@ -174,11 +257,18 @@ export const makeHarness = (config: Partial<SagaConfig> = {}) => {
     historico,
     clientes: {
       findById: async () =>
-        ({ id: 'cli-1', nome: 'Maria', email: 'm@x.com', cpfCnpj: { value: '12345678909' } }) as never,
+        ({
+          id: 'cli-1',
+          nome: 'Maria',
+          email: 'm@x.com',
+          cpfCnpj: { value: '12345678909' },
+        }) as never,
     } as never,
     catalogo: {
       findById: async (id: string) =>
-        id === 'cat-1' ? ({ id, descricao: 'Troca de amortecedor', preco: 250, tempoEstimado: 1.5 } as never) : null,
+        id === 'cat-1'
+          ? ({ id, descricao: 'Troca de amortecedor', preco: 250, tempoEstimado: 1.5 } as never)
+          : null,
     } as never,
     pecas: {
       findById: async (id: string) =>
@@ -192,8 +282,13 @@ export const makeHarness = (config: Partial<SagaConfig> = {}) => {
 
   const abrirOS = async (): Promise<OrdemServico> => {
     const os = OrdemServico.create({
-      id: OS_ID, numeroOS: 'OS-20261111-0001', clienteId: 'cli-1', veiculoId: 'v-1',
-      placa: 'ABC1D23', cpfCnpj: '12345678909', quilometragemEntrada: 1000,
+      id: OS_ID,
+      numeroOS: 'OS-20261111-0001',
+      clienteId: 'cli-1',
+      veiculoId: 'v-1',
+      placa: 'ABC1D23',
+      cpfCnpj: '12345678909',
+      quilometragemEntrada: 1000,
     });
     await uow.run(async () => {
       await ordens.save(os);
@@ -209,7 +304,10 @@ export const makeHarness = (config: Partial<SagaConfig> = {}) => {
     messageId?: string,
   ): Promise<Envelope> => {
     const env = createEnvelope({
-      type, messageId, sagaId: 'x', correlationId: 'corr-1',
+      type,
+      messageId,
+      sagaId: 'x',
+      correlationId: 'corr-1',
       payload: { ordemServicoId: OS_ID, ...payload },
     });
     await orchestrator.handleReply(env);
@@ -218,7 +316,9 @@ export const makeHarness = (config: Partial<SagaConfig> = {}) => {
 
   const saga = async () => (await sagas.findByOrdemServicoId(OS_ID)) as SagaInstancia;
   const os = async () => (await ordens.findById(OS_ID)) as OrdemServico;
-  const avancarRelogio = (ms: number) => { now.value = new Date(now.value.getTime() + ms); };
+  const avancarRelogio = (ms: number) => {
+    now.value = new Date(now.value.getTime() + ms);
+  };
 
   /** Conduz o caminho feliz até `ate` (inclusive). */
   const ATE = ['diagnostico', 'orcamento', 'aprovacao', 'pagamento', 'reparo'] as const;
@@ -234,14 +334,38 @@ export const makeHarness = (config: Partial<SagaConfig> = {}) => {
     if (ate === 'orcamento') return;
     await responder('OrcamentoAprovado', { orcamentoId: 'orc-1', aprovadoEm: 'x' });
     if (ate === 'aprovacao') return;
-    await responder('PagamentoSolicitado', { orcamentoId: 'orc-1', pagamentoId: 'pg-1', initPoint: 'http://mp', expiraEm: 'x' });
-    await responder('PagamentoConfirmado', { orcamentoId: 'orc-1', pagamentoId: 'pg-1', mpPaymentId: '1', valor: 610, confirmadoEm: 'x' });
+    await responder('PagamentoSolicitado', {
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      initPoint: 'http://mp',
+      expiraEm: 'x',
+    });
+    await responder('PagamentoConfirmado', {
+      orcamentoId: 'orc-1',
+      pagamentoId: 'pg-1',
+      mpPaymentId: '1',
+      valor: 610,
+      confirmadoEm: 'x',
+    });
     if (ate === 'pagamento') return;
     await responder('ReparoIniciado', { execucaoId: 'ex-1' });
   };
 
   return {
-    ordens, sagas, outbox, inbox, historico, estoqueRepo, orchestrator, uow, notificacoes,
-    abrirOS, responder, saga, os, avancarRelogio, conduzir,
+    ordens,
+    sagas,
+    outbox,
+    inbox,
+    historico,
+    estoqueRepo,
+    orchestrator,
+    uow,
+    notificacoes,
+    abrirOS,
+    responder,
+    saga,
+    os,
+    avancarRelogio,
+    conduzir,
   };
 };
