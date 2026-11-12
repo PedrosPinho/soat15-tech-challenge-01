@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 5. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-12, após a Etapa 6. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -20,6 +20,8 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 2. Validação com Docker (nada disto rodou: o ambiente de desenvolvimento não tem Docker)
 
+- [ ] 🔶 **Smoke ponta a ponta** (o teste mais importante que ainda não rodou): no OS, `docker compose -f docker-compose.integration.yml up --build -d` e `./scripts/smoke-fluxo-feliz.sh` (precisa de `curl` e `jq`; os repos `billing-service` e `execution-service` clonados ao lado). Se falhar, o script diz em qual passo; ajustes prováveis: shape de alguma resposta do OS, tempo de espera, variável de ambiente.
+- [ ] 🔶 Rodar também as suítes `LOCALSTACK_ENDPOINT=http://localhost:4566 npx jest tests/integration/messaging-localstack` nos 3 repos (adapter SQS/SNS real: raw delivery, filter policy, DLQ).
 - [ ] 🔶 **OS**: `npm test` com Docker (10 suítes dependem de Testcontainers: 7 repositórios Postgres, 2 integração, `messaging.spec.ts`) e `docker compose up` (LocalStack + `scripts/localstack-init.sh`). A cobertura global do OS **não foi medida**.
 - [ ] 🔶 **Execution**: `docker compose up --build`; `LOCALSTACK_ENDPOINT=http://localhost:4566 npm test` (ativa `tests/integration-localstack.spec.ts`, 6 testes).
 - [ ] 🔶 **Billing**: `docker compose up --build`; `TEST_DATABASE_URL=postgres://oficina:senha123@localhost:5433/oficina_billing npm test` (ativa `tests/integration.postgres.spec.ts`, 5 testes).
@@ -38,6 +40,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
   `/soat15-tc/<env>/billing/mp-access-token` e `/soat15-tc/<env>/billing/mp-webhook-secret`.
 - [ ] 🔶 **T4.3** Teste manual do `MercadoPagoPaymentGateway` no sandbox: criar preferência, abrir o `sandbox_init_point`, pagar com titular `APRO` (aprovado) e `OTHE` (recusado), conferir o webhook assinado e o estorno. O adapter só foi testado com `fetch` simulado — **o formato real das respostas/assinatura do MP pode exigir ajuste**.
 - [ ] ⚪ **T0.5** SonarCloud: organização, 3 projetos (analysis method *GitHub Actions*), `SONAR_TOKEN` em cada repo (Guia Passo 3). Só é usado na Etapa 8.
+- [ ] 🔶 **SonarCloud (T6.4)**: confirmar `sonar.organization` (`pedrospinho`) e `sonar.projectKey` (`pedrospinho_<repo>`) em cada `sonar-project.properties` — são presumidos pelo padrão do SonarCloud.
 - [ ] ⚪ New Relic: `NEW_RELIC_LICENSE_KEY` como GitHub Secret (sem ela o agente fica desligado, sem erro).
 
 ## 4. GitHub Secrets / Environments (por repo)
@@ -74,7 +77,6 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 7. Ainda é código meu (não é seu), por etapa
 
-- Etapa 6 — testes: E2E/BDD multi-serviço, cobertura do OS (medir com Docker), teste de isolamento de banco.
 - Etapa 7 — observabilidade distribuída (New Relic, propagação de `traceparent`).
 - Etapa 8 — CI/CD final (SonarCloud). Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
 
@@ -88,3 +90,9 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 | `soat15-tech-challenge-01` (OS) | `k8s/db-bootstrap.sql` + Job; `DATABASE_URL` com `os_service`/`oficina_os`; `refresh-aws-secrets.sh` p/ 6 repos |
 - [ ] ⛔ Push + PR dessas 3 branches nos repos de infra (`main`/`homolog` protegidas), na ordem do item 5.
 - [ ] ⚪ Os repos de infra leem `terraform_remote_state` do workspace `homolog` fixo (herança da Fase 3): em `prod` não há ambiente real (ADR-007).
+
+## 9. Etapa 6 — o que mudou (branch `feat/fase4-etapa6` nos 3 serviços, sem push)
+
+- BDD `tests/bdd/` (OS), contratos `tests/contracts/` (3 repos), `tests/integration/messaging-localstack.spec.ts` (3 repos), `sonar-project.properties` (3 repos), `docker-compose.integration.yml` + `scripts/smoke-fluxo-feliz.sh` (OS).
+- [ ] ⚪ Manter os contratos em dia: ao mudar qualquer mensagem, `UPDATE_CONTRACTS=1 npx jest tests/contracts` no produtor e copiar o JSON para o consumidor (README do OS, seção Qualidade).
+- [ ] 🔶 Cobertura do OS só é conhecida no CI (sem Docker aqui: 86,6 % linhas / 77 % branches / 78,5 % funções; o threshold global de 80 % pode falhar se as suítes de Docker não cobrirem o restante — confira no primeiro run).
