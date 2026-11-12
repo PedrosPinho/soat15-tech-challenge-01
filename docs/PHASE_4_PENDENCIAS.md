@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 6. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-12, após a Etapa 7. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -77,7 +77,6 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 ## 7. Ainda é código meu (não é seu), por etapa
 
-- Etapa 7 — observabilidade distribuída (New Relic, propagação de `traceparent`).
 - Etapa 8 — CI/CD final (SonarCloud). Etapa 9 — README, diagramas, vídeo (o roteiro é seu).
 
 ## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`, sem push)
@@ -96,3 +95,11 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - BDD `tests/bdd/` (OS), contratos `tests/contracts/` (3 repos), `tests/integration/messaging-localstack.spec.ts` (3 repos), `sonar-project.properties` (3 repos), `docker-compose.integration.yml` + `scripts/smoke-fluxo-feliz.sh` (OS).
 - [ ] ⚪ Manter os contratos em dia: ao mudar qualquer mensagem, `UPDATE_CONTRACTS=1 npx jest tests/contracts` no produtor e copiar o JSON para o consumidor (README do OS, seção Qualidade).
 - [ ] 🔶 Cobertura do OS só é conhecida no CI (sem Docker aqui: 86,6 % linhas / 77 % branches / 78,5 % funções; o threshold global de 80 % pode falhar se as suítes de Docker não cobrirem o restante — confira no primeiro run).
+
+## 10. Etapa 7 — observabilidade (branch `feat/fase4-etapa7` nos 3 serviços + `k8s-infra`, sem push)
+
+- [ ] ⛔ **Conta New Relic** (free tier): `NEW_RELIC_LICENSE_KEY` (ingestão) em cada repo de serviço e no `k8s-infra`; para os dashboards/alertas por Terraform também `new_relic_api_key` + `new_relic_account_id` e `enable_new_relic_dashboards=true` no `k8s-infra` (ver README dele). Sem a licença o agente fica desligado e nada quebra.
+- [ ] 🔶 **Trace distribuído OS → Billing → OS**: depois do 1º deploy com licença, abrir *Distributed tracing*, filtrar por `ordemServicoId` e conferir que o trace atravessa os serviços (é o item do vídeo). Se o trace quebrar na fila, olhar o campo `trace` do envelope e os MessageAttributes `traceparent`/`newrelic`.
+- [ ] 🔶 Conferir contra dados reais: nomes de evento/atributo (`SagaIniciada`, `SagaPassoExecutado`, `SagaFinalizada`, `FilaProfundidade`), a NRQL aninhada do billboard de DLQ e o `transactionName` do webhook MP (alerta). Ajustar em `k8s-infra/newrelic_saga.tf`.
+- [ ] 🔶 **Forçar uma mensagem para a DLQ** (ex.: enviar JSON inválido a `…-billing-commands`) e conferir que o alerta "Mensagem em DLQ" dispara (≤ ~6 min: coleta de 60 s + janela de 5 min).
+- [ ] ⚪ O alerta "taxa de compensação > 50 %" é ruidoso com pouco volume; ajuste o limiar/duração se disparar à toa no vídeo.
