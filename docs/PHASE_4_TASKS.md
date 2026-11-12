@@ -2,7 +2,7 @@
 
 **Base**: [`PHASE_4_PLAN.md`](PHASE_4_PLAN.md) (decisões D1–D9 confirmadas, A1–A14 assumidas)
 **Passos que dependem de conta externa**: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md)
-**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapa 2 (OS Service) implementada** (2026-11-11) — itens que dependem de Docker/AWS ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; próxima: Etapa 3 (Execution Service).
+**Status atual**: refinement concluído; **Etapa 1 concluída**; **Etapas 2 (OS), 3 (Execution) e 4 (Billing) implementadas** — itens que dependem de Docker/AWS/Mercado Pago ficam 🔶 (ver cada task). Etapa 0 (itens **[👤]**) a cargo do usuário; tudo que sobrou para o usuário está em [`PHASE_4_PENDENCIAS.md`](PHASE_4_PENDENCIAS.md). Próxima: Etapa 5 (plataforma compartilhada).
 
 Legenda de repositório: **[OS]** `soat15-tech-challenge-01` · **[EX]**
 `soat15-tech-challenge-execution-service` · **[BI]**
@@ -120,18 +120,24 @@ e "executado contra a AWS" são registrados separadamente.
 
 ## Etapa 4 — Billing Service
 
-- [ ] **T4.1** Agregados `Orcamento` e `Pagamento` + migrations (`orcamentos`, `orcamento_itens`, `pagamentos`, `outbox`, `mensagens_processadas`).
-- [ ] **T4.2** Outbox + relay e inbox (cópia adaptada do OS).
-- [ ] **T4.3** Port `IPaymentGateway` + `FakePaymentGateway` + `MercadoPagoPaymentGateway` (criar preferência com `external_reference`/`notification_url`, consultar pagamento, estornar; `X-Idempotency-Key` em escrita).
+- [x] **T4.1** Agregados `Orcamento` e `Pagamento` + migrations (`orcamentos`, `orcamento_itens`, `pagamentos`, `outbox`, `mensagens_processadas`).
+  ↳ `orcamentos`, `orcamento_itens`, `pagamentos` (índice único parcial: 1 pagamento vivo por orçamento), `outbox`, `mensagens_processadas`. Ids de outros serviços são `varchar` sem FK (ADR-012).
+- [x] **T4.2** Outbox + relay e inbox (cópia adaptada do OS).
+- [x] **T4.3** Port `IPaymentGateway` + `FakePaymentGateway` + `MercadoPagoPaymentGateway` (criar preferência com `external_reference`/`notification_url`, consultar pagamento, estornar; `X-Idempotency-Key` em escrita).
   ✔ Teste manual contra o sandbox: preferência criada, `sandbox_init_point` abre o checkout.
-- [ ] **T4.4** Consumidor de `billing-commands`: `GerarOrcamento`, `CancelarOrcamento`, `SolicitarPagamento`, `EstornarPagamento`.
-- [ ] **T4.5** API: `GET /api/orcamentos/:id`, `POST /:id/aprovar|recusar` (cliente só no próprio), `POST /:id/webhook` (segredo compartilhado), `GET /api/pagamentos?ordemServicoId=`, `GET /internal/financeiro/resumo`, `POST /internal/pagamentos/:id/sincronizar` (reconciliação).
-- [ ] **T4.6** `POST /api/pagamentos/webhooks/mercadopago`: validação `x-signature` (HMAC-SHA256 de `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`), consulta `GET /v1/payments/:id`, publica `PagamentoConfirmado`/`PagamentoRecusado`; responde 200 rápido e é idempotente.
+  🔶 `FakePaymentGateway` e `MercadoPagoPaymentGateway` (REST, testado com `fetch` simulado). **Teste manual contra o sandbox NÃO feito** (precisa da conta MP — T0.4): ver PHASE_4_PENDENCIAS.md.
+- [x] **T4.4** Consumidor de `billing-commands`: `GerarOrcamento`, `CancelarOrcamento`, `SolicitarPagamento`, `EstornarPagamento`.
+- [x] **T4.5** API: `GET /api/orcamentos/:id`, `POST /:id/aprovar|recusar` (cliente só no próprio), `POST /:id/webhook` (segredo compartilhado), `GET /api/pagamentos?ordemServicoId=`, `GET /internal/financeiro/resumo`, `POST /internal/pagamentos/:id/sincronizar` (reconciliação).
+  ↳ Acrescentado `GET /api/orcamentos?ordemServicoId=` (o cliente precisa achar o orçamento da OS). Corpo do webhook de aprovação externa: `{ aprovado: boolean, motivo? }` com `x-webhook-secret`.
+- [x] **T4.6** `POST /api/pagamentos/webhooks/mercadopago`: validação `x-signature` (HMAC-SHA256 de `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`), consulta `GET /v1/payments/:id`, publica `PagamentoConfirmado`/`PagamentoRecusado`; responde 200 rápido e é idempotente.
   ✔ Testes: assinatura inválida ⇒ 401; webhook repetido ⇒ um só evento.
-- [ ] **T4.7** Notificação "orçamento disponível" (port `INotificationService` copiada, SES/SMTP).
-- [ ] **T4.8** `terraform/`: ECR, SQS `billing-commands` + DLQ, parâmetros SSM do MP.
-- [ ] **T4.9** `k8s/`: Deployment, Service, HPA, ConfigMap, Ingress (`/api/orcamentos`, `/api/pagamentos`), Job de migration.
-- [ ] **T4.10** Cobertura ≥ 80%.
+  ✅ Assinatura inválida ⇒ 401 sem consultar o MP; webhook repetido/concorrente ⇒ um só evento (testado). Valor aprovado ≠ cobrado **não** confirma.
+- [x] **T4.7** Notificação "orçamento disponível" (port `INotificationService` copiada, SES/SMTP).
+- [x] **T4.8** `terraform/`: ECR, SQS `billing-commands` + DLQ, parâmetros SSM do MP.
+  ↳ `terraform fmt`/`validate` OK. Os parâmetros SSM do MP **não** viraram `data` no Terraform (falharia o apply antes de existirem): o CI os lê no deploy.
+- [x] **T4.9** `k8s/`: Deployment, Service, HPA, ConfigMap, Ingress (`/api/orcamentos`, `/api/pagamentos`), Job de migration.
+- [x] **T4.10** Cobertura ≥ 80%.
+
 
 ## Etapa 5 — Plataforma compartilhada
 
@@ -250,3 +256,18 @@ Repo `soat15-tech-challenge-execution-service`, branch `feat/fase4-etapa3` (3 co
 - Rodar `docker compose up --build` e a suíte com `LOCALSTACK_ENDPOINT` definido.
 - Secrets no repo do Execution: `AWS_*` (Learner Lab) e opcionalmente `NEW_RELIC_LICENSE_KEY`; ordem de deploy: OS antes do Execution.
 - Nos nós, se o IMDS não responder de dentro do pod, subir `HttpPutResponseHopLimit` para 2.
+
+### 2026-11-12 — Etapa 4 (Billing Service)
+
+Repo `soat15-tech-challenge-billing-service`, branch `feat/fase4-etapa4` (5 commits, sem push). **Verificado**: `tsc`, `eslint`, `prettier` e `npm run build` limpos; 238 testes passando, cobertura **98,2 % de linhas / 93,4 % de branches** (limite 80 %); `terraform fmt` + `validate` OK; YAML de K8s/CI/compose parseia.
+
+**Não verificado (sem Docker/AWS/MP)**: `tests/integration.postgres.spec.ts` (5 testes: migrations reais, rollback, índice parcial, webhooks concorrentes com `FOR UPDATE`, `SKIP LOCKED` — pulados sem `TEST_DATABASE_URL`, rodam no CI com service container); os repositórios Postgres só foram testados com `pool` simulado; integração real com o sandbox do Mercado Pago; `docker compose up`; `terraform apply`; deploy no EKS (depende também do bootstrap do banco, Etapa 5).
+
+**Desvios / decisões**
+- Chamadas ao MP **fora** da transação do banco; `X-Idempotency-Key` (`preferencia-<orcamentoId>`, `estorno-<pagamentoId>`). Falha do MP em `SolicitarPagamento` propaga (mensagem volta à fila); em `EstornarPagamento` responde `EstornoFalhou` para a Saga decidir o retry.
+- Link de pagamento cancelado (`CancelarOrcamento`) marca o pagamento pendente como `RECUSADO`; se o cliente pagar mesmo assim, o webhook o confirma (`RECUSADO → CONFIRMADO`) e a Saga estorna (caso previsto no OS).
+- Cartão recusado no MP publica `PagamentoRecusado` imediatamente (a Saga compensa), mesmo que o Checkout Pro permitisse outra tentativa.
+- Aprovar orçamento vencido: vira `EXPIRADO`, publica `OrcamentoRecusado` e responde 422.
+- `GET /internal/financeiro/resumo` devolve `{ receitaTotal, totalEstornado, pagamentosConfirmados, pagamentosEstornados }` (o OS lê só `receitaTotal`).
+- `/internal` não está no Ingress: o OS chama `http://billing-service:3003` dentro do cluster. Service na porta 3003.
+- `PAYMENT_GATEWAY=fake` no `docker-compose` (sem conta MP); `mercadopago` nos manifests K8s.
