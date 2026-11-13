@@ -88,7 +88,7 @@ api PATCH "$EXEC/api/execucoes/$EXEC_ID/reparo/concluir" '{"observacoes":"smoke 
 passo "OS: FINALIZADA, saga concluída, receita no dashboard"
 espera "$OS/api/ordens-servico/$OS_ID" 'select((.data.status // .status)=="FINALIZADA") | "FINALIZADA"' "$AUTH" "OS FINALIZADA" >/dev/null
 echo "Histórico da OS:"; api GET "$OS/api/ordens-servico/$OS_ID/historico" | jq -c '.' | head -c 1500; echo
-RECEITA=$(api GET "$OS/api/relatorios/dashboard" | jq -r '.data.receitaTotal // .receitaTotal')
+RECEITA=$(api GET "$OS/api/relatorios/dashboard" | jq -r '.financeiro.receitaTotal // .data.financeiro.receitaTotal')
 [[ "$RECEITA" != null && "$RECEITA" != "" ]] || falha "dashboard sem receitaTotal (Billing indisponível?)"
 echo "receitaTotal no dashboard: $RECEITA"
 
