@@ -1,19 +1,26 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-12, após a Etapa 9 (todas as etapas de código/documentação concluídas). Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-13, após o push dos 6 repos e a limpeza do histórico (sem trailer Claude). Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
 ## 1. Repositórios e Git
 
-- [ ] ⛔ Criar no GitHub os repos públicos `soat15-tech-challenge-billing-service` e `soat15-tech-challenge-execution-service`, adicionar `soat-architecture` como colaborador e dar `git remote add origin … && git push -u origin main homolog` (T0.3, Guia Passo 1).
-- [ ] ⛔ Dar push das branches de trabalho e abrir PRs (nada foi enviado ao remoto):
-  | Repo | Branch | Conteúdo |
-  |---|---|---|
-  | `soat15-tech-challenge-01` (OS) | `feat/fase4-etapa1` → `feat/fase4-etapa2` | contratos, RFC/ADRs; refactor do OS + Saga |
-  | `…-execution-service` | `feat/fase4-etapa3` | Execution Service |
-  | `…-billing-service` | `feat/fase4-etapa4` | Billing Service |
+- [x] Repos `billing-service` e `execution-service` criados e enviados (`main`, `homolog` e branches `feat/fase4-*`). Remotes via SSH com a chave `gh_id_ed25519`.
+- [ ] ⛔ Adicionar `soat-architecture` como colaborador nos 2 repos novos (T0.3, Guia Passo 1).
+- [x] Branches `feat/fase4-*` enviadas nos 6 repos (OS, Billing, Execution, db-infra, k8s-infra, auth-lambda). Histórico reescrito para remover `Co-Authored-By: Claude`; todos os commits são de `pedrospinho`.
+- [ ] ⛔ **`main` do OS**: o force-push foi recusado (GH006, branch protegida). A `main` remota ainda tem 3 commits de agosto com trailer Claude (`bffb42c`, `d2893a2`, `3536d4e`) e a `main` local está divergente. Para limpar: desligue a proteção da `main` do OS, avise-me para dar o `git push --force-with-lease origin main` e religue a proteção. Se preferir manter, rode `git fetch && git branch -f main origin/main` no OS; as `feat/fase4-*` não dependem disso.
+- [ ] ⛔ Abrir PRs das branches `feat/fase4-*` contra `homolog`, em ordem de etapa (cada uma é cumulativa; ou só a `etapa9` de cada repo):
+  | Repo | Branches |
+  |---|---|
+  | `soat15-tech-challenge-01` (OS) | `etapa1`, `2`, `5`, `6`, `7`, `8`, `9` |
+  | `…-execution-service` | `etapa3`, `6`, `7`, `8`, `9` |
+  | `…-billing-service` | `etapa4`, `6`, `7`, `8`, `9` |
+  | `db-infra` | `etapa5` |
+  | `k8s-infra` | `etapa5`, `7` |
+  | `auth-lambda` | `etapa5` |
+- [ ] ⚪ Hashes de commits citados em mensagens/docs anteriores mudaram com a reescrita de histórico (OS, Billing, Execution, db-infra, k8s-infra, auth-lambda).
 - [ ] ⚪ Nos repos Billing e Execution, o commit inicial do esqueleto (Etapa 1) está **direto na `main`** (feito antes da regra "só em branches"). Se quiser, reorganize antes do primeiro push.
 - [ ] ⚪ `docs/` está no `.gitignore` do OS: os docs da fase foram adicionados com `git add -f`. Decida se mantém o ignore.
 - [ ] 🔶 Branch protection em `main`/`homolog` dos 2 repos novos (PR + status checks `Build` e `Test`).
@@ -79,7 +86,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 
 - Nada. Todas as etapas de código e documentação estão feitas; o que resta está nas seções acima e na 12.
 
-## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`, sem push)
+## 8. Etapa 5 — o que mudou fora do OS (4 repos, branch `feat/fase4-etapa5`)
 
 | Repo | Mudança |
 |---|---|
@@ -90,13 +97,13 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] ⛔ Push + PR dessas 3 branches nos repos de infra (`main`/`homolog` protegidas), na ordem do item 5.
 - [ ] ⚪ Os repos de infra leem `terraform_remote_state` do workspace `homolog` fixo (herança da Fase 3): em `prod` não há ambiente real (ADR-007).
 
-## 9. Etapa 6 — o que mudou (branch `feat/fase4-etapa6` nos 3 serviços, sem push)
+## 9. Etapa 6 — o que mudou (branch `feat/fase4-etapa6` nos 3 serviços)
 
 - BDD `tests/bdd/` (OS), contratos `tests/contracts/` (3 repos), `tests/integration/messaging-localstack.spec.ts` (3 repos), `sonar-project.properties` (3 repos), `docker-compose.integration.yml` + `scripts/smoke-fluxo-feliz.sh` (OS).
 - [ ] ⚪ Manter os contratos em dia: ao mudar qualquer mensagem, `UPDATE_CONTRACTS=1 npx jest tests/contracts` no produtor e copiar o JSON para o consumidor (README do OS, seção Qualidade).
 - [ ] 🔶 Cobertura do OS só é conhecida no CI (sem Docker aqui: 86,6 % linhas / 77 % branches / 78,5 % funções; o threshold global de 80 % pode falhar se as suítes de Docker não cobrirem o restante — confira no primeiro run).
 
-## 10. Etapa 7 — observabilidade (branch `feat/fase4-etapa7` nos 3 serviços + `k8s-infra`, sem push)
+## 10. Etapa 7 — observabilidade (branch `feat/fase4-etapa7` nos 3 serviços + `k8s-infra`)
 
 - [ ] ⛔ **Conta New Relic** (free tier): `NEW_RELIC_LICENSE_KEY` (ingestão) em cada repo de serviço e no `k8s-infra`; para os dashboards/alertas por Terraform também `new_relic_api_key` + `new_relic_account_id` e `enable_new_relic_dashboards=true` no `k8s-infra` (ver README dele). Sem a licença o agente fica desligado e nada quebra.
 - [ ] 🔶 **Trace distribuído OS → Billing → OS**: depois do 1º deploy com licença, abrir *Distributed tracing*, filtrar por `ordemServicoId` e conferir que o trace atravessa os serviços (é o item do vídeo). Se o trace quebrar na fila, olhar o campo `trace` do envelope e os MessageAttributes `traceparent`/`newrelic`.
@@ -104,7 +111,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] 🔶 **Forçar uma mensagem para a DLQ** (ex.: enviar JSON inválido a `…-billing-commands`) e conferir que o alerta "Mensagem em DLQ" dispara (≤ ~6 min: coleta de 60 s + janela de 5 min).
 - [ ] ⚪ O alerta "taxa de compensação > 50 %" é ruidoso com pouco volume; ajuste o limiar/duração se disparar à toa no vídeo.
 
-## 11. Etapa 8 — CI/CD (branch `feat/fase4-etapa8` nos 3 serviços, sem push)
+## 11. Etapa 8 — CI/CD (branch `feat/fase4-etapa8` nos 3 serviços)
 
 - [ ] ⛔ **`SONAR_TOKEN`** como GitHub Secret nos 3 serviços (Guia Passo 3) — sem ele o job `Sonar` falha e, sendo check obrigatório, bloqueia merge e o `terraform apply`.
 - [ ] ⛔ **Branch protection**: com os remotos criados, `./scripts/protect-branches.sh --dry-run` e depois sem a flag (cria PR obrigatório + checks `Build`, `Test`, `Sonar` em `main`/`homolog` dos 3 serviços). Só rode **depois** de o `Sonar` rodar uma vez verde, senão ninguém consegue mergear.
@@ -112,7 +119,7 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] 🔶 Conferir no 1º `plan` de PR que `terraform_remote_state` do OS resolve (o OS precisa ter aplicado antes no mesmo workspace).
 - [ ] ⚪ `destroy.yml` (Actions → Run workflow) ao fim de cada sessão do Learner Lab, na ordem do cabeçalho; o passo de workloads remove o Ingress primeiro para o ALB não ficar órfão.
 
-## 12. Etapa 9 — entregáveis finais (branch `feat/fase4-etapa9`, sem push)
+## 12. Etapa 9 — entregáveis finais (branch `feat/fase4-etapa9`)
 
 - [ ] ⛔ **Vídeo (≤ 15 min)** (T9.6) — roteiro no Passo 8 do `PHASE_4_EXECUTION_GUIDE.md`; gravar numa sessão do lab recém-aplicada, depois de rodar o fluxo completo e as falhas. Material pronto: collection Postman `docs/postman/oficina-fase4-fluxo-completo.postman_collection.json` (pasta "Falhas e compensações") e `scripts/smoke-fluxo-feliz.sh`.
 - [ ] ⛔ **PDF do portal** (T9.7) — conteúdo no Passo 9 do guia. Os diagramas (componentes, sequência feliz e de compensação) estão em Mermaid em `docs/architecture/`; exporte como imagem (mermaid.live ou a extensão do VS Code). Inclua prints de branch protection, quality gate e cobertura.
