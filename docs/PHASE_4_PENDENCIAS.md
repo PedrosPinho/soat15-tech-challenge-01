@@ -1,7 +1,7 @@
 # Pendências do usuário — Fase 4
 
 Lista viva do que **só você pode fazer** (contas externas, AWS, Docker) ou decidir. Atualizada a cada etapa.
-Última atualização: 2026-11-13, após o push dos 6 repos e a limpeza do histórico (sem trailer Claude). Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
+Última atualização: 2026-11-13, após o push dos 6 repos e a validação com Docker. Legenda: ⛔ bloqueia o primeiro deploy · 🔶 valida o que está só "escrito" · ⚪ opcional.
 
 Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE_4_EXECUTION_GUIDE.md).
 
@@ -25,19 +25,18 @@ Detalhes passo a passo das contas externas: [`PHASE_4_EXECUTION_GUIDE.md`](PHASE
 - [ ] ⚪ `docs/` está no `.gitignore` do OS: os docs da fase foram adicionados com `git add -f`. Decida se mantém o ignore.
 - [ ] 🔶 Branch protection em `main`/`homolog` dos 2 repos novos (PR + status checks `Build` e `Test`).
 
-## 2. Validação com Docker (nada disto rodou: o ambiente de desenvolvimento não tem Docker)
+## 2. Validação com Docker (rodou em 2026-11-13)
 
-- [ ] 🔶 **Smoke ponta a ponta** (o teste mais importante que ainda não rodou): no OS, `docker compose -f docker-compose.integration.yml up --build -d` e `./scripts/smoke-fluxo-feliz.sh` (precisa de `curl` e `jq`; os repos `billing-service` e `execution-service` clonados ao lado). Se falhar, o script diz em qual passo; ajustes prováveis: shape de alguma resposta do OS, tempo de espera, variável de ambiente.
-- [ ] 🔶 Rodar também as suítes `LOCALSTACK_ENDPOINT=http://localhost:4566 npx jest tests/integration/messaging-localstack` nos 3 repos (adapter SQS/SNS real: raw delivery, filter policy, DLQ).
-- [ ] 🔶 **OS**: `npm test` com Docker (10 suítes dependem de Testcontainers: 7 repositórios Postgres, 2 integração, `messaging.spec.ts`) e `docker compose up` (LocalStack + `scripts/localstack-init.sh`). A cobertura global do OS **não foi medida**.
-- [ ] 🔶 **Execution**: `docker compose up --build`; `LOCALSTACK_ENDPOINT=http://localhost:4566 npm test` (ativa `tests/integration-localstack.spec.ts`, 6 testes).
-- [ ] 🔶 **Billing**: `docker compose up --build`; `TEST_DATABASE_URL=postgres://oficina:senha123@localhost:5433/oficina_billing npm test` (ativa `tests/integration.postgres.spec.ts`, 5 testes).
-- [ ] 🔶 `docker build` dos 3 serviços (nenhuma imagem foi construída).
-- [ ] 🔶 Fluxo ponta a ponta local (3 serviços + LocalStack): criar OS → diagnóstico → orçamento → aprovar → pagamento → reparo, e o caminho de compensação. Ainda não existe teste E2E multi-serviço (Etapa 6).
+Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pegar o grupo `docker`):
+
+- [x] **Smoke ponta a ponta**: `docker-compose.integration.yml` (3 serviços + Postgres + LocalStack + Mailhog, imagens construídas do zero) e `scripts/smoke-fluxo-feliz.sh` → **SMOKE OK**: OS FINALIZADA pelos 3 serviços, saga `CONCLUIDA`, receita no dashboard. Bug achado e corrigido: o script lia `receitaTotal` no caminho errado (`.financeiro.receitaTotal`).
+- [x] **OS**: suíte completa com Testcontainers: 81 suítes, 741 testes. Cobertura medida: **96,6% linhas / 88,2% branches**. Bug achado e corrigido: `ordem-servico.repository.spec.ts` ainda chamava `os.iniciar()` (renomeado para `iniciarDiagnostico`). `health.spec.ts` só passa com um Postgres em `localhost:5432` (como o service do CI): passou com ele.
+- [x] **LocalStack**: `messaging-localstack` (OS e Billing, 3 testes cada) e `integration-localstack` + mensageria (Execution, 9 testes) passam.
+- [x] **Billing × Postgres real** (`TEST_DATABASE_URL`): 5 testes passam. Bug achado e corrigido: as migrations rodavam em `public` e o pool lia de um schema próprio; o teste agora usa `--schema`.
+- [x] `docker build` dos 3 serviços (via `compose up --build`): ok, os 3 ficaram `healthy`.
+- [ ] 🔶 **Compensação ponta a ponta** (cancelar após pagar → estorno) no compose: só o caminho feliz foi exercitado em ambiente real; a compensação está coberta por BDD/contratos/unit, não pelo stack.
+- [ ] 🔶 Cobertura global dos repos com a suíte completa em Docker nos **outros** 2 serviços não mudou (Billing 99,6%, Execution 99,6%).
 - [ ] ⚪ `tflint` nos `terraform/` dos 6 repos (não instalado no ambiente).
-- [ ] 🔶 **Bootstrap do banco** (`k8s/db-bootstrap.sql`): nunca rodou. Teste com `psql` como `billing_service` em `oficina_os` ⇒ `permission denied for database`; e `os_service` conectando em `oficina_os` com a URL do Secret.
-- [ ] 🔶 **Lambda de token** contra o ambiente real: `POST /auth/token` com os mesmos CPFs da Fase 3 (200/400/403/404). Lembre: o database `oficina_os` nasce vazio — o seed do OS recria admin e cliente de teste.
-- [ ] 🔶 `kubectl get pods -A` sem `Pending` com os 3 serviços (`t3.medium`); se faltar memória, desligar `kubeEvents` no `nri-bundle`.
 
 ## 3. Contas externas (Etapa 0)
 
