@@ -158,7 +158,7 @@ describe('PostgresOrdemServicoRepository (integration com PostgreSQL real via Te
     const os = makeOS({ servicos: [makeServico()] });
     await repo.save(os);
 
-    const iniciada = os.iniciar().adicionarServico(makeServico());
+    const iniciada = os.iniciarDiagnostico().adicionarServico(makeServico());
     await repo.update(iniciada);
 
     const found = await repo.findById(os.id);
