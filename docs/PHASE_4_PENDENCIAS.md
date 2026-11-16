@@ -62,7 +62,9 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 **Repos de infra** (`db-infra`, `k8s-infra`, `auth-lambda`) também precisam dos 3 `AWS_*`. O `auth-lambda` ganhou um secret novo: **`INTERNAL_API_TOKEN`** (mesmo valor dos serviços; vira `TF_VAR_internal_api_token` e entra na Lambda de token).
 | `SONAR_TOKEN` (+ var `SONAR_HOST_URL`) | — | — | — | opcional: só se houver Sonar acessível pelo GitHub |
 
-- [ ] ⛔ Criar os Environments `homolog` e `prod` nos repos que os usam (os jobs `terraform-apply` e `deploy` referenciam `environment:`).
+- [x] Environments `homolog` e `prod` criados nos 6 repos (2026-11-16). Sem regras de aprovação: configure se quiser.
+- [x] (original) Criar os Environments `homolog` e `prod` nos repos que os usam (os jobs `terraform-apply` e `deploy` referenciam `environment:`).
+- [x] Secrets criados em 2026-11-16: `AWS_*` nos 6 repos; `INTERNAL_API_TOKEN` (mesmo valor aleatório) no OS, Billing e auth-lambda; `WEBHOOK_SECRET` no Billing. **Faltam:** `MP_NOTIFICATION_URL` (Billing, após o 1º deploy do gateway), `NEW_RELIC_LICENSE_KEY` em Billing/Execution, `NEW_RELIC_ACCOUNT_ID`/`NEW_RELIC_API_KEY` já estão no k8s-infra, `ALERT_NOTIFICATION_EMAIL` (2 repos que o usam). Os `AWS_*` expiram com a sessão do lab: renove com `./scripts/refresh-aws-secrets.sh` (precisa de `aws` CLI) ou `gh secret set`.
 - [ ] ⛔ **T0.6** `scripts/refresh-aws-secrets.sh` já publica nos **6** repos (`--dry-run` lista). Falta você rodá-lo com as credenciais do Learner Lab no início de cada sessão.
 
 ## 5. Ordem do primeiro deploy
