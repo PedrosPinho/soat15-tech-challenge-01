@@ -75,6 +75,28 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 4. `auth-lambda` **depois** dos Ingress (precisa do ALB): fase 1 do apply cria só a API e `POST /auth/token` (que responde 500 até a fase 2); com `enable_vpc_link_integration=true` (default) o `plan` falha se o ALB ainda não existir.
 - [ ] ⛔ Rodar o `terraform apply` em `homolog` pelo push (o CI aplica só em `homolog`; em `main` só faz `plan`, ADR-007) e conferir no console: tabela `…-execucoes`, 2 filas de comando + DLQs, tópico `oficina-eventos`, fila `os-saga-replies` com a assinatura e a filter policy.
 
+### Resultado do primeiro deploy em `homolog` (2026-11-16, conta AWS `368596537549`) — T8.5
+
+Ordem executada: db-infra → k8s-infra → OS → Execution + Billing → auth-lambda, tudo pelo CI (merge dos PRs). Verificado pela borda (`https://1meh3wq1p3.execute-api.us-east-1.amazonaws.com`): `GET /health/ready` → `UP`/`CONNECTED`, `POST /api/auth/login` → token, `POST /auth/token` com CPF inválido → 400, webhook sem assinatura → 401.
+
+Bugs/ajustes encontrados (e como foram resolvidos):
+
+| # | Achado | Resolução |
+|---|---|---|
+| 1 | Conta AWS do Learner Lab mudou (`442534931336` → `368596537549`): bucket de estado inexistente e `LabRole` com ID fixo em 16 arquivos | Bucket `soat15-tc-tfstate-368596537549` (versionado, criptografado) + tabela de lock criados e ID trocado nos `backend.tf`/`variables.tf`/`remote_state.tf` dos 6 repos |
+| 2 | **Dependência circular do `jwt-secret`**: é criado pelo Terraform do auth-lambda (último), mas o deploy do OS o lê | `terraform apply -target` dos 2 recursos (`random_password.jwt_secret`, `aws_ssm_parameter.jwt_secret`) no workspace `homolog` do auth-lambda **antes** do OS. Para um ambiente do zero: faça isso entre o k8s-infra e o OS |
+| 3 | **Dependência circular do `mp-webhook-secret`**: o Mercado Pago só gera a assinatura depois de cadastrar a URL do webhook, que só existe com o API Gateway; o deploy do Billing o lê | Valor provisório aleatório no SSM (`/soat15-tc/homolog/billing/mp-webhook-secret`). **Substituir** pelo segredo real (ver pendência abaixo) |
+| 4 | Histórico reescrito (limpeza de trailers) divergiu da `homolog` remota: PRs do OS e do auth-lambda ficaram `CONFLICTING` e o CI não rodava | Meus commits reaplicados (cherry-pick) sobre `origin/homolog` e force-push das branches `feat/fase4-*` |
+| 5 | Billing/Execution: PRs novos não disparavam o Actions | Um PR de teste descartável destravou; depois recriar o PR real |
+| 6 | `Terraform plan` dos PRs de Billing, Execution, auth-lambda e k8s-infra falha antes do 1º apply (lê `terraform_remote_state` de quem ainda não foi aplicado) | Esperado; passa na ordem do deploy. Não é check obrigatório |
+
+Pendências que ficaram deste deploy:
+- [ ] ⛔ **Webhook do Mercado Pago**: no painel da aplicação, cadastrar `https://1meh3wq1p3.execute-api.us-east-1.amazonaws.com/api/pagamentos/webhooks/mercadopago` (evento `payment`), copiar a **assinatura secreta** e publicar com `aws ssm put-parameter --name /soat15-tc/homolog/billing/mp-webhook-secret --type SecureString --overwrite --value '...'`; depois reexecutar o deploy do Billing (ou `kubectl rollout restart deployment/billing-service -n oficina-homolog`).
+- [ ] ⛔ `MP_NOTIFICATION_URL` (secret do Billing) = a URL acima; reexecutar o deploy do Billing para ele valer.
+- [ ] 🔶 Passo 0, item 5 (pod → SQS/DynamoDB via `LabRole`): os 3 serviços sobem e publicam/consomem, mas não rodei o `kubectl run awscli`.
+- [ ] 🔶 Fluxo completo na AWS (Passo 7): criar OS → pagar no Mercado Pago de teste → FINALIZADA, e a compensação (recusa `OTHE`).
+- [ ] ⚪ Custo: EKS, 2 nós `t3.medium` e RDS estão ligados; ao encerrar, `destroy` manual em cada repo (ordem inversa).
+
 ## 6. Decisões/contratos para você confirmar
 
 - [ ] `GerarOrcamento.itens[].referenciaId` de itens `SERVICO` é o **id do serviço da OS** (a entidade não guarda o `catalogoServicoId`). Ajustado no `contratos-mensagens.md`; o Billing já segue.
