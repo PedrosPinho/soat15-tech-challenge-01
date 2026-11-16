@@ -34,11 +34,11 @@ Roteiro do vídeo: [`ROTEIRO_VIDEO_FASE4.md`](ROTEIRO_VIDEO_FASE4.md). Passo a p
 
 ## 3. Observabilidade (New Relic)
 
-O OS tem `NEW_RELIC_LICENSE_KEY`, e o k8s-infra tem licença, `NEW_RELIC_ACCOUNT_ID` e `NEW_RELIC_API_KEY`. **Billing e Execution não têm a licença**, então o agente deles está desligado: o trace OS → Billing → OS fica quebrado até isso mudar.
+Os 4 repos têm `NEW_RELIC_LICENSE_KEY` (conta 8492355); o k8s-infra tem também `NEW_RELIC_ACCOUNT_ID`, `NEW_RELIC_API_KEY` e `ALERT_NOTIFICATION_EMAIL`. Os três serviços reportam ao New Relic (`oficina-api-homolog`, `billing-service-homolog`, `execution-service-homolog`) e o dashboard "Oficina — Saga / Microsserviços" existe.
 
-- [ ] ⛔ Criar `NEW_RELIC_LICENSE_KEY` no **Billing** e no **Execution** (mesma chave) e reexecutar o job `Deploy (EKS)` de cada um.
-- [ ] ⛔ Verificar se o k8s-infra criou o dashboard **"Oficina — Saga / Microsserviços"** e os 4 alertas (precisa de `enable_new_relic_dashboards=true`, `new_relic_api_key` e `new_relic_account_id`; ver o README do k8s-infra). Se não, ajustar e reaplicar.
-- [ ] ⛔ `ALERT_NOTIFICATION_EMAIL` (secret referenciado em 2 workflows): crie nos repos que o usam, com o e-mail dos alertas.
+- [x] Licença no Billing e no Execution; deploy de cada um reexecutado.
+- [ ] ⛔ Abrir o dashboard e os alertas no New Relic e conferir que há dados da Saga (rode um fluxo antes) e o trace OS → Billing → OS.
+- [x] `ALERT_NOTIFICATION_EMAIL` criado no k8s-infra.
 - [ ] 🔶 **Trace distribuído**: depois do item acima, abrir *Distributed tracing* (filtrar por `ordemServicoId`) e conferir que o trace atravessa OS → Billing → OS. Se quebrar na fila, olhar o campo `trace` do envelope e os MessageAttributes `traceparent`/`newrelic`.
 - [ ] 🔶 Conferir contra dados reais os eventos/atributos (`SagaIniciada`, `SagaPassoExecutado`, `SagaFinalizada`, `FilaProfundidade`), a NRQL do billboard de DLQ e o `transactionName` do webhook do Mercado Pago. Ajustar em `k8s-infra/newrelic_saga.tf`.
 - [ ] 🔶 **Forçar uma mensagem na DLQ** (JSON inválido em `…-billing-commands`) e conferir que o alerta "Mensagem em DLQ" dispara (≤ ~6 min).
