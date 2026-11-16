@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 import { Cliente } from '@domain/entities/cliente.entity';
 import { IClienteRepository, ListClientesResult } from '@domain/repositories/cliente.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { ClienteRow, toDomainCliente } from '../mappers/cliente.mapper';
 
 export class PostgresClienteRepository implements IClienteRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(cliente: Cliente): Promise<void> {
     await this.pool.query(

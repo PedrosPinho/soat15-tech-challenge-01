@@ -169,4 +169,38 @@ describe('PostgresItemEstoqueRepository (integration com PostgreSQL real via Tes
       await expect(repo.utilizar(pecaId, 5)).rejects.toThrow('excede o reservado');
     });
   });
+
+  describe('liberarReserva (atômico) — compensação da Saga', () => {
+    it('devolve a quantidade reservada ao saldo disponível', async () => {
+      await repo.save(makeItem({ quantidadeDisponivel: 10, quantidadeReservada: 4 }));
+      const result = await repo.liberarReserva(pecaId, 3);
+      expect(result.quantidadeDisponivel).toBe(13);
+      expect(result.quantidadeReservada).toBe(1);
+    });
+
+    it('rejeita liberar mais do que o reservado', async () => {
+      await repo.save(makeItem({ quantidadeDisponivel: 10, quantidadeReservada: 2 }));
+      await expect(repo.liberarReserva(pecaId, 3)).rejects.toThrow('Quantidade a liberar excede o reservado');
+    });
+
+    it('item inexistente: NotFound', async () => {
+      await expect(
+        repo.liberarReserva('00000000-0000-0000-0000-000000000000', 1),
+      ).rejects.toThrow('não encontrado');
+    });
+
+    it('rejeita quantidade <= 0', async () => {
+      await expect(repo.liberarReserva(pecaId, 0)).rejects.toThrow('maior que zero');
+    });
+
+    it('reservar e liberar concorrentes preservam o total (disponível + reservado)', async () => {
+      await repo.save(makeItem({ quantidadeDisponivel: 10, quantidadeReservada: 0 }));
+      await Promise.allSettled([
+        ...Array.from({ length: 8 }, () => repo.reservar(pecaId, 1)),
+        ...Array.from({ length: 4 }, () => repo.liberarReserva(pecaId, 1)),
+      ]);
+      const item = await repo.findByPecaId(pecaId);
+      expect(item!.quantidadeDisponivel + item!.quantidadeReservada).toBe(10);
+    });
+  });
 });
