@@ -96,23 +96,19 @@ Conta limpa no momento do teste: sem instâncias EC2, clusters EKS ou RDS. Nenhu
    `APRO`** = aprovado, **`OTHE`** = recusado (é assim que se demonstra a falha
    de pagamento no vídeo).
 
-## Passo 3 — SonarCloud
+## Passo 3 — SonarQube (local)
 
-1. Entrar em <https://sonarcloud.io> com o GitHub, importar a organização `PedrosPinho`.
-2. Criar 3 projetos (analysis method: **GitHub Actions**, não *Automatic
-   Analysis*, porque a cobertura vem do `lcov` gerado no CI):
-   `soat15-tech-challenge-01`, `...-billing-service`, `...-execution-service`.
-3. Gerar um token (My Account → Security) e salvar como secret `SONAR_TOKEN`
-   em cada um dos 3 repos de serviço:
-   ```bash
-   for r in soat15-tech-challenge-01 soat15-tech-challenge-billing-service soat15-tech-challenge-execution-service; do
-     gh secret set SONAR_TOKEN -R PedrosPinho/$r
-   done
-   ```
-4. Quality gate: manter o padrão *Sonar way*, ajustando "Coverage on New
-   Code" para **80%**.
-5. Me passar a `organization key` e as `project keys` (não são segredo) para
-   eu preencher os `sonar-project.properties`.
+A análise roda **localmente** (sem SonarCloud, sem token no GitHub):
+
+```bash
+./scripts/sonar-local.sh              # sobe o SonarQube, roda os testes e analisa os 3 serviços
+./scripts/sonar-local.sh billing      # ou só um: os | billing | execution
+```
+
+Painel em <http://localhost:9000> (usuário `admin`, senha `Sonar-Local-123!` ou `SONAR_ADMIN_PASSWORD`).
+Os 3 serviços passaram no quality gate padrão (*Sonar way*). Tire os prints do painel para o PDF.
+O job `Sonar` do CI só roda se existirem a variável `SONAR_HOST_URL` e o secret `SONAR_TOKEN`
+(servidor acessível pelo GitHub); sem eles ele passa com um aviso.
 
 ## Passo 4 — Secrets e credenciais de CI
 
