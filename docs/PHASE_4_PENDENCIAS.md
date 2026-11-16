@@ -91,10 +91,11 @@ Bugs/ajustes encontrados (e como foram resolvidos):
 | 6 | `Terraform plan` dos PRs de Billing, Execution, auth-lambda e k8s-infra falha antes do 1º apply (lê `terraform_remote_state` de quem ainda não foi aplicado) | Esperado; passa na ordem do deploy. Não é check obrigatório |
 
 Pendências que ficaram deste deploy:
-- [ ] ⛔ **Webhook do Mercado Pago**: no painel da aplicação, cadastrar `https://1meh3wq1p3.execute-api.us-east-1.amazonaws.com/api/pagamentos/webhooks/mercadopago` (evento `payment`), copiar a **assinatura secreta** e publicar com `aws ssm put-parameter --name /soat15-tc/homolog/billing/mp-webhook-secret --type SecureString --overwrite --value '...'`; depois reexecutar o deploy do Billing (ou `kubectl rollout restart deployment/billing-service -n oficina-homolog`).
-- [ ] ⛔ `MP_NOTIFICATION_URL` (secret do Billing) = a URL acima; reexecutar o deploy do Billing para ele valer.
-- [ ] 🔶 Passo 0, item 5 (pod → SQS/DynamoDB via `LabRole`): os 3 serviços sobem e publicam/consomem, mas não rodei o `kubectl run awscli`.
-- [ ] 🔶 Fluxo completo na AWS (Passo 7): criar OS → pagar no Mercado Pago de teste → FINALIZADA, e a compensação (recusa `OTHE`).
+- [x] **Webhook do Mercado Pago** cadastrado (`https://1meh3wq1p3.execute-api.us-east-1.amazonaws.com/api/pagamentos/webhooks/mercadopago`, evento `payment`), assinatura secreta publicada em `/soat15-tc/homolog/billing/mp-webhook-secret` (versão 2) e deploy do Billing refeito. `MP_NOTIFICATION_URL` criado.
+- [x] **Fluxo feliz real na AWS (Passo 7, 2026-11-16)**: OS → diagnóstico → orçamento aprovado → Checkout Pro (comprador de teste, titular `APRO`) → webhook confirmou o pagamento `189941409088` → reparo → **OS FINALIZADA**, saga `CONCLUIDA` com os 10 passos, `receitaTotal` = 250 no dashboard.
+  - Armadilha: o Checkout dá "uma das partes é de teste" se o navegador estiver logado na conta **real** do Mercado Pago. Use janela anônima e o login da **compradora de teste**.
+- [ ] 🔶 **Compensação na AWS**: pagamento recusado (titular `OTHE`) e cancelamento após pagar (estorno). Só o caminho feliz foi exercitado em ambiente real.
+- [ ] 🔶 Passo 0, item 5 (pod → SQS/DynamoDB via `LabRole`): implícito pelo fluxo feliz (os 3 serviços publicam e consomem filas), mas o `kubectl run awscli` não foi rodado.
 - [ ] ⚪ Custo: EKS, 2 nós `t3.medium` e RDS estão ligados; ao encerrar, `destroy` manual em cada repo (ordem inversa).
 
 ## 6. Decisões/contratos para você confirmar
