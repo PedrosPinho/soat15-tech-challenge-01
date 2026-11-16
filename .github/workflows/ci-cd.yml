@@ -22,7 +22,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: soat15-tc-oficina-api
+  ECR_REPOSITORY: soat15-tc-os-service
   EKS_CLUSTER_NAME: soat15-tc-cluster
 
 jobs:
@@ -40,6 +40,8 @@ jobs:
       - run: npm ci
 
       - run: npm run type-check
+
+      - run: npm run lint
 
       - run: npm run build
 
@@ -60,11 +62,25 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      # SQS/SNS reais para tests/integration/messaging-localstack.spec.ts.
+      localstack:
+        image: localstack/localstack:3.8
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: sqs,sns
+        options: >-
+          --health-cmd "curl -fs http://localhost:4566/_localstack/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       NODE_ENV: test
+      LOCALSTACK_ENDPOINT: http://localhost:4566
       DATABASE_URL: postgres://oficina:ci-password@localhost:5432/oficina
       JWT_SECRET: ci-test-jwt-secret
-      WEBHOOK_SECRET: ci-test-webhook-secret
+      INTERNAL_API_TOKEN: ci-test-internal-token
+      MESSAGING_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
 
@@ -88,6 +104,18 @@ jobs:
           set -o pipefail
           npm run test:coverage | tee coverage-output.txt
 
+      - name: Relatório BDD (ciclo da OS)
+        if: always()
+        shell: bash
+        run: |
+          npx jest tests/bdd tests/contracts --silent --verbose 2>&1 | grep -E "✓|✕|Tests:" > bdd-output.txt || true
+          {
+            echo '## BDD — ciclo da OS e contratos entre serviços'
+            echo '```'
+            cat bdd-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish coverage summary
         if: always()
         shell: bash
@@ -107,9 +135,157 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  terraform-validate:
+    name: Terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - run: terraform fmt -check -recursive
+
+      - run: terraform init -backend=false
+
+      - run: terraform validate
+
+  sonar:
+    name: Sonar
+    needs: [test]
+    # PR de fork não recebe secrets; nesse caso o check não roda (o mantenedor reexecuta no merge).
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # análise de código novo (blame) precisa do histórico
+      - name: Sonar configurado?
+        id: cfg
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        run: |
+          if [ -n "$SONAR_TOKEN" ] && [ -n "$SONAR_HOST_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Sonar ignorado no CI (sem SONAR_HOST_URL/SONAR_TOKEN): a análise é local, via scripts/sonar-local.sh do repo OS"
+          fi
+      - if: steps.cfg.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+      - if: steps.cfg.outputs.enabled == 'true'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          # Quality gate obrigatório: o passo espera o resultado e falha se o gate reprovar.
+          args: -Dsonar.qualitygate.wait=true
+
+  terraform-plan:
+    name: Terraform plan
+    needs: [terraform-validate]
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Contra `main` o workspace prod não existe de verdade (ADR-007): a falha é esperada.
+    continue-on-error: ${{ github.base_ref == 'main' }}
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init
+      - name: Plan (workspace do ambiente de destino)
+        run: |
+          ENV=homolog
+          [ "${{ github.base_ref }}" = "main" ] && ENV=prod
+          terraform workspace select -or-create "$ENV"
+          set -o pipefail
+          terraform plan -no-color -input=false -lock=false | tee plan-output.txt
+          {
+            echo "## Terraform plan — OS Service ($ENV)"
+            echo '<details><summary>Ver plano</summary>'
+            echo
+            echo '```'
+            tail -c 60000 plan-output.txt
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  terraform-apply:
+    name: Terraform (ECR + mensageria da Saga)
+    needs: [build, test, sonar, terraform-validate]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'homolog' }}
+    # Em `main` o job só faz `plan` (ADR-007: prod não é implantado de verdade); as
+    # saídas ficam vazias e o deploy de prod falha de propósito (continue-on-error).
+    outputs:
+      events_topic_arn: ${{ steps.out.outputs.events_topic_arn }}
+      saga_replies_queue_url: ${{ steps.out.outputs.saga_replies_queue_url }}
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init
+
+      - name: Selecionar workspace
+        run: |
+          ENV=homolog
+          [ "${{ github.ref_name }}" = "main" ] && ENV=prod
+          terraform workspace select -or-create "$ENV"
+
+      - name: Apply (só em homolog)
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            terraform plan -input=false
+          else
+            terraform apply -auto-approve -input=false
+          fi
+
+      - name: Saídas (URLs de fila/tópico para o deploy)
+        id: out
+        run: |
+          {
+            echo "events_topic_arn=$(terraform output -raw events_topic_arn 2>/dev/null || true)"
+            echo "saga_replies_queue_url=$(terraform output -raw saga_replies_queue_url 2>/dev/null || true)"
+          } >> "$GITHUB_OUTPUT"
+
   docker-build-push:
     name: Build & Push (ECR)
-    needs: [build, test]
+    needs: [build, test, sonar, terraform-apply]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
@@ -143,7 +319,7 @@ jobs:
 
   deploy:
     name: Deploy (EKS)
-    needs: docker-build-push
+    needs: [docker-build-push, terraform-apply]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'homolog' }}
@@ -179,27 +355,48 @@ jobs:
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/namespace.yaml | \
             sed "s/name: oficina$/name: $NAMESPACE/" | kubectl apply -f -
 
-      - name: Secret (endpoint/senha do RDS e JWT_SECRET vêm do SSM — nunca em arquivo)
-        # DATABASE_URL/JWT_SECRET: lidos do SSM Parameter Store, nos parâmetros que
-        # db-infra e auth-lambda já criam por workspace (ver rds.tf/ssm.tf naqueles
-        # repositórios) — o endpoint do RDS não tem parâmetro próprio (só a senha),
-        # então vem do describe-db-instances pelo identifier, que segue a mesma
-        # convenção de nome (`${project_name}-${workspace}-...`).
-        # WEBHOOK_SECRET: não é compartilhado com nenhuma Lambda, então não tem
-        # parâmetro SSM — é um GitHub Secret próprio deste repositório.
+      - name: Bootstrap dos databases/roles (Job; senha master só existe aqui)
+        # Cria (idempotente) oficina_os/oficina_billing e os roles os_service/billing_service,
+        # com REVOKE CONNECT ... FROM PUBLIC (ADR-012). Roda no cluster porque o runner do
+        # GitHub não alcança o RDS. O Billing depende deste passo: o OS faz deploy primeiro.
         run: |
           DB_ENDPOINT=$(aws rds describe-db-instances \
             --db-instance-identifier "soat15-tc-${TF_ENV}-db" \
             --query 'DBInstances[0].Endpoint.Address' --output text)
-          DB_PASSWORD=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/db/password" --with-decryption --query 'Parameter.Value' --output text)
+          get() { aws ssm get-parameter --name "$1" --with-decryption --query 'Parameter.Value' --output text; }
+          kubectl create secret generic oficina-db-bootstrap -n "$NAMESPACE" \
+            --from-literal=PGHOST="$DB_ENDPOINT" \
+            --from-literal=PGUSER=oficina \
+            --from-literal=PGPASSWORD="$(get /soat15-tc/${TF_ENV}/db/password)" \
+            --from-literal=OS_PASSWORD="$(get /soat15-tc/${TF_ENV}/db/os-service-password)" \
+            --from-literal=BILLING_PASSWORD="$(get /soat15-tc/${TF_ENV}/db/billing-service-password)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap oficina-db-bootstrap-sql -n "$NAMESPACE" \
+            --from-file=db-bootstrap.sql=k8s/db-bootstrap.sql --dry-run=client -o yaml | kubectl apply -f -
+          kubectl delete job oficina-db-bootstrap -n "$NAMESPACE" --ignore-not-found
+          sed -e "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/job-db-bootstrap.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/oficina-db-bootstrap -n "$NAMESPACE" --timeout=120s \
+            || { kubectl logs job/oficina-db-bootstrap -n "$NAMESPACE" --tail=100; exit 1; }
+          kubectl delete secret oficina-db-bootstrap -n "$NAMESPACE" --ignore-not-found
+
+      - name: Secret (role os_service no database oficina_os e JWT_SECRET vêm do SSM — nunca em arquivo)
+        # DATABASE_URL: role `os_service` (não mais o master) no database `oficina_os` — criados
+        # pelo passo anterior; a senha vem do SSM (db-infra). JWT_SECRET: auth-lambda.
+        # INTERNAL_API_TOKEN: token serviço-a-serviço (Lambda de auth -> /internal,
+        # OS -> Billing). Mesmo valor nos 3 serviços e na Lambda: GitHub Secret
+        # em cada repositório (ver PHASE_4_EXECUTION_GUIDE.md, Passo 4).
+        run: |
+          DB_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "soat15-tc-${TF_ENV}-db" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)
+          DB_PASSWORD=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/db/os-service-password" --with-decryption --query 'Parameter.Value' --output text)
           JWT_SECRET=$(aws ssm get-parameter --name "/soat15-tc/${TF_ENV}/jwt-secret" --with-decryption --query 'Parameter.Value' --output text)
-          # A senha do RDS permite caracteres especiais (#, %, ?, [, ], etc. — ver
-          # override_special em db-infra/rds.tf) que quebram a URL sem escapar.
+          # Senha só alfanumérica (db-infra), mas escapa por garantia.
           DB_PASSWORD_URLENC=$(jq -rn --arg v "$DB_PASSWORD" '$v|@uri')
           kubectl create secret generic oficina-api-secret -n "$NAMESPACE" \
-            --from-literal=DATABASE_URL="postgres://oficina:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina?sslmode=no-verify" \
+            --from-literal=DATABASE_URL="postgres://os_service:${DB_PASSWORD_URLENC}@${DB_ENDPOINT}:5432/oficina_os?sslmode=no-verify" \
             --from-literal=JWT_SECRET="$JWT_SECRET" \
-            --from-literal=WEBHOOK_SECRET="${{ secrets.WEBHOOK_SECRET }}" \
+            --from-literal=INTERNAL_API_TOKEN="${{ secrets.INTERNAL_API_TOKEN }}" \
             --from-literal=NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_LICENSE_KEY }}" \
             --from-literal=NEW_RELIC_APP_NAME="oficina-api-${TF_ENV}" \
             --dry-run=client -o yaml | kubectl apply -f -
@@ -207,6 +404,20 @@ jobs:
       - name: ConfigMap
         run: |
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/configmap.yaml | kubectl apply -f -
+
+      - name: ConfigMap de mensageria (saídas do Terraform)
+        # Billing/Execution criam as próprias filas de comando (execution-commands /
+        # billing-commands) e as publicam no SSM; o OS só é dono do tópico e da fila de
+        # respostas. Os nomes seguem a convenção `${project}-${env}-<fila>`.
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          QUEUE_BASE="https://sqs.${AWS_REGION}.amazonaws.com/${ACCOUNT_ID}/soat15-tc-${TF_ENV}"
+          kubectl create configmap oficina-api-messaging -n "$NAMESPACE" \
+            --from-literal=EVENTS_TOPIC_ARN="${{ needs.terraform-apply.outputs.events_topic_arn }}" \
+            --from-literal=SAGA_REPLIES_QUEUE_URL="${{ needs.terraform-apply.outputs.saga_replies_queue_url }}" \
+            --from-literal=EXECUTION_COMMANDS_QUEUE_URL="${QUEUE_BASE}-execution-commands" \
+            --from-literal=BILLING_COMMANDS_QUEUE_URL="${QUEUE_BASE}-billing-commands" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Job de migration (roda antes do rollout, apaga a execução anterior)
         run: |
@@ -233,6 +444,8 @@ jobs:
             -e "s|image: oficina-api:local|image: ${{ needs.docker-build-push.outputs.image }}|" \
             k8s/deployment.yaml | kubectl apply -f -
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/service.yaml | kubectl apply -f -
+          sed -e "s/namespace: oficina$/namespace: $NAMESPACE/" \
+              -e "s/oficina-ENV/oficina-${TF_ENV}/" k8s/ingress.yaml | kubectl apply -f -
           sed "s/namespace: oficina$/namespace: $NAMESPACE/" k8s/hpa.yaml | kubectl apply -f -
 
       - name: Forçar rollout

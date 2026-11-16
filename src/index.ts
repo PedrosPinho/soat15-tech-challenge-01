@@ -5,7 +5,7 @@
 // desabilitado sem lançar erro -- seguro mesmo antes da conta New Relic
 // existir, inclusive em teste de integração (`tests/integration/health.spec.ts`
 // importa este arquivo).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 require('newrelic');
 
 import express, { Application } from 'express';
@@ -25,7 +25,18 @@ import { clienteRouter } from '@presentation/routes/cliente.routes';
 import { veiculoRouter, veiculosByClienteRouter } from '@presentation/routes/veiculo.routes';
 import { pecaRouter } from '@presentation/routes/peca.routes';
 import { ordemServicoRouter } from '@presentation/routes/ordem-servico.routes';
-import { pagamentoRouter } from '@presentation/routes/pagamento.routes';
+import { internalRouter } from '@presentation/routes/internal.routes';
+import {
+  getSagaRuntime,
+  makeMessageBus,
+  makeOutboxRelay,
+  makeQueueDepthCollector,
+} from '@main/factories/saga.factory';
+import { createSagaTimeoutSweeper, startSagaReplyConsumer } from '@application/saga/saga-workers';
+import { Subscription } from '@domain/services/message-bus';
+import { OutboxRelay } from '@application/messaging/outbox-relay';
+import { PeriodicTask } from '@application/messaging/periodic-task';
+import { QueueDepthCollector } from '@infrastructure/messaging/queue-depth-collector';
 import { relatoriosRouter } from '@presentation/routes/relatorios.routes';
 import { catalogoServicoRouter } from '@presentation/routes/catalogo-servico.routes';
 
@@ -63,13 +74,43 @@ app.use('/api/veiculos', veiculoRouter);
 app.use('/api/clientes/:clienteId/veiculos', veiculosByClienteRouter);
 app.use('/api/pecas', pecaRouter);
 app.use('/api/ordens-servico', ordemServicoRouter);
-app.use('/api/pagamentos', pagamentoRouter);
 app.use('/api/relatorios', relatoriosRouter);
 app.use('/api/servicos', catalogoServicoRouter);
+// Fora do prefixo /api e do API Gateway: chamadas serviço-a-serviço (ex.: Lambda de auth).
+app.use('/internal', internalRouter);
 
 app.use(errorHandler);
 
 let httpServer: ReturnType<Application['listen']> | undefined;
+let relay: OutboxRelay | undefined;
+let sweeper: PeriodicTask | undefined;
+let queueDepth: QueueDepthCollector | undefined;
+let replySubscription: Subscription | undefined;
+
+/**
+ * Mensageria da Saga: relay do outbox, consumidor de `os-saga-replies` e
+ * sweeper de timeouts. `MESSAGING_ENABLED=false` sobe só a API (útil em testes
+ * de integração e em dev sem LocalStack).
+ */
+const startMessaging = async (): Promise<void> => {
+  if (process.env.MESSAGING_ENABLED === 'false') {
+    logger.warn('MESSAGING_ENABLED=false: Saga e mensageria desligadas');
+    return;
+  }
+  const bus = makeMessageBus();
+  const { orchestrator } = getSagaRuntime();
+  relay = makeOutboxRelay(bus);
+  relay.start();
+  replySubscription = await startSagaReplyConsumer(bus, orchestrator);
+  sweeper = createSagaTimeoutSweeper(
+    orchestrator,
+    Number(process.env.SAGA_SWEEPER_INTERVAL_MS ?? 15_000),
+  );
+  sweeper.start();
+  queueDepth = makeQueueDepthCollector(bus);
+  queueDepth?.start();
+  logger.info('Mensageria da Saga iniciada');
+};
 
 const startServer = async (): Promise<void> => {
   try {
@@ -78,6 +119,8 @@ const startServer = async (): Promise<void> => {
     // conectado antes que o servidor comece a aceitar requisições.
     await connectDatabase();
     logger.info('Database connected successfully');
+
+    await startMessaging();
 
     httpServer = app.listen(PORT, () => {
       logger.info({ port: PORT }, 'Server running');
@@ -91,6 +134,10 @@ const startServer = async (): Promise<void> => {
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Signal received: closing server');
   httpServer?.close();
+  await replySubscription?.stop();
+  await sweeper?.stop();
+  await relay?.stop();
+  await queueDepth?.stop();
   await disconnectDatabase();
   process.exit(0);
 };

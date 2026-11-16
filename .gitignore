@@ -21,3 +21,4 @@ PROJECT_STATUS.md
 project_sumary.md
 
 .claude/*
+terraform/.terraform/
