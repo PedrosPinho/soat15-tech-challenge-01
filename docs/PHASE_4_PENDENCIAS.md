@@ -45,8 +45,8 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 - [ ] ⛔ **T0.4** Conta Mercado Pago Developers: aplicação (Checkout Pro), credenciais **de teste**, usuários vendedor/comprador, webhook secret (Guia Passo 2). Publicar no SSM (sem colar em chat/arquivo):
   `/soat15-tc/<env>/billing/mp-access-token` e `/soat15-tc/<env>/billing/mp-webhook-secret`.
 - [ ] 🔶 **T4.3** Teste manual do `MercadoPagoPaymentGateway` no sandbox: criar preferência, abrir o `sandbox_init_point`, pagar com titular `APRO` (aprovado) e `OTHE` (recusado), conferir o webhook assinado e o estorno. O adapter só foi testado com `fetch` simulado — **o formato real das respostas/assinatura do MP pode exigir ajuste**.
-- [ ] ⚪ **T0.5** SonarCloud: organização, 3 projetos (analysis method *GitHub Actions*), `SONAR_TOKEN` em cada repo (Guia Passo 3). Só é usado na Etapa 8.
-- [ ] 🔶 **SonarCloud (T6.4)**: confirmar `sonar.organization` (`pedrospinho`) e `sonar.projectKey` (`pedrospinho_<repo>`) em cada `sonar-project.properties` — são presumidos pelo padrão do SonarCloud.
+- [x] **T0.5** Sonar: passou a rodar **local** (`docker-compose.sonar.yml` + `scripts/sonar-local.sh`); os 3 serviços passaram no quality gate em 2026-11-16. Nada a criar no SonarCloud.
+- [ ] ⚪ Tirar prints do painel local do Sonar (http://localhost:9000) para o PDF.
 - [ ] ⚪ New Relic: `NEW_RELIC_LICENSE_KEY` como GitHub Secret (sem ela o agente fica desligado, sem erro).
 
 ## 4. GitHub Secrets / Environments (por repo)
@@ -60,7 +60,7 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 | `NEW_RELIC_LICENSE_KEY` | ⚪ | ⚪ | ⚪ | |
 
 **Repos de infra** (`db-infra`, `k8s-infra`, `auth-lambda`) também precisam dos 3 `AWS_*`. O `auth-lambda` ganhou um secret novo: **`INTERNAL_API_TOKEN`** (mesmo valor dos serviços; vira `TF_VAR_internal_api_token` e entra na Lambda de token).
-| `SONAR_TOKEN` | ⚪ | ⚪ | ⚪ | Etapa 8 |
+| `SONAR_TOKEN` (+ var `SONAR_HOST_URL`) | — | — | — | opcional: só se houver Sonar acessível pelo GitHub |
 
 - [ ] ⛔ Criar os Environments `homolog` e `prod` nos repos que os usam (os jobs `terraform-apply` e `deploy` referenciam `environment:`).
 - [ ] ⛔ **T0.6** `scripts/refresh-aws-secrets.sh` já publica nos **6** repos (`--dry-run` lista). Falta você rodá-lo com as credenciais do Learner Lab no início de cada sessão.
@@ -112,7 +112,7 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 
 ## 11. Etapa 8 — CI/CD (branch `feat/fase4-etapa8` nos 3 serviços)
 
-- [ ] ⛔ **`SONAR_TOKEN`** como GitHub Secret nos 3 serviços (Guia Passo 3) — sem ele o job `Sonar` falha e, sendo check obrigatório, bloqueia merge e o `terraform apply`.
+- [x] `SONAR_TOKEN` deixou de ser obrigatório: o job `Sonar` do CI passa com aviso sem `SONAR_HOST_URL`/`SONAR_TOKEN`.
 - [ ] ⛔ **Branch protection**: com os remotos criados, `./scripts/protect-branches.sh --dry-run` e depois sem a flag (cria PR obrigatório + checks `Build`, `Test`, `Sonar` em `main`/`homolog` dos 3 serviços). Só rode **depois** de o `Sonar` rodar uma vez verde, senão ninguém consegue mergear.
 - [ ] ⛔ **T8.5 — primeira execução real em `homolog`** dos 3 pipelines (ordem: OS → Execution/Billing). Espere bugs: registre cada um em `PHASE_4_TASKS.md` (seção Etapa 8) como na Fase 3. Candidatos prováveis: nome de output/parâmetro SSM, permissão da LabRole, `kubectl wait` do Job de bootstrap, `sonar.organization`/`projectKey`, shape de resposta no smoke.
 - [ ] 🔶 Conferir no 1º `plan` de PR que `terraform_remote_state` do OS resolve (o OS precisa ter aplicado antes no mesmo workspace).
@@ -123,6 +123,6 @@ Executado nesta máquina (Docker 29.1.3, usando `sg docker -c` até a sessão pe
 - [ ] ⛔ **Vídeo (≤ 15 min)** (T9.6) — roteiro no Passo 8 do `PHASE_4_EXECUTION_GUIDE.md`; gravar numa sessão do lab recém-aplicada, depois de rodar o fluxo completo e as falhas. Material pronto: collection Postman `docs/postman/oficina-fase4-fluxo-completo.postman_collection.json` (pasta "Falhas e compensações") e `scripts/smoke-fluxo-feliz.sh`.
 - [ ] ⛔ **PDF do portal** (T9.7) — conteúdo no Passo 9 do guia. Os diagramas (componentes, sequência feliz e de compensação) estão em Mermaid em `docs/architecture/`; exporte como imagem (mermaid.live ou a extensão do VS Code). Inclua prints de branch protection, quality gate e cobertura.
 - [ ] 🔶 **Importar a collection no Postman** e rodar contra o compose de integração (nunca foi aberta no Postman real).
-- [ ] 🔶 Conferir que os **badges do SonarCloud** do README do OS apontam para o `projectKey` real.
+- [x] Badges do SonarCloud removidos do README (análise é local).
 - [ ] 🔶 Conferir que o Mermaid dos diagramas **renderiza no GitHub** (sintaxe validada só por leitura; ex.: `sequenceDiagram` com `-)`/`--)`).
 - [ ] ⚪ Push das branches `feat/fase4-etapa*` e PRs para `homolog` (e depois `main`), na ordem das etapas; as branches de etapa são cumulativas (cada uma parte da anterior).

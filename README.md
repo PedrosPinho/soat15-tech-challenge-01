@@ -1,7 +1,5 @@
 # OS Service — Oficina Mecânica (Tech Challenge SOAT · Fase 4)
 
-[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=pedrospinho_soat15-tech-challenge-01&metric=alert_status)](https://sonarcloud.io/project/overview?id=pedrospinho_soat15-tech-challenge-01)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pedrospinho_soat15-tech-challenge-01&metric=coverage)](https://sonarcloud.io/project/overview?id=pedrospinho_soat15-tech-challenge-01)
 
 Sistema de gestão para oficinas mecânicas (Pós-Tech SOAT FIAP). Na **Fase 4** o monólito das fases anteriores foi
 decomposto em **3 microsserviços independentes** — cada um com repositório, pipeline, infraestrutura e banco próprios —
@@ -13,7 +11,7 @@ coordenados por uma **Saga orquestrada** com compensação. **Este repositório 
 | 1 | API REST completa, DDD em camadas, testes, Swagger |
 | 2 | Clean Architecture, Postgres real nos testes, Docker, Kubernetes + HPA |
 | 3 | Nuvem: EKS, RDS, Terraform em 4 repos, autenticação por CPF (Lambda + API Gateway), New Relic |
-| **4** | **Microsserviços (OS, Billing, Execution), Saga orquestrada, SQS/SNS, DynamoDB, Mercado Pago, SonarCloud** |
+| **4** | **Microsserviços (OS, Billing, Execution), Saga orquestrada, SQS/SNS, DynamoDB, Mercado Pago, SonarQube local** |
 
 Planejamento e decisões: [`PHASE_4_PLAN.md`](docs/PHASE_4_PLAN.md), [`PHASE_4_TASKS.md`](docs/PHASE_4_TASKS.md),
 [`RFC-005`](docs/architecture/rfcs/RFC-005-microsservicos-e-saga.md), `ADR-008` a `ADR-015` em
@@ -338,7 +336,7 @@ npx jest tests/bdd        # os 6 cenários BDD do ciclo da OS
 npx jest tests/contracts  # contratos com Billing e Execution
 ```
 
-**Evidência de cobertura** (mínimo exigido: 80 % por serviço, gate no CI e no SonarCloud):
+**Evidência de cobertura** (mínimo exigido: 80 % por serviço, gate no CI e no SonarQube local):
 
 | Serviço | Linhas | Branches | Como foi medido |
 |---|---|---|---|
@@ -346,13 +344,15 @@ npx jest tests/contracts  # contratos com Billing e Execution
 | Execution | 99,6 % | 93,2 % | idem (sem LocalStack) |
 | OS | _ver o relatório do CI_ | | as suítes com Testcontainers exigem Docker; sem elas: 86,6 % de linhas |
 
-Relatório de cobertura e BDD publicados em cada execução do CI (`GITHUB_STEP_SUMMARY`) e no SonarCloud (badges no topo).
+Relatório de cobertura e BDD publicados em cada execução do CI (`GITHUB_STEP_SUMMARY`) e no SonarQube local.
 
-### SonarCloud, BDD e contratos
+### SonarQube local, BDD e contratos
 
-- **SonarCloud** (substitui o SonarQube local da Fase 3): `sonar-project.properties` aponta para a
-  organização/projeto no SonarCloud; o scan roda no CI com o `lcov` do `npm run test:coverage` e o
-  `SONAR_TOKEN` (GitHub Secret). Cobertura mínima de 80% por serviço (`coverageThreshold`).
+- **SonarQube local**: `docker compose -f docker-compose.sonar.yml up -d` sobe o servidor
+  (http://localhost:9000) e `./scripts/sonar-local.sh [os|billing|execution]` roda os testes com cobertura e
+  analisa os 3 serviços, esperando o quality gate (`sonar-project.properties` em cada repo). No CI, o job
+  `Sonar` só analisa se houver a variável `SONAR_HOST_URL` e o secret `SONAR_TOKEN`; sem eles passa com um
+  aviso. Cobertura mínima de 80% por serviço (`coverageThreshold`).
 - **BDD do ciclo da OS** (`tests/bdd/features/ciclo-os.feature`, `jest-cucumber`, em português): 6 cenários
   — caminho feliz, orçamento recusado, pagamento recusado, falha no reparo (com estorno), timeout de
   aprovação e mensagem duplicada. O orquestrador real conversa por um `InMemoryMessageBus` com
@@ -368,7 +368,7 @@ Relatório de cobertura e BDD publicados em cada execução do CI (`GITHUB_STEP_
 
 ## CI/CD
 
-`build` → `test` (Postgres + LocalStack, cobertura ≥ 80 %, relatório BDD) → `sonar` (SonarCloud, **espera o quality gate**) →
+`build` → `test` (Postgres + LocalStack, cobertura ≥ 80 %, relatório BDD) → `sonar` (opcional no CI; local por padrão, **espera o quality gate**) →
 `terraform apply` (ECR, SNS/SQS; em PR roda `terraform plan`) → `docker-build-push` (ECR) → `deploy` (bootstrap de banco,
 migration, seed, Deployment/Service/HPA/Ingress, `rollout status`, smoke `/health/ready`). Deploy real só em `homolog`
 (em `main` o `apply` vira `plan` e o deploy falha de propósito, ADR-007). Branch protection com `Build`, `Test` e `Sonar`
