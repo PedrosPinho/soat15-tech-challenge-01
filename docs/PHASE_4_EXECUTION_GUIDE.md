@@ -37,13 +37,17 @@ SQS/SNS bloqueados → RabbitMQ no cluster; DynamoDB bloqueado → MongoDB no
 cluster; `t3.medium` bloqueado → `t3.small` + prefix delegation. Os três
 planos B ficam atrás das mesmas ports, mas mudam Terraform e manifestos.
 
+Validado em 2026-11-16, conta `368596537549` (role `voclabs`), `us-east-1`, via `amazon/aws-cli`:
+
 | Item | Resultado |
 |---|---|
-| SQS | ☐ |
-| SNS + filter policy | ☐ |
-| DynamoDB | ☐ |
-| `t3.medium` | ☐ |
-| Pod → SQS/DynamoDB via `LabRole` | ☐ |
+| SQS | ✅ criar, enviar, receber e apagar a fila |
+| SNS + filter policy | ✅ com raw delivery: só a mensagem `type=Teste` chegou, `type=Outro` foi filtrada |
+| DynamoDB | ✅ on-demand, `put-item`/`get-item`/`delete-table` |
+| `t3.medium` | ✅ `run-instances --dry-run` → `DryRunOperation` (permitido); `t3.small` também. Nenhuma instância foi criada |
+| Pod → SQS/DynamoDB via `LabRole` | ☐ pendente: precisa do cluster EKS aplicado (Passo 5) |
+
+Conta limpa no momento do teste: sem instâncias EC2, clusters EKS ou RDS. Nenhum plano B é necessário.
 
 ## Passo 1 — Repositórios novos no GitHub
 
