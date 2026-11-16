@@ -94,7 +94,8 @@ Pendências que ficaram deste deploy:
 - [x] **Webhook do Mercado Pago** cadastrado (`https://1meh3wq1p3.execute-api.us-east-1.amazonaws.com/api/pagamentos/webhooks/mercadopago`, evento `payment`), assinatura secreta publicada em `/soat15-tc/homolog/billing/mp-webhook-secret` (versão 2) e deploy do Billing refeito. `MP_NOTIFICATION_URL` criado.
 - [x] **Fluxo feliz real na AWS (Passo 7, 2026-11-16)**: OS → diagnóstico → orçamento aprovado → Checkout Pro (comprador de teste, titular `APRO`) → webhook confirmou o pagamento `189941409088` → reparo → **OS FINALIZADA**, saga `CONCLUIDA` com os 10 passos, `receitaTotal` = 250 no dashboard.
   - Armadilha: o Checkout dá "uma das partes é de teste" se o navegador estiver logado na conta **real** do Mercado Pago. Use janela anônima e o login da **compradora de teste**.
-- [ ] 🔶 **Compensação na AWS**: pagamento recusado (titular `OTHE`) e cancelamento após pagar (estorno). Só o caminho feliz foi exercitado em ambiente real.
+- [x] **Compensação por pagamento recusado na AWS (2026-11-16)**: titular `OTHE` → Mercado Pago `rejected` (`cc_rejected_other_reason`), Billing `RECUSADO`, saga **`COMPENSADA`** (`PagamentoRecusado` → `IniciarCompensacao` → `CancelarOrcamento` → `CancelarExecucao` → `OSCancelada`), OS `CANCELADA` (motivo registrado), orçamento `CANCELADO`, execução `CANCELADA`; a receita do dashboard não mudou (250).
+- [ ] 🔶 Falta só o **cancelamento depois de pago (estorno)**: coberto por BDD/contratos/unit, não exercitado com o Mercado Pago real.
 - [ ] 🔶 Passo 0, item 5 (pod → SQS/DynamoDB via `LabRole`): implícito pelo fluxo feliz (os 3 serviços publicam e consomem filas), mas o `kubectl run awscli` não foi rodado.
 - [ ] ⚪ Custo: EKS, 2 nós `t3.medium` e RDS estão ligados; ao encerrar, `destroy` manual em cada repo (ordem inversa).
 
