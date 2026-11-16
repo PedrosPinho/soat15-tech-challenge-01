@@ -1,0 +1,36 @@
+# Job de bootstrap dos databases/roles (db-bootstrap.sql). Aplicado pelo CI/CD antes da migration;
+# o pipeline apaga a execução anterior (spec de Job é imutável) e remove o Secret com a senha
+# master logo depois. A senha master e as senhas dos roles vêm do SSM (db-infra).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-db-bootstrap
+  namespace: oficina
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - >-
+              psql -v ON_ERROR_STOP=1
+              -v os_password="$OS_PASSWORD" -v billing_password="$BILLING_PASSWORD"
+              -f /sql/db-bootstrap.sql
+          env:
+            - { name: PGSSLMODE, value: require }
+            - { name: PGDATABASE, value: oficina }
+          envFrom:
+            - secretRef:
+                name: oficina-db-bootstrap
+          volumeMounts:
+            - { name: sql, mountPath: /sql, readOnly: true }
+      volumes:
+        - name: sql
+          configMap:
+            name: oficina-db-bootstrap-sql

@@ -1,11 +1,11 @@
 import { Pool } from 'pg';
 import { User } from '@domain/entities/user.entity';
 import { IUserRepository } from '@domain/repositories/user.repository';
-import { getPool } from '../pool';
+import { txAwarePool } from '../unit-of-work';
 import { UserRow, toDomainUser } from '../mappers/user.mapper';
 
 export class PostgresUserRepository implements IUserRepository {
-  constructor(private readonly pool: Pool = getPool()) {}
+  constructor(private readonly pool: Pool = txAwarePool()) {}
 
   async save(user: User): Promise<void> {
     await this.pool.query(

@@ -1,12 +1,12 @@
 import { IOrdemServicoRepository } from '@domain/repositories/ordem-servico.repository';
-import { IPagamentoRepository } from '@domain/repositories/pagamento.repository';
+import { IFinanceiroGateway } from '@domain/services/financeiro.gateway';
 import { IItemEstoqueRepository } from '@domain/repositories/item-estoque.repository';
 import { DashboardResponseDto } from '@application/dtos/relatorios/dashboard.dto';
 
 export class DashboardUseCase {
   constructor(
     private readonly osRepo: IOrdemServicoRepository,
-    private readonly pagamentoRepo: IPagamentoRepository,
+    private readonly financeiro: IFinanceiroGateway,
     private readonly estoqueRepo: IItemEstoqueRepository,
   ) {}
 
@@ -18,7 +18,7 @@ export class DashboardUseCase {
         this.osRepo.list(1, 1, { status: 'EM_EXECUCAO' }),
         this.osRepo.list(1, 1, { status: 'FINALIZADA' }),
         this.osRepo.list(1, 1, { status: 'CANCELADA' }),
-        this.pagamentoRepo.sumConfirmados(),
+        this.financeiro.receitaTotal(),
         this.estoqueRepo.list(),
       ]);
 

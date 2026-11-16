@@ -2,7 +2,7 @@ import { OrdemServico, StatusOS } from '@domain/entities/ordem-servico.entity';
 import { IClienteRepository } from '@domain/repositories/cliente.repository';
 import { INotificationService } from '@domain/services/notification.service';
 import { logger } from '@shared/logger';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const newrelic = require('newrelic');
 
 export interface NotificarMudancaStatusDeps {

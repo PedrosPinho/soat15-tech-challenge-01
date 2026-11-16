@@ -59,7 +59,8 @@ export const clearTestDatabase = async (): Promise<void> => {
   if (!pool) return;
   await pool.query(
     `TRUNCATE TABLE
-      pagamentos, servico_pecas, servicos_os, ordens_servico, contadores_numero_os,
+      outbox, mensagens_processadas, saga_passos_log, saga_instancias, os_status_historico,
+      servico_pecas, servicos_os, ordens_servico, contadores_numero_os,
       itens_estoque, veiculos, clientes, pecas, catalogo_servicos, usuarios
      RESTART IDENTITY CASCADE`,
   );
